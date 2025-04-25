@@ -1,5 +1,5 @@
 {
-  "extends": "../../packages/tsconfig/base.json", // Estende a base do monorepo
+  "extends": "../../packages/typescript-config/base.json",
   "compilerOptions": {
     "outDir": "./dist", // Pasta de saída do build JS
     "rootDir": "./src", // Pasta raiz do código TS

@@ -3,8 +3,21 @@ import * as dotenv from 'dotenv';
 import 'reflect-metadata';
 import { DataSource } from 'typeorm';
 
-dotenv.config({ path: process.cwd() + '/apps/api/.env' }); // Carrega o .env específico da API
+dotenv.config();
 
+// --- DEBUG POSTGRES CREDS ---
+console.log('--- DEBUG POSTGRES CREDS ---');
+console.log('POSTGRES_HOST:', process.env.POSTGRES_HOST);
+console.log('POSTGRES_PORT:', process.env.POSTGRES_PORT);
+console.log('POSTGRES_USER:', process.env.POSTGRES_USER);
+// Verifica especificamente se a senha está definida
+console.log(
+  'POSTGRES_PASSWORD:',
+  process.env.POSTGRES_PASSWORD ? '****** (definida)' : '!!! NÃO DEFINIDA !!!'
+);
+console.log('POSTGRES_DB:', process.env.POSTGRES_DB);
+console.log('--- FIM DEBUG ---');
+// -----------------------------
 export const AppDataSource = new DataSource({
   type: 'postgres',
   host: process.env.POSTGRES_HOST || 'localhost',
