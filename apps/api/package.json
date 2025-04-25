@@ -1,0 +1,13 @@
+{
+  "name": "@sistema-premiacao/api",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/server.js", 
+  "scripts": {
+    "dev": "echo \"[api] TODO: run dev script\"",
+    "build": "echo \"[api] TODO: run build script\""
+  },
+  "keywords": [],
+  "author": "Lipe",
+  "license": "ISC"
+}
