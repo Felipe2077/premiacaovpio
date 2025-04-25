@@ -1,0 +1,11 @@
+{
+  "extends": "../../packages/tsconfig/base.json", // Estende a base do monorepo
+  "compilerOptions": {
+    "outDir": "./dist", // Pasta de saída do build JS
+    "rootDir": "./src", // Pasta raiz do código TS
+    "experimentalDecorators": true, // Habilita decorators (TypeORM)
+    "emitDecoratorMetadata": true // Habilita metadados (TypeORM)
+  },
+  "include": ["src/**/*"], // Inclui todos os arquivos TS da pasta src
+  "exclude": ["node_modules", "dist"] // Exclui pastas
+}
