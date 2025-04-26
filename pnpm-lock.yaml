@@ -23,6 +23,9 @@ importers:
       '@fastify/cors':
         specifier: ^11.0.1
         version: 11.0.1
+      '@sistema-premiacao/shared-types':
+        specifier: workspace:^
+        version: link:../../packages/shared-types
       dotenv:
         specifier: ^16.5.0
         version: 16.5.0
