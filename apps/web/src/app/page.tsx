@@ -20,6 +20,7 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link'; // <-- Importar Link que faltava no seu base
 import { useMemo } from 'react'; // <-- React importado (boa prática)
 // Importar nossos tipos compartilhados
+import { formatNumber, formatPercent } from '@/lib/utils';
 import {
   Criterio,
   EntradaRanking,
@@ -202,21 +203,6 @@ export default function HomePage() {
     // ----------------------------------------
   }, [detailedResults]);
   // -----------------------------------------------------
-
-  // --- Funções de Formatação e Estilo COMPLETAS ---
-  const formatNumber = (
-    num: number | null | undefined,
-    decimals = 2
-  ): string => {
-    if (num === null || num === undefined || !isFinite(num)) return '-';
-    return num.toFixed(decimals);
-  };
-
-  const formatPercent = (ratio: number | null | undefined): string => {
-    if (ratio === null || ratio === undefined || !isFinite(ratio)) return '-';
-    if (!isFinite(ratio)) return 'N/A';
-    return `${(ratio * 100).toFixed(1)}%`;
-  };
 
   // **NOVO:** Função para definir estilo da célula de pontos (requer activeCriteria)
   const getPointsCellStyle = (
