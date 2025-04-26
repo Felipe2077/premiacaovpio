@@ -379,7 +379,12 @@ export default function HomePage() {
                         ) => (
                           <TableHead
                             key={criterion.id}
-                            className='text-center font-semibold min-w-[120px]'
+                            className='text-center font-semibold min-w-[90px] px-1 text-xs whitespace-normal'
+                            // min-w-[90px] ou [80px]? Teste!
+                            // px-1: Reduz padding horizontal
+                            // text-xs: Diminui fonte
+                            // whitespace-normal: Permite quebra de linha
+                            // --- FIM AJUSTES ---
                           >
                             {criterion.name} {/* Exibe o nome do critério */}
                           </TableHead>
@@ -395,7 +400,7 @@ export default function HomePage() {
                       <TableRow>
                         <TableCell
                           colSpan={uniqueCriteria.length + 1}
-                          className='text-center h-24'
+                          className='text-center p-1'
                         >
                           Nenhum dado detalhado para exibir no período.
                         </TableCell>
