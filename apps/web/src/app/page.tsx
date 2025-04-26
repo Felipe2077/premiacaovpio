@@ -1,16 +1,15 @@
 // apps/web/src/app/page.tsx (VERSÃO REFATORADA COM HOOK)
 'use client';
 
+import FilterControls from '@/components/filters/FilterControls';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import Link from 'next/link';
-// Componentes Filhos
+
 import DetailedResultsTable from '@/components/competition/DetailedResultsTable';
 import RankingTable from '@/components/competition/RankingTable';
-// Nosso Custom Hook!
 import { useCompetitionData } from '@/hooks/useCompetitionData'; // <-- IMPORTAR HOOK
 
 export default function HomePage() {
-  // Chama o hook UMA VEZ para pegar TUDO!
   const {
     rankingData,
     // detailedResults, // Não precisamos passar para DetailedResultsTable se ele já está em resultsBySector
@@ -29,7 +28,7 @@ export default function HomePage() {
         <h1 className='text-3xl font-bold mb-6 text-center'>
           Premiação Filiais - Desempenho
         </h1>
-
+        <FilterControls />
         {/* Exibição de Erro Geral (vindo do hook) */}
         {error && (
           <p className='text-red-500 text-center font-semibold mb-4'>
