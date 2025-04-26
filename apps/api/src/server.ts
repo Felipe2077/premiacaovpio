@@ -1,5 +1,6 @@
 // apps/api/src/server.ts
 import { AppDataSource } from '@/database/data-source';
+import { CriterionEntity } from '@/entity/criterion.entity';
 import { AuditLogService } from '@/modules/audit/audit.service'; // Importado
 import { ParameterService } from '@/modules/parameters/parameter.service'; // Importado
 import { RankingService } from '@/modules/ranking/ranking.service';
@@ -7,7 +8,7 @@ import cors from '@fastify/cors';
 import * as dotenv from 'dotenv';
 import Fastify from 'fastify';
 
-dotenv.config(); // Chamada simples agora funciona
+dotenv.config();
 
 const fastify = Fastify({ logger: true });
 
@@ -45,11 +46,9 @@ const start = async () => {
         reply.send(data);
       } catch (error: any) {
         fastify.log.error(`Erro em /api/ranking: ${error.message}`);
-        reply
-          .status(500)
-          .send({
-            error: error.message || 'Erro interno ao calcular ranking.',
-          });
+        reply.status(500).send({
+          error: error.message || 'Erro interno ao calcular ranking.',
+        });
       }
     });
 
@@ -61,12 +60,10 @@ const start = async () => {
         reply.send(data);
       } catch (error: any) {
         fastify.log.error(`Erro em /api/results: ${error.message}`);
-        reply
-          .status(500)
-          .send({
-            error:
-              error.message || 'Erro interno ao buscar resultados detalhados.',
-          });
+        reply.status(500).send({
+          error:
+            error.message || 'Erro interno ao buscar resultados detalhados.',
+        });
       }
     });
 
@@ -77,11 +74,9 @@ const start = async () => {
         reply.send(data);
       } catch (error: any) {
         fastify.log.error(`Erro em /api/parameters/current: ${error.message}`);
-        reply
-          .status(500)
-          .send({
-            error: error.message || 'Erro interno ao buscar parâmetros.',
-          });
+        reply.status(500).send({
+          error: error.message || 'Erro interno ao buscar parâmetros.',
+        });
       }
     });
 
@@ -98,6 +93,43 @@ const start = async () => {
           .send({ error: error.message || 'Erro interno ao buscar logs.' });
       }
     });
+    // Rota para buscar critérios ativos (id, nome, index)
+    fastify.get('/api/criteria/active', async (request, reply) => {
+      fastify.log.info('Recebida requisição GET /api/criteria/active');
+      try {
+        const criterionRepo = AppDataSource.getRepository(CriterionEntity);
+        // ----------------------------------------------------
+
+        // Agora sim podemos usar criterionRepo
+        const activeCriteria = await criterionRepo.find({
+          where: { ativo: true },
+          select: ['id', 'nome', 'index'], // Seleciona apenas os campos necessários
+          order: { id: 'ASC' },
+        });
+
+        if (!activeCriteria || activeCriteria.length === 0) {
+          fastify.log.warn('Nenhum critério ativo encontrado no banco.');
+          return reply.send([]); // Retorna array vazio
+        }
+
+        fastify.log.info(
+          `Retornando ${activeCriteria.length} critérios ativos.`
+        );
+        return reply.send(activeCriteria);
+      } catch (error: any) {
+        // Tipar error como any ou unknown
+        fastify.log.error('Erro ao buscar critérios ativos:', error);
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : 'Erro desconhecido no servidor';
+        return reply.status(500).send({
+          message: 'Erro interno ao buscar critérios ativos',
+          error: errorMessage,
+        });
+      }
+    });
+
     // --- Fim das Rotas ---
 
     // --- Listen ---
