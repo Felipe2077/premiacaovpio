@@ -15,5 +15,5 @@ export interface EntradaResultadoDetalhado {
   valorRealizado: number | null;
   valorMeta: number | string | null; // Meta pode ter vindo como string do parâmetro
   percentualAtingimento?: number | null; // Ou diferença, a definir
-  pontos?: number | null; // Pontuação específica do critério
+  pontos: number | null; // Pontuação específica do critério
 }
