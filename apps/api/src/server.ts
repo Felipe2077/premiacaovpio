@@ -1,59 +1,73 @@
 // src/server.ts
-import { RankingService } from '@/modules/ranking/ranking.service'; // Importa o serviço
+import { RankingService } from '@/modules/ranking/ranking.service';
 import cors from '@fastify/cors';
+import * as dotenv from 'dotenv';
 import Fastify from 'fastify';
-import { AppDataSource } from './database/data-source'; // Importa nossa config do Postgres
+import { AppDataSource } from './database/data-source';
+
+// --- Carregar .env do diretório atual (apps/api) ---
+const configResult = dotenv.config(); // Sem argumentos, procura .env no cwd()
+console.log(`Dotenv: Tentando carregar .env de ${process.cwd()}`);
+if (configResult.error) {
+  console.warn(
+    `AVISO: dotenv não carregou .env. Usando vars do ambiente. Erro: ${configResult.error.message}`
+  );
+} else {
+  console.log('.env carregado com sucesso.');
+}
+// Adicionar um check *depois* para ver se as vars estão lá
+if (!process.env.POSTGRES_USER || !process.env.POSTGRES_PASSWORD) {
+  console.error(
+    'ERRO FATAL: Credenciais do Postgres não encontradas no ambiente ou .env!'
+  );
+  // process.exit(1); // Poderia até parar aqui se elas forem essenciais
+}
+// ---------------------------------------------------
 
 const fastify = Fastify({
-  logger: true, // Habilita logs do Fastify
+  logger: true,
 });
 
+// ... (Restante do seu código: instancia RankingService, define rota /api/poc-data) ...
 const rankingService = new RankingService();
 
-// --- Rotas da API (DEPOIS do registro do CORS) ---
 fastify.get('/api/poc-data', async (request, reply) => {
-  try {
-    fastify.log.info(
-      'Endpoint /api/poc-data chamado, buscando dados via RankingService...'
-    );
-    const data = await rankingService.getCurrentRanking();
-    reply.send(data);
-  } catch (error) {
-    fastify.log.error('Erro ao buscar dados via RankingService:', error);
-    reply.status(500).send({ error: 'Erro interno ao buscar dados.' });
-  }
+  // ... (lógica da rota) ...
 });
 
-// Função para iniciar o servidor
+// Função para iniciar o servidor (seu código aqui está ótimo!)
 const start = async () => {
   try {
-    // --- 2. Registrar e Configurar o Plugin CORS ---
-    // Permite requisições do seu frontend Next.js em desenvolvimento
-    // ATENÇÃO: Em produção, reavalie e seja mais restritivo nas origens!
+    // --- Registro CORS ---
     await fastify.register(cors, {
       origin: [
-        'http://localhost:3000', // Acesso via localhost
-        'http://127.0.0.1:3000', // Acesso via loopback IPV4
-        'http://192.168.2.104:3000/',
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+        // A linha abaixo funciona, mas a regex é mais flexível se seu IP mudar
+        // /http:\/\/192\.168\.\d+\.\d+:3000/,
+        'http://192.168.2.104:3000', // Adicionei a barra final removida só por padrão
       ],
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Métodos HTTP permitidos
-      // allowedHeaders: ['Content-Type', 'Authorization'], // Headers permitidos (descomente se precisar)
-      // credentials: true, // Se precisar enviar/receber cookies entre origens
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     });
-    // -------------------------------------------------
-    // Tenta inicializar o DataSource do Postgres aqui se não fez antes
+    fastify.log.info('Plugin CORS registrado.');
+    // --------------------
+
+    // --- Inicialização DataSource ---
+    // Está no lugar certo!
     if (!AppDataSource.isInitialized) {
       await AppDataSource.initialize();
       fastify.log.info('Data Source Postgres inicializado pelo servidor.');
     }
+    // -----------------------------
 
-    const port = Number(process.env.API_PORT) || 3001;
-    const host = process.env.HOST || '0.0.0.0';
+    // --- Listen ---
+    const port = Number(process.env.API_PORT) || 3001; // <-- Agora vai ler do .env!
+    const host = process.env.HOST || '0.0.0.0'; // <-- Agora vai ler do .env!
 
     await fastify.listen({ port: port, host: host });
-    fastify.log.info(
-      `API Server rodando em http://<span class="math-inline">\{host\}\:</span>{port}`
-    );
+    // O Fastify já loga as mensagens de listen, a linha abaixo pode ser removida ou corrigida
+    // fastify.log.info( `API Server rodando em http://${host}:${port}` ); // Correção da interpolação
+    // --------------------
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);

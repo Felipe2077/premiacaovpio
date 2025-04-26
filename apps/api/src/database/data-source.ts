@@ -2,6 +2,13 @@
 import * as dotenv from 'dotenv';
 import 'reflect-metadata';
 import { DataSource } from 'typeorm';
+import { AuditLogEntity } from '../entity/audit-log.entity'; // Criar este arquivo
+import { CriterionEntity } from '../entity/criterion.entity';
+import { ParameterValueEntity } from '../entity/parameter-value.entity'; // Criar este arquivo
+import { PerformanceDataEntity } from '../entity/performance-data.entity'; // Criar este arquivo
+import { RoleEntity } from '../entity/role.entity'; // Criar este arquivo
+import { SectorEntity } from '../entity/sector.entity';
+import { UserEntity } from '../entity/user.entity'; // Criar este arquivo
 
 dotenv.config();
 
@@ -18,6 +25,7 @@ console.log(
 console.log('POSTGRES_DB:', process.env.POSTGRES_DB);
 console.log('--- FIM DEBUG ---');
 // -----------------------------
+
 export const AppDataSource = new DataSource({
   type: 'postgres',
   host: process.env.POSTGRES_HOST || 'localhost',
@@ -26,10 +34,15 @@ export const AppDataSource = new DataSource({
   password: process.env.POSTGRES_PASSWORD,
   database: process.env.POSTGRES_DB,
   synchronize: true, // !! APENAS PARA DEV/POC !! Cria/altera tabelas automaticamente. DESABILITAR em produção!
-  logging: false, // Mude para true para ver os SQLs gerados
+  logging: false,
   entities: [
-    // __dirname + '/../entity/*.entity.{js,ts}' // Exemplo se tivéssemos entidades
-    // Por enquanto vamos usar query bruta, não precisa de entidade aqui
+    SectorEntity,
+    CriterionEntity,
+    ParameterValueEntity,
+    PerformanceDataEntity,
+    AuditLogEntity,
+    UserEntity,
+    RoleEntity,
   ],
   migrations: [],
   subscribers: [],
