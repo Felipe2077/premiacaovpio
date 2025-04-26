@@ -10,14 +10,11 @@ import {
 } from '@/components/ui/select'; // Importa componentes Select
 
 export function FilterControls() {
-  // No futuro, aqui entrarão useState e handlers onValueChange
+  // TODO No futuro, aqui entrarão useState e handlers onValueChange
   // Por enquanto, apenas renderiza os placeholders
 
   return (
-    // O JSX que você recortou do page.tsx vem aqui:
-    <div className='flex flex-wrap gap-4 my-4 justify-center items-end'>
-      {' '}
-      {/* items-end para alinhar label/select */}
+    <div className='flex flex-wrap gap-4 justify-center items-end'>
       <div>
         <label
           htmlFor='period-select'

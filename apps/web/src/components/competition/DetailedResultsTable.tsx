@@ -120,19 +120,19 @@ export function DetailedResultsTable({
       <div className='flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-400 mb-3 items-center'>
         <span>Legenda (Posição no Critério):</span>
         <span className='flex items-center'>
-          <span className='inline-block w-3 h-3 rounded-full bg-green-100 border border-green-300 mr-1'></span>{' '}
+          <span className='inline-block w-3 h-3 rounded-full bg-green-100 border border-green-300 mr-1'></span>
           1º (Melhor)
         </span>
         <span className='flex items-center'>
-          <span className='inline-block w-3 h-3 rounded-full bg-yellow-100 border border-yellow-300 mr-1'></span>{' '}
+          <span className='inline-block w-3 h-3 rounded-full bg-yellow-100 border border-yellow-300 mr-1'></span>
           2º
         </span>
         <span className='flex items-center'>
-          <span className='inline-block w-3 h-3 rounded-full bg-orange-100 border border-orange-300 mr-1'></span>{' '}
+          <span className='inline-block w-3 h-3 rounded-full bg-orange-100 border border-orange-300 mr-1'></span>
           3º
         </span>
         <span className='flex items-center'>
-          <span className='inline-block w-3 h-3 rounded-full bg-red-100 border border-red-300 mr-1'></span>{' '}
+          <span className='inline-block w-3 h-3 rounded-full bg-red-100 border border-red-300 mr-1'></span>
           4º (Pior)
         </span>
         <span className='text-gray-400'>

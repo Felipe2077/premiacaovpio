@@ -40,7 +40,6 @@ export function RankingTable({
   // Se temos dados, renderiza a tabela
   return (
     <div className='border rounded-md'>
-      {/* Mantém a borda */}
       <Table>
         <TableCaption>
           Classificação final (Menor pontuação = Melhor posição).
@@ -59,12 +58,12 @@ export function RankingTable({
               key={entry.SETOR}
               className={
                 entry.RANK === 1
-                  ? 'bg-yellow-100/50 dark:bg-yellow-900/30 hover:bg-yellow-100 dark:hover:bg-yellow-900/50'
+                  ? 'bg-green-100/70 dark:bg-green-900/30 hover:bg-green-100 dark:hover:bg-green-900/50'
                   : ''
               }
             >
               <TableCell
-                className={`font-medium text-lg ${entry.RANK === 1 ? 'text-yellow-600 dark:text-yellow-400' : ''}`}
+                className={`font-medium text-lg ${entry.RANK === 1 ? 'text-green-600 dark:text-green-400' : ''}`}
               >
                 {entry.RANK}º {entry.RANK === 1 ? '🏆' : ''}
               </TableCell>
@@ -74,7 +73,7 @@ export function RankingTable({
                 {entry.SETOR}
               </TableCell>
               <TableCell
-                className={`text-right text-lg font-semibold ${entry.RANK === 1 ? 'text-yellow-600 dark:text-yellow-400' : ''}`}
+                className={`text-right text-lg font-semibold ${entry.RANK === 1 ? 'text-green-600 dark:text-green-400' : ''}`}
               >
                 {formatNumber(entry.PONTUACAO)}
               </TableCell>

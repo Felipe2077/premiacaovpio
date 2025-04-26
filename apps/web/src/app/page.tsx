@@ -24,10 +24,7 @@ export default function HomePage() {
 
   return (
     <TooltipProvider>
-      <main className='container mx-auto p-4 lg:p-6 space-y-10'>
-        <h1 className='text-3xl font-bold mb-6 text-center'>
-          Premiação Filiais - Desempenho
-        </h1>
+      <main className='container mx-auto px-4 lg:px-6 space-y-10'>
         <FilterControls />
         {/* Exibição de Erro Geral (vindo do hook) */}
         {error && (
