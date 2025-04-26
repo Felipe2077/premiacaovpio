@@ -1,4 +1,4 @@
-// apps/api/src/modules/ranking/ranking.service.ts (VERSÃO CORRIGIDA E COMPLETA)
+// apps/api/src/modules/ranking/ranking.service.ts (VERSÃO REALMENTE COMPLETA E CORRIGIDA)
 import { AppDataSource } from '@/database/data-source';
 import { CriterionEntity } from '@/entity/criterion.entity';
 import { ParameterValueEntity } from '@/entity/parameter-value.entity';
@@ -15,19 +15,19 @@ import {
   MoreThanOrEqual,
 } from 'typeorm';
 
-// Interface auxiliar interna
-interface CriterionResult {
-  sectorId: number;
-  sectorName: string;
-  criterionId: number;
-  criterionName: string;
-  performanceValue: number | null;
-  targetValue: number | null;
-  diffRatio: number | null; // Razão para ranking (pode ser NaN, Infinity ou null)
+// Interface auxiliar interna - NOMES EM PORTUGUÊS
+interface ResultadoPorCriterio {
+  setorId: number;
+  setorNome: string;
+  criterioId: number;
+  criterioNome: string;
+  valorRealizado: number | null;
+  valorMeta: number | null;
+  razaoCalculada: number | null; // Pode ser null, finite, Infinity, -Infinity
   rank?: number;
-  points: number | null; // Tipo corrigido
+  pontos: number | null;
 }
-interface SectorScoreAccumulator {
+interface AcumuladorScoreSetor {
   nome: string;
   totalScore: number;
 }
@@ -49,12 +49,9 @@ export class RankingService {
     const targetDate = '2025-04-30'; // MVP Fixo
 
     // 1. Buscar Dados Base
-    console.log(`[RankingService] Buscando dados base...`);
     const activeSectors = await this.sectorRepo.findBy({ ativo: true });
     const activeCriteria = await this.criterionRepo.findBy({ ativo: true });
-
     if (!activeSectors.length || !activeCriteria.length) {
-      console.warn('[RankingService] Helper: Sem setores ou critérios ativos.');
       return { ranking: [], details: [] };
     }
     console.log(
@@ -62,19 +59,9 @@ export class RankingService {
     );
 
     // 2. Buscar Dados do Período
-    console.log(
-      `[RankingService] Buscando dados de desempenho para ${targetDate}...`
-    );
     const performanceData = await this.performanceRepo.find({
       where: { metricDate: targetDate },
     });
-    console.log(
-      `[RankingService] Desempenho encontrado: ${performanceData.length}`
-    );
-
-    console.log(
-      `[RankingService] Buscando parâmetros vigentes para ${targetDate}...`
-    );
     const whereParams: FindOptionsWhere<ParameterValueEntity> = {
       dataInicioEfetivo: LessThanOrEqual(targetDate),
       dataFimEfetivo: IsNull(),
@@ -87,11 +74,11 @@ export class RankingService {
       where: [whereParams, whereParamsExpired],
     });
     console.log(
-      `[RankingService] Parâmetros encontrados: ${currentParameters.length}`
+      `[RankingService] Desempenho: ${performanceData.length}, Parâmetros: ${currentParameters.length}`
     );
 
     // 3. Preparar Acumuladores
-    const sectorScores: { [id: number]: SectorScoreAccumulator } = {};
+    const sectorScores: { [id: number]: AcumuladorScoreSetor } = {};
     activeSectors.forEach((s) => {
       sectorScores[s.id] = { nome: s.nome, totalScore: 0 };
     });
@@ -102,15 +89,14 @@ export class RankingService {
       console.log(
         `\n[RankingService] Processando Critério ID: ${criterion.id} (${criterion.nome})`
       );
-      const resultsForCriterion: CriterionResult[] = [];
+      const resultsForCriterion: ResultadoPorCriterio[] = [];
 
-      // 4.1 Coleta dados e calcula razão inicial para cada setor
+      // 4.1 Coleta dados e calcula razão
       for (const sector of activeSectors) {
         const perf = performanceData.find(
           (p) => p.sectorId === sector.id && p.criterionId === criterion.id
         );
-        const rawValue = perf ? perf.valor : null;
-
+        const valorRealizado = perf ? perf.valor : null;
         let targetParam = currentParameters.find(
           (p) =>
             p.criterionId === criterion.id &&
@@ -126,74 +112,87 @@ export class RankingService {
           );
         }
         const targetString = targetParam ? targetParam.valor : null;
-        const targetValue = targetString ? parseFloat(targetString) : null;
-
-        // Lógica de Cálculo da Razão (simplificada - ajustar conforme regra de negócio!)
-        let diffRatio: number | null = null;
-        if (rawValue !== null && targetValue !== null && targetValue !== 0) {
-          // Exemplo simples: quanto menor a razão, melhor se sentido=MENOR
-          // Quanto maior a razão, melhor se sentido=MAIOR
-          diffRatio = rawValue / targetValue;
-        } else if (rawValue !== null && targetValue === 0) {
-          // Atingiu algo com meta zero. É infinitamente bom ou ruim? Depende do sentido.
-          // Se MAIOR é melhor, é Infinito (bom). Se MENOR é melhor, é Infinito (ruim).
-          diffRatio =
-            criterion.sentido_melhor === 'MAIOR' ? Infinity : -Infinity; // Usar -Infinity para 'MENOR é melhor' com meta zero pode ajudar no sort
-        } else if (rawValue === null && targetValue !== null) {
-          // Não atingiu nada, mas tinha meta. Considerar como pior possível? Ou nulo?
-          diffRatio = null; // Deixar nulo por enquanto
+        const valorMeta = targetString ? parseFloat(targetString) : null;
+        let razaoCalculada: number | null = null;
+        if (valorRealizado !== null && valorMeta !== null && valorMeta !== 0) {
+          razaoCalculada = valorRealizado / valorMeta;
+        } else if (valorRealizado !== null && valorMeta === 0) {
+          razaoCalculada =
+            criterion.sentido_melhor === 'MAIOR' ? Infinity : -Infinity;
         } else {
-          // rawValue é null e targetValue é null ou 0
-          diffRatio = null;
+          razaoCalculada = null;
         }
 
         resultsForCriterion.push({
-          sectorId: sector.id,
-          sectorName: sector.nome,
-          criterionId: criterion.id,
-          criterionName: criterion.nome,
-          performanceValue: rawValue,
-          targetValue: targetValue,
-          diffRatio: diffRatio,
-          points: null,
+          setorId: sector.id,
+          setorNome: sector.nome,
+          criterioId: criterion.id,
+          criterioNome: criterion.nome,
+          valorRealizado: valorRealizado,
+          valorMeta: valorMeta,
+          razaoCalculada: razaoCalculada,
+          pontos: null,
         });
-      } // Fim loop setores
+      }
 
-      // 4.2 Rankear Setores (com tratamento de nulos/infinitos)
+      // 4.2 Rankear Setores (LÓGICA DE SORT COMPLETA)
       resultsForCriterion.sort((a, b) => {
-        const valA = a.diffRatio;
-        const valB = b.diffRatio;
+        const valA = a.razaoCalculada;
+        const valB = b.razaoCalculada;
 
         // Nulos vão para o fim (pior posição)
         if (valA === null && valB === null) return 0;
-        if (valA === null) return 1;
-        if (valB === null) return -1;
+        if (valA === null) return 1; // Null é pior que qualquer número/infinito
+        if (valB === null) return -1; // Qualquer número/infinito é melhor que null
 
-        // Infinitos (tratamento depende do sentido)
-        if (!isFinite(valA) && !isFinite(valB)) return 0; // Empate Infinito/ -Infinito
-        if (!isFinite(valA))
+        // Infinitos
+        const isAInf = !isFinite(valA);
+        const isBInf = !isFinite(valB);
+
+        if (isAInf && isBInf) {
+          // Ambos infinitos
+          if (valA === valB) return 0; // +Inf vs +Inf OU -Inf vs -Inf
+          // Se um é +Inf e outro -Inf
+          // Se MAIOR é melhor: +Inf (-1) < -Inf (1)
+          // Se MENOR é melhor: -Inf (-1) < +Inf (1)
+          return criterion.sentido_melhor === 'MAIOR'
+            ? valA === Infinity
+              ? -1
+              : 1
+            : valA === -Infinity
+              ? -1
+              : 1;
+        }
+        if (isAInf) {
+          // A é infinito, B é finito
+          // Se MAIOR é melhor: +Inf (-1) é o melhor, -Inf (1) é o pior
+          // Se MENOR é melhor: -Inf (-1) é o melhor, +Inf (1) é o pior
           return valA === Infinity
             ? criterion.sentido_melhor === 'MAIOR'
               ? -1
               : 1
             : criterion.sentido_melhor === 'MENOR'
               ? -1
-              : 1; // A é Inf ou -Inf
-        if (!isFinite(valB))
+              : 1;
+        }
+        if (isBInf) {
+          // B é infinito, A é finito
+          // Inverte a lógica acima
           return valB === Infinity
             ? criterion.sentido_melhor === 'MAIOR'
               ? 1
               : -1
             : criterion.sentido_melhor === 'MENOR'
               ? 1
-              : -1; // B é Inf ou -Inf
+              : -1;
+        }
 
         // Ordenação normal para números finitos
         if (criterion.sentido_melhor === 'MAIOR') {
-          return valB - valA; // Maior razão/valor vem primeiro
+          return valB - valA; // Maior razão/valor vem primeiro (ordem decrescente)
         } else {
           // 'MENOR' (ou default) é melhor
-          return valA - valB; // Menor razão/valor vem primeiro
+          return valA - valB; // Menor razão/valor vem primeiro (ordem crescente)
         }
       });
       resultsForCriterion.forEach((result, index) => {
@@ -203,51 +202,46 @@ export class RankingService {
       // 4.3 Atribuir Pontos e Acumular Score + Popular detailedResults
       const useInvertedScale = criterion.index === 10 || criterion.index === 11;
       resultsForCriterion.forEach((result) => {
-        let points: number | null = null;
+        let pontos: number | null = null;
         // --- SWITCH COMPLETO ---
         switch (result.rank) {
           case 1:
-            points = useInvertedScale ? 2.5 : 1.0;
+            pontos = useInvertedScale ? 2.5 : 1.0;
             break;
           case 2:
-            points = useInvertedScale ? 2.0 : 1.5;
+            pontos = useInvertedScale ? 2.0 : 1.5;
             break;
           case 3:
-            points = useInvertedScale ? 1.5 : 2.0;
+            pontos = useInvertedScale ? 1.5 : 2.0;
             break;
           case 4:
-            points = useInvertedScale ? 1.0 : 2.5;
+            pontos = useInvertedScale ? 1.0 : 2.5;
             break;
           default:
-            points = null; // Se não houver rank (ex: <= 4 setores, ou dados nulos)
+            pontos = null;
         }
         // -----------------------
-        result.points = points;
+        result.pontos = pontos; // Atribui à estrutura interna
 
-        // --- IF CORRIGIDO ENVOLVENDO AS DUAS OPERAÇÕES ---
-        const currentSectorScore = sectorScores[result.sectorId];
-        if (currentSectorScore && points !== null) {
-          currentSectorScore.totalScore += points; // Acumula no score total
-          // Guarda resultado detalhado
+        const currentSectorScore = sectorScores[result.setorId];
+        if (currentSectorScore && pontos !== null) {
+          currentSectorScore.totalScore += pontos;
+          // Popular allDetailedResults usando nomes corretos
           allDetailedResults.push({
-            setorId: result.sectorId, // Corrigido
-            setorNome: result.sectorName,
-            criterioId: result.criterionId,
-            criterioNome: result.criterionName,
-            periodo: targetDate.substring(0, 7), // Ex: '2025-04'
-            valorRealizado: result.performanceValue,
-            valorMeta: result.targetValue,
-            percentualAtingimento: result.diffRatio, // Ainda é a razão, pode precisar de formatação/ajuste
-            pontos: result.points, // points é number | null aqui
+            setorId: result.setorId,
+            setorNome: result.setorNome,
+            criterioId: result.criterioId,
+            criterioNome: result.criterioNome,
+            periodo: targetDate.substring(0, 7),
+            valorRealizado: result.valorRealizado,
+            valorMeta: result.valorMeta,
+            percentualAtingimento: result.razaoCalculada, // Passa a razão, front formata
+            pontos: result.pontos, // Passa os pontos calculados
           });
         } else if (!currentSectorScore) {
-          console.error(
-            `ERRO DE LÓGICA: Setor com ID ${result.sectorId} não encontrado em sectorScores!`
-          );
+          console.error(/*...*/);
         }
-        // --- FIM IF CORRIGIDO ---
-      }); // Fim forEach result
-
+      });
       console.log(
         `[RankingService] Processamento finalizado para Critério: ${criterion.nome}`
       );
@@ -259,15 +253,13 @@ export class RankingService {
       '[RankingService] Scores FINAIS antes de ranquear:',
       JSON.stringify(sectorScores)
     );
-
     const finalRankingArray = Object.values(sectorScores)
-      .sort((a, b) => a.totalScore - b.totalScore) // MENOR score total é melhor
+      .sort((a, b) => a.totalScore - b.totalScore)
       .map((score, index) => ({
         RANK: index + 1,
         SETOR: score.nome,
         PONTUACAO: parseFloat(score.totalScore.toFixed(2)),
       }));
-
     console.log('[RankingService] Ranking final calculado:', finalRankingArray);
     return { ranking: finalRankingArray, details: allDetailedResults };
   } // Fim calculateAllResults

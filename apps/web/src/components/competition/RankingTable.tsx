@@ -29,11 +29,6 @@ export function RankingTable({
     return <p>Carregando ranking...</p>;
   }
 
-  // Não exibimos erro aqui, deixamos a página pai decidir como mostrar erros gerais
-  // if (error) {
-  //   return <p className="text-red-500">Erro ao carregar ranking: {error.message}</p>;
-  // }
-
   if (!rankingData || rankingData.length === 0) {
     return (
       <div className='border rounded-md p-4 text-center text-gray-500'>

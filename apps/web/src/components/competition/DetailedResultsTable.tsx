@@ -23,15 +23,12 @@ import {
 } from '@sistema-premiacao/shared-types';
 
 // Interfaces locais (mantidas para este componente)
-interface SimpleSector {
-  id: number;
-  name: string;
-}
+
 interface CriterionResultMap {
   [criterionId: number]: EntradaResultadoDetalhado | undefined;
 }
 interface SectorData {
-  sectorName: string;
+  setorNome: string;
   criteriaResults: CriterionResultMap;
 }
 
@@ -148,7 +145,7 @@ export function DetailedResultsTable({
                 return (
                   <TableRow key={sectorId}>
                     <TableCell className='font-semibold sticky left-0 bg-background z-10'>
-                      {sectorData.sectorName}
+                      {sectorData.setorNome}
                     </TableCell>
                     {uniqueCriteria.map((criterion) => {
                       const result = sectorData.criteriaResults[criterion.id];
