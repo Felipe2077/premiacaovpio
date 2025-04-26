@@ -1,6 +1,7 @@
 // apps/web/src/app/page.tsx (Seu Código Base + Refinamentos Visuais)
 'use client';
 
+import RankingTable from '@/components/competition/RankingTable';
 import {
   Table,
   TableBody,
@@ -10,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+
 import {
   Tooltip,
   TooltipContent,
@@ -256,7 +258,7 @@ export default function HomePage() {
 
   return (
     <TooltipProvider>
-      <main className='mx-auto p-4 lg:p-6 space-y-10'>
+      <main className='mx-auto p-4 lg:p-6 space-y-8'>
         <h1 className='text-3xl font-bold mb-6 text-center'>
           Premiação Filiais - Desempenho
         </h1>
@@ -271,68 +273,12 @@ export default function HomePage() {
 
         {/* Seção Ranking Final */}
         <section>
-          <h2 className='text-2xl font-semibold mb-1'>🏆 Ranking Final</h2>
-          {/* **MELHORIA:** Subtítulo Explicativo */}
-          <p className='text-sm text-gray-600 dark:text-gray-400 italic mb-3'>
-            Classificação final baseada na soma dos pontos por critério (Menor
-            pontuação = Melhor posição).
-          </p>
-
-          {/* Mudado para exibir mesmo que a outra tabela esteja carregando */}
-          {isLoadingRanking && <p>Carregando ranking...</p>}
-          {!isLoadingRanking &&
-            rankingData && ( // Só mostra tabela se não estiver carregando E tiver dados
-              <div className='border rounded-md'>
-                <Table>
-                  {/* <TableCaption>Classificação final.</TableCaption> */}
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className='w-[80px]'>Posição</TableHead>
-                      <TableHead>Setor</TableHead>
-                      <TableHead className='text-right'>
-                        Pontuação Total
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {rankingData.length === 0 && (
-                      <tr>
-                        <TableCell colSpan={3} className='text-center h-24'>
-                          Nenhum dado de ranking.
-                        </TableCell>
-                      </tr>
-                    )}
-                    {rankingData.map((entry) => (
-                      // **MELHORIA:** Destaque para o 1º lugar
-                      <TableRow
-                        key={entry.SETOR}
-                        className={
-                          entry.RANK === 1
-                            ? 'bg-yellow-100/50 dark:bg-yellow-900/30 hover:bg-yellow-100 dark:hover:bg-yellow-900/50'
-                            : ''
-                        }
-                      >
-                        <TableCell
-                          className={`font-medium text-lg ${entry.RANK === 1 ? 'text-yellow-600 dark:text-yellow-400' : ''}`}
-                        >
-                          {entry.RANK}º {entry.RANK === 1 ? '🏆' : ''}
-                        </TableCell>
-                        <TableCell
-                          className={`text-lg ${entry.RANK === 1 ? 'font-bold' : ''}`}
-                        >
-                          {entry.SETOR}
-                        </TableCell>
-                        <TableCell
-                          className={`text-right text-lg font-semibold ${entry.RANK === 1 ? 'text-yellow-600 dark:text-yellow-400' : ''}`}
-                        >
-                          {formatNumber(entry.PONTUACAO)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
+          <h2 className='text-2xl font-semibold mb-1'>🏆 Ranking Atual</h2>
+          <RankingTable
+            data={rankingData}
+            isLoading={isLoadingRanking}
+            error={errorRanking}
+          />
         </section>
 
         {/* Seção Detalhes por Critério */}

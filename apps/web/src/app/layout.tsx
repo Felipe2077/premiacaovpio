@@ -19,12 +19,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang='pt-BR'>
-      <body className={`${inter.className} min-h-screen flex flex-col`}>
+      <body className={`${inter.className} flex flex-col`}>
         <Header />
         {/* Conteúdo principal da página */}
         <main className='flex-grow container mx-auto p-4 lg:p-6'>
           <Providers>{children}</Providers>
         </main>
+        {/* Footer simples */}
         <footer className='bg-gray-200 text-center p-2 text-sm text-gray-600 mt-auto'>
           Sistema de Premiação - MVP V1.7 - {new Date().getFullYear()}
         </footer>
