@@ -161,7 +161,6 @@ export default function HomePage() {
   }
 
   const { resultsBySector, uniqueSectors, uniqueCriteria } = useMemo(() => {
-    // <-- Desestrutura os 3
     if (!detailedResults)
       return {
         resultsBySector: {},
@@ -374,88 +373,93 @@ export default function HomePage() {
                         Critério
                       </TableHead>
                       {/* Cabeçalho fixo */}
-                      {uniqueSectors.map((sector) => (
-                        <TableHead
-                          key={sector.id}
-                          className='text-center font-semibold min-w-[120px]'
-                        >
-                          {sector.name}
-                        </TableHead>
-                      ))}
+                      {uniqueCriteria.map(
+                        (
+                          criterion // <-- CORRETO: Mapeia uniqueCriteria
+                        ) => (
+                          <TableHead
+                            key={criterion.id}
+                            className='text-center font-semibold min-w-[120px]'
+                          >
+                            {criterion.name} {/* Exibe o nome do critério */}
+                          </TableHead>
+                        )
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {/* Itera sobre os SETORES (linhas) - Layout B */}
-                    {Object.entries(resultsBySector).map(
-                      ([sectorIdStr, sectorData]) => (
-                        <TableRow key={sectorIdStr}>
-                          {/* Coluna fixa do setor */}
-                          <TableCell className='font-semibold sticky left-0 bg-background z-10'>
-                            {sectorData.sectorName}
-                          </TableCell>
-                          {/* Itera sobre os CRITÉRIOS (colunas) */}
-                          {uniqueCriteria.map((criterion) => {
-                            const result =
-                              sectorData.criteriaResults[criterion.id];
-                            const pontos = result?.pontos;
-                            // **MELHORIA:** Aplica a classe de estilo calculada
-                            const cellStyle = getPointsCellStyle(
-                              pontos,
-                              criterion.id
-                            ); // Passa ID
-
-                            return (
-                              <TableCell
-                                key={`${sectorIdStr}-${criterion.id}`} // Usa key correta
-                                className='text-center p-1 sm:p-2' // Ajuste de padding
-                              >
-                                {result ? (
-                                  <Tooltip delayDuration={200}>
-                                    <TooltipTrigger asChild>
-                                      <span
-                                        className={`cursor-default ${cellStyle}`}
-                                      >
-                                        {formatNumber(pontos)}
-                                      </span>
-                                    </TooltipTrigger>
-                                    <TooltipContent className='text-xs bg-popover text-popover-foreground shadow-md p-2 rounded'>
-                                      {/* Conteúdo tooltip corrigido */}
-                                      <p>
-                                        Valor:
-                                        {formatNumber(result.valorRealizado)}
-                                      </p>
-                                      <p>
-                                        Meta: {formatNumber(result.valorMeta)}
-                                      </p>
-                                      <p>
-                                        % Ating.:
-                                        {formatPercent(
-                                          result.percentualAtingimento
-                                        )}
-                                      </p>
-                                      {/* Mostra rank se existir (calculado no backend - TODO) */}
-                                      {/* <p>(Rank Critério: {result.rank ?? '-'})</p> */}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                ) : (
-                                  <span className='text-gray-400'>-</span>
-                                )}
-                              </TableCell>
-                            );
-                          })}
-                        </TableRow>
-                      )
-                    )}
-                    {Object.keys(resultsBySector).length ===
-                      0 /* Verificação de corpo vazio */ && (
+                    {/* Verifica se há dados E critérios para o cabeçalho */}
+                    {Object.keys(resultsBySector).length === 0 ||
+                    uniqueCriteria.length === 0 ? (
+                      // Mostra mensagem se não houver dados ou critérios
                       <TableRow>
                         <TableCell
                           colSpan={uniqueCriteria.length + 1}
                           className='text-center h-24'
                         >
-                          Nenhum dado detalhado para exibir.
+                          Nenhum dado detalhado para exibir no período.
                         </TableCell>
                       </TableRow>
+                    ) : (
+                      // Itera sobre os SETORES (resultsBySector) para criar as LINHAS
+                      Object.entries(resultsBySector).map(
+                        ([sectorIdStr, sectorData]) => (
+                          <TableRow key={sectorIdStr}>
+                            {/* Primeira CÉLULA é o nome do setor (coluna fixa) */}
+                            <TableCell className='font-semibold sticky left-0 bg-background z-10'>
+                              {sectorData.sectorName}
+                            </TableCell>
+                            {/* Itera sobre os CRITÉRIOS (uniqueCriteria) para criar as COLUNAS/CÉLULAS restantes */}
+                            {uniqueCriteria.map((criterion) => {
+                              // Busca o resultado específico para este SETOR e este CRITÉRIO
+                              const result =
+                                sectorData.criteriaResults[criterion.id];
+                              const pontos = result?.pontos;
+                              const cellStyle = getPointsCellStyle(
+                                pontos,
+                                criterion.id
+                              );
+
+                              return (
+                                <TableCell
+                                  key={`${sectorIdStr}-${criterion.id}`} // Chave única da célula
+                                  className='text-center p-1 sm:p-2'
+                                >
+                                  {/* Renderiza o Tooltip e os Pontos SE houver resultado */}
+                                  {result ? (
+                                    <Tooltip delayDuration={200}>
+                                      <TooltipTrigger asChild>
+                                        <span
+                                          className={`cursor-default ${cellStyle}`}
+                                        >
+                                          {formatNumber(pontos)}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent className='text-xs bg-popover text-popover-foreground shadow-md p-2 rounded'>
+                                        <p>
+                                          Valor:{' '}
+                                          {formatNumber(result.valorRealizado)}
+                                        </p>
+                                        <p>
+                                          Meta: {formatNumber(result.valorMeta)}
+                                        </p>
+                                        <p>
+                                          % Ating.:{' '}
+                                          {formatPercent(
+                                            result.percentualAtingimento
+                                          )}
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <span className='text-gray-400'>-</span> // Mostra '-' se não houver dados
+                                  )}
+                                </TableCell>
+                              );
+                            })}
+                          </TableRow>
+                        )
+                      )
                     )}
                   </TableBody>
                 </Table>
