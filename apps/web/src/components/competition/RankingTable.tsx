@@ -52,7 +52,7 @@ export function RankingTable({
   return (
     <div className='border rounded-md'>
       <Table>
-        <TableCaption className='my-2'>
+        <TableCaption>
           Classificação atual (Menor pontuação = Melhor posição).
         </TableCaption>
         <TableHeader>

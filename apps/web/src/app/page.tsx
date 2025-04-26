@@ -23,7 +23,7 @@ export default function HomePage() {
 
   return (
     <TooltipProvider>
-      <main className='container mx-auto px-4 lg:px-6 flex flex-col gap-10 flex-1'>
+      <main className='container mx-auto px-4 lg:px-6 flex flex-col gap-8 flex-1'>
         {/* Exibição de Erro Geral (vindo do hook) */}
         {error && (
           <p className='text-red-500 text-center font-semibold mb-4'>
@@ -33,7 +33,7 @@ export default function HomePage() {
         )}
 
         <section>
-          <div className='flex justify-between mt-4 mb-6 items-center'>
+          <div className='flex justify-between mt-4 mb-2 items-center'>
             <div>
               <h2 className='text-2xl font-semibold my-1'>🏆 Ranking Atual</h2>
               <p className='text-sm text-gray-600 dark:text-gray-400 italic mb-3'>
