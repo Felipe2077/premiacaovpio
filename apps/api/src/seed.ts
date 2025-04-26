@@ -1,6 +1,6 @@
-// apps/api/src/seed.ts
+// apps/api/src/seed.ts (COM "FURO POR ATRASO" ADICIONADO)
 import 'reflect-metadata';
-import { AppDataSource } from './database/data-source'; // Ajuste o caminho se necessário
+import { AppDataSource } from './database/data-source';
 import { AuditLogEntity } from './entity/audit-log.entity';
 import { CriterionEntity } from './entity/criterion.entity';
 import { ParameterValueEntity } from './entity/parameter-value.entity';
@@ -18,7 +18,7 @@ const sectorsMock = [
   { id: 4, nome: 'SÃO SEBASTIÃO', ativo: true },
 ];
 
-const criteriaMock: Partial<CriterionEntity>[] = [
+const criteriaMockCorrigido: Partial<CriterionEntity>[] = [
   {
     id: 1,
     nome: 'ATRASO',
@@ -98,8 +98,7 @@ const criteriaMock: Partial<CriterionEntity>[] = [
     sentido_melhor: 'MAIOR',
     ativo: true,
     unidade_medida: 'KM/L',
-  }, // Mudei para 15 (ou outro número único)
-
+  }, // Index corrigido
   {
     id: 11,
     nome: 'KM OCIOSA',
@@ -107,7 +106,7 @@ const criteriaMock: Partial<CriterionEntity>[] = [
     sentido_melhor: 'MENOR',
     ativo: true,
     unidade_medida: '%',
-  },
+  }, // Index corrigido
   {
     id: 12,
     nome: 'PEÇAS',
@@ -132,26 +131,26 @@ const criteriaMock: Partial<CriterionEntity>[] = [
     ativo: true,
     unidade_medida: 'R$',
   },
+  // --- NOVO CRITÉRIO ---
+  {
+    id: 15,
+    nome: 'FURO POR ATRASO',
+    index: 17,
+    sentido_melhor: 'MENOR',
+    ativo: true,
+    unidade_medida: 'Qtd',
+  }, // Assumi Qtd e MENOR
+  // --------------------
 ];
 
-// Exemplo de usuário e perfil
 const rolesMock = [
   { id: 1, nome: 'Admin' },
   { id: 2, nome: 'Viewer' },
 ];
-const usersMock = [
-  {
-    id: 1,
-    nome: 'Admin Sistema',
-    email: 'admin@sistema.com',
-    ativo: true,
-    roles: [rolesMock[0]],
-  },
-]; // Senha não necessária para seed
+// Não precisamos recriar usersMock aqui, ele será populado depois
 
-// Exemplo de parâmetros (METAS para Abril/2025) - VALORES CHUTADOS! Ajuste conforme necessário
 const parametersMock = [
-  // Meta IPK (Critério 9) - Geral
+  // Metas existentes...
   {
     nomeParametro: 'META_IPK',
     valor: '3.00',
@@ -160,7 +159,6 @@ const parametersMock = [
     criterionId: 9,
     justificativa: 'Meta inicial IPK',
   },
-  // Meta Atraso (Critério 1) - Específico GAMA
   {
     nomeParametro: 'META_ATRASO',
     valor: '350',
@@ -170,7 +168,6 @@ const parametersMock = [
     sectorId: 1,
     justificativa: 'Meta inicial Atraso GAMA',
   },
-  // Meta Atraso (Critério 1) - Geral (para os outros setores)
   {
     nomeParametro: 'META_ATRASO',
     valor: '320',
@@ -179,29 +176,37 @@ const parametersMock = [
     criterionId: 1,
     justificativa: 'Meta inicial Atraso Geral',
   },
-  // Adicionar mais metas para outros critérios...
-  // Exemplo de Fator de Ajuste (se decidir parametrizar)
-  // { nomeParametro: 'AJUSTE_DEFEITO_PARANOA_ABR25', valor: '-1', dataInicioEfetivo: '2025-04-01', dataFimEfetivo: '2025-04-30', criterionId: 4, sectorId: 2, justificativa: 'Ajuste pontual parametrizado' },
+  // --- META PARA NOVO CRITÉRIO ---
+  {
+    nomeParametro: 'META_FURO_ATRASO',
+    valor: '5',
+    dataInicioEfetivo: '2025-04-01',
+    dataFimEfetivo: null,
+    criterionId: 15,
+    justificativa: 'Meta inicial Furo por Atraso',
+  }, // Assumi meta 5
+  // ------------------------------
 ];
 
-// Exemplo de Dados de Desempenho (Abril/2025) - VALORES CHUTADOS! Ajuste para gerar um ranking legal
 const performanceMock = [
-  // GAMA (sectorId: 1)
-  { sectorId: 1, criterionId: 1, metricDate: '2025-04-30', valor: 303 }, // Atraso
-  { sectorId: 1, criterionId: 9, metricDate: '2025-04-30', valor: 3.01 }, // IPK
-  // PARANOÁ (sectorId: 2)
-  { sectorId: 2, criterionId: 1, metricDate: '2025-04-30', valor: 317 }, // Atraso
-  { sectorId: 2, criterionId: 9, metricDate: '2025-04-30', valor: 2.88 }, // IPK
-  // SANTA MARIA (sectorId: 3)
-  { sectorId: 3, criterionId: 1, metricDate: '2025-04-30', valor: 309 }, // Atraso
-  { sectorId: 3, criterionId: 9, metricDate: '2025-04-30', valor: 2.81 }, // IPK
-  // SÃO SEBASTIÃO (sectorId: 4)
-  { sectorId: 4, criterionId: 1, metricDate: '2025-04-30', valor: 706 }, // Atraso - Valor alto para teste
-  { sectorId: 4, criterionId: 9, metricDate: '2025-04-30', valor: 1.78 }, // IPK - Valor baixo para teste
-  // Adicionar dados para OUTROS CRITÉRIOS e talvez outros meses (ex: 2025-03-31)
+  // Dados existentes...
+  { sectorId: 1, criterionId: 1, metricDate: '2025-04-30', valor: 303 }, // Atraso GAMA
+  { sectorId: 1, criterionId: 9, metricDate: '2025-04-30', valor: 3.01 }, // IPK GAMA
+  { sectorId: 2, criterionId: 1, metricDate: '2025-04-30', valor: 317 }, // Atraso PARANOÁ
+  { sectorId: 2, criterionId: 9, metricDate: '2025-04-30', valor: 2.88 }, // IPK PARANOÁ
+  { sectorId: 3, criterionId: 1, metricDate: '2025-04-30', valor: 309 }, // Atraso SANTA MARIA
+  { sectorId: 3, criterionId: 9, metricDate: '2025-04-30', valor: 2.81 }, // IPK SANTA MARIA
+  { sectorId: 4, criterionId: 1, metricDate: '2025-04-30', valor: 706 }, // Atraso SÃO SEBASTIÃO
+  { sectorId: 4, criterionId: 9, metricDate: '2025-04-30', valor: 1.78 }, // IPK SÃO SEBASTIÃO
+  // --- DADOS PARA NOVO CRITÉRIO (ID 15) ---
+  { sectorId: 1, criterionId: 15, metricDate: '2025-04-30', valor: 3 }, // Furo Atraso GAMA
+  { sectorId: 2, criterionId: 15, metricDate: '2025-04-30', valor: 6 }, // Furo Atraso PARANOÁ
+  { sectorId: 3, criterionId: 15, metricDate: '2025-04-30', valor: 4 }, // Furo Atraso SANTA MARIA
+  { sectorId: 4, criterionId: 15, metricDate: '2025-04-30', valor: 7 }, // Furo Atraso SÃO SEBASTIÃO
+  // ---------------------------------------
+  // Adicionar dados para OUTROS CRITÉRIOS para ter tabelas mais completas!
 ];
 
-// Exemplo de Logs
 const auditLogsMock = [
   {
     timestamp: new Date().toISOString(),
@@ -220,8 +225,7 @@ async function runSeed() {
     await AppDataSource.initialize();
     console.log('DataSource inicializado com sucesso!');
 
-    // Pegar Repositórios
-    const queryRunner = AppDataSource.createQueryRunner(); // Usar QueryRunner para DELETE em cascata se necessário ou ordem
+    const queryRunner = AppDataSource.createQueryRunner(); // Melhor usar queryRunner para limpar
     const sectorRepo = AppDataSource.getRepository(SectorEntity);
     const criterionRepo = AppDataSource.getRepository(CriterionEntity);
     const roleRepo = AppDataSource.getRepository(RoleEntity);
@@ -230,58 +234,50 @@ async function runSeed() {
     const performanceRepo = AppDataSource.getRepository(PerformanceDataEntity);
     const auditLogRepo = AppDataSource.getRepository(AuditLogEntity);
 
-    // Limpar tabelas na ordem inversa de dependência (cuidado com foreign keys se ativas)
-    // Para o MVP com synchronize: true, pode ser mais fácil limpar tudo,
-    // mas em prod usaríamos delete({}) ou truncate com cuidado.
-    console.log('Limpando dados antigos (se existirem)...');
-    await queryRunner.query('DELETE FROM user_roles'); // Limpa a tabela de junção Muitos-para-Muitos
-    await auditLogRepo.delete({}); // Deleta todos os logs (referenciam users)
-    await performanceRepo.delete({}); // Deleta dados de performance (referenciam sectors, criteria)
-    await parameterRepo.delete({}); // Deleta parâmetros (referenciam users, sectors, criteria)
+    console.log('Limpando dados antigos (na ordem correta)...');
+    await queryRunner.query('DELETE FROM audit_logs');
+    await queryRunner.query('DELETE FROM performance_data');
+    await queryRunner.query('DELETE FROM parameter_values');
+    await queryRunner.query('DELETE FROM user_roles'); // Limpar tabela de junção
+    await queryRunner.query('DELETE FROM users');
+    await queryRunner.query('DELETE FROM roles');
+    await queryRunner.query('DELETE FROM criteria');
+    await queryRunner.query('DELETE FROM sectors');
+    // Usar DELETE FROM em vez de clear() ou truncate() é mais seguro com FKs
+    // Se usar TRUNCATE, precisaria ser TRUNCATE ... RESTART IDENTITY CASCADE
+    console.log('Tabelas limpas (usando DELETE).');
 
-    // 2. Agora limpar as tabelas que eram referenciadas
-    await userRepo.delete({}); // Deleta usuários (NÃO use clear/truncate por causa de user_roles)
-    await roleRepo.delete({}); // Deleta perfis
-    await criterionRepo.delete({}); // Deleta critérios
-    await sectorRepo.delete({}); // Deleta setores
-
-    console.log('Tabelas limpas.');
-
-    // Inserir Dados Mock (usando .save() que é mais flexível)
     console.log('Inserindo Setores...');
     await sectorRepo.save(sectorsMock);
 
     console.log('Inserindo Critérios...');
-    await criterionRepo.save(criteriaMock);
+    await criterionRepo.save(criteriaMockCorrigido); // Usa a lista corrigida
 
     console.log('Inserindo Perfis...');
     await roleRepo.save(rolesMock);
 
     console.log('Inserindo Usuários...');
-    // Para salvar relações ManyToMany, precisamos carregar as entidades relacionadas primeiro
     const adminRole = await roleRepo.findOneByOrFail({ nome: 'Admin' });
     const viewerRole = await roleRepo.findOneByOrFail({ nome: 'Viewer' });
-    await userRepo.save([
+    const createdUsers = await userRepo.save([
       {
-        id: 1,
         nome: 'Admin Sistema',
         email: 'admin@sistema.com',
         ativo: true,
         roles: [adminRole],
       },
       {
-        id: 2,
         nome: 'Usuario Comum',
         email: 'user@sistema.com',
         ativo: true,
         roles: [viewerRole],
       },
     ]);
+    const adminUser = createdUsers.find((u) => u.email === 'admin@sistema.com');
 
     console.log('Inserindo Parâmetros...');
-    // Adicionar createdByUserId se quiser ligar ao usuário mock
     await parameterRepo.save(
-      parametersMock.map((p) => ({ ...p, createdByUserId: 1 }))
+      parametersMock.map((p) => ({ ...p, createdByUserId: adminUser?.id }))
     );
 
     console.log('Inserindo Dados de Desempenho...');
@@ -289,8 +285,12 @@ async function runSeed() {
 
     console.log('Inserindo Logs de Auditoria...');
     await auditLogRepo.save(
-      auditLogsMock.map((l) => ({ ...l, userId: 1, userName: 'Admin Sistema' }))
-    ); // Atribui ao usuário admin mock
+      auditLogsMock.map((l) => ({
+        ...l,
+        userId: adminUser?.id,
+        userName: adminUser?.nome,
+      }))
+    );
 
     console.log('Seed executado com sucesso!');
   } catch (error) {
