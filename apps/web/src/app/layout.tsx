@@ -22,7 +22,7 @@ export default function RootLayout({
       {/* Adicionado flex layout para footer */}
       <body className={`${inter.className} min-h-screen flex flex-col`}>
         {/* --- BARRA DE NAVEGAÇÃO SIMPLES --- */}
-        <header className='bg-gray-800 text-white p-4 shadow-md sticky top-0 z-50'>
+        <header className='bg-gray-800 text-white p-4 shadow-md  top-0 z-50 w-full'>
           {/* Sticky para fixar */}
           <nav className='container mx-auto flex flex-wrap gap-x-6 gap-y-2 items-center'>
             <Link href='/' className='font-bold text-lg mr-auto'>
@@ -54,7 +54,7 @@ export default function RootLayout({
         {/* ----------------------------------- */}
 
         {/* Conteúdo principal da página (com flex-grow) */}
-        <main className='flex-grow container mx-auto p-4'>
+        <main className='max-w-screen-3xl mx-auto p-4'>
           <Providers>{children}</Providers>
         </main>
 
