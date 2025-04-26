@@ -244,8 +244,8 @@ export default function HomePage() {
 
   return (
     <TooltipProvider>
-      <main className='mx-auto p-4 lg:p-6 space-y-8'>
-        <h1 className='text-3xl font-bold mb-6 text-center'>
+      <main className='mx-auto px-4  space-y-8'>
+        <h1 className='text-3xl font-bold mb-2 text-center'>
           Premiação Filiais - Desempenho
         </h1>
 
