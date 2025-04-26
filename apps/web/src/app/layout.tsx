@@ -26,7 +26,7 @@ export default function RootLayout({
           <Providers>{children}</Providers>
         </main>
         {/* Footer simples */}
-        <footer className='bg-gray-200 text-center p-2 text-sm text-gray-600 mt-auto'>
+        <footer className='bg-gray-100 text-center p-2 text-sm text-gray-600 sticky bottom-0 z-50'>
           Sistema de Premiação - MVP V1.7 - {new Date().getFullYear()}
         </footer>
       </body>

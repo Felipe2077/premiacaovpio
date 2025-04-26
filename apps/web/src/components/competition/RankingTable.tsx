@@ -1,6 +1,7 @@
 // apps/web/src/components/competition/RankingTable.tsx
 'use client'; // Precisa ser client se usar hooks ou event handlers, ou se for usado em Client Components
 
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -26,13 +27,23 @@ export function RankingTable({
 }: RankingTableProps) {
   // Renderização condicional baseada nas props
   if (isLoading) {
-    return <p>Carregando ranking...</p>;
-  }
-
-  if (!rankingData || rankingData.length === 0) {
     return (
-      <div className='border rounded-md p-4 text-center text-gray-500'>
-        Nenhum dado de ranking para exibir.
+      <div className='border rounded-md p-4 space-y-3'>
+        {/* Simula Cabeçalho */}
+        <div className='flex justify-between'>
+          <Skeleton className='h-5 w-1/4' />
+          <Skeleton className='h-5 w-1/4' />
+          <Skeleton className='h-5 w-1/4' />
+        </div>
+        {/* Simula 4 Linhas */}
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className='flex justify-between space-x-2'>
+            <Skeleton className='h-4 w-1/6' /> {/* Posição */}
+            <Skeleton className='h-4 w-3/6' /> {/* Setor */}
+            <Skeleton className='h-4 w-2/6' /> {/* Pontuação */}
+          </div>
+        ))}
+        <Skeleton className='h-3 w-1/2 mt-2' /> {/* Simula Caption */}
       </div>
     );
   }
@@ -41,8 +52,8 @@ export function RankingTable({
   return (
     <div className='border rounded-md'>
       <Table>
-        <TableCaption>
-          Classificação final (Menor pontuação = Melhor posição).
+        <TableCaption className='my-2'>
+          Classificação atual (Menor pontuação = Melhor posição).
         </TableCaption>
         <TableHeader>
           <TableRow>

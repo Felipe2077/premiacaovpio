@@ -1,6 +1,7 @@
 // apps/web/src/components/competition/DetailedResultsTable.tsx (VERSÃO CORRIGIDA V2)
 'use client';
 
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -95,7 +96,30 @@ export function DetailedResultsTable({
   // --------------------------------------
 
   if (isLoading) {
-    return <p>Carregando detalhes...</p>;
+    // Simula algumas linhas e colunas genéricas
+    const numMockRows = 4;
+    const numMockCols = 6; // Número aproximado de colunas visíveis? Ou use uniqueCriteria.length se já tiver? Melhor fixo.
+    return (
+      <div className='border rounded-md p-4 space-y-3'>
+        {/* Simula Cabeçalho */}
+        <div className='flex space-x-2'>
+          <Skeleton className='h-5 w-[150px]' /> {/* Coluna Setor */}
+          {[...Array(numMockCols)].map((_, i) => (
+            <Skeleton key={i} className='h-5 flex-1' />
+          ))}
+        </div>
+        {/* Simula Linhas */}
+        {[...Array(numMockRows)].map((_, i) => (
+          <div key={i} className='flex space-x-2 mt-2'>
+            <Skeleton className='h-4 w-[150px]' /> {/* Coluna Setor */}
+            {[...Array(numMockCols)].map((_, j) => (
+              <Skeleton key={j} className='h-4 flex-1' />
+            ))}
+          </div>
+        ))}
+        <Skeleton className='h-3 w-1/2 mt-2' /> {/* Simula Caption */}
+      </div>
+    );
   }
   if (error) {
     return (
