@@ -1,75 +1,79 @@
 // apps/web/src/app/page.tsx
-'use client'; // Precisa ser client component para usar hooks como useQuery
+'use client';
 
 import { useQuery } from '@tanstack/react-query';
+// Importa componentes da Tabela Shadcn (ajuste o caminho se diferente)
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'; // Assumindo que @/components/ui/table existe após 'add table'
 
-// Função para buscar os dados da nossa API backend
-const fetchPocData = async () => {
-  // ATENÇÃO: A porta 3001 é onde nossa API (apps/api) está rodando!
-  const res = await fetch('http://localhost:3001/api/poc-data');
+// Interface para nossos dados mockados (PODEMOS MOVER PARA shared-types DEPOIS!)
+interface RankingEntry {
+  RANK: number;
+  SETOR: string;
+  PONTUACAO: number;
+}
+
+const fetchRankingData = async (): Promise<RankingEntry[]> => {
+  const res = await fetch('http://localhost:3001/api/poc-data'); // Continua chamando a mesma API
   if (!res.ok) {
-    throw new Error('Erro ao buscar dados da API');
+    throw new Error(`Erro ${res.status} ao buscar dados da API`);
   }
   return res.json();
 };
 
 export default function HomePage() {
-  const { data, isLoading, error, isFetching } = useQuery({
-    queryKey: ['pocData'], // Chave única para este query
-    queryFn: fetchPocData, // Função que busca os dados
+  const {
+    data: rankingData,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ['rankingData'], // Mudei a chave para clareza
+    queryFn: fetchRankingData,
   });
 
   return (
     <main className='container mx-auto p-4'>
       <h1 className='text-2xl font-bold mb-4'>
-        Demonstração MVP - Dados da PoC
+        Premiação Filiais - Ranking MVP
       </h1>
 
-      {isLoading && <p>Carregando dados da API...</p>}
+      {isLoading && <p className='text-blue-600'>Carregando ranking...</p>}
+      {error && (
+        <p className='text-red-500'>Erro ao buscar ranking: {error.message}</p>
+      )}
 
-      {error && <p className='text-red-500'>Erro: {error.message}</p>}
-
-      {isFetching && <p>Buscando atualizações...</p>}
-
-      {data && (
-        <div>
-          <h2 className='text-xl mb-2'>
-            Dados Recebidos ({Array.isArray(data) ? data.length : 0} registros):
-          </h2>
-          {/* Opção 1: Mostrar JSON (mais rápido de implementar) */}
-          <pre className='bg-gray-100 p-2 rounded overflow-x-auto text-sm'>
-            {JSON.stringify(data, null, 2)}
-          </pre>
-
-          {/* Opção 2: Tabela Simples (descomente se preferir) */}
-          {/*
-          <div className="overflow-x-auto mt-4">
-            <table className="min-w-full divide-y divide-gray-200 border">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r">Empresa</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r">Cod. OS</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r">Num. OS</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data Abertura</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {Array.isArray(data) && data.map((item: any, index: number) => (
-                  <tr key={item.CODINTOS || index}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r">{item.CODIGOEMPRESA}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r">{item.CODINTOS}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r">{item.NUMEROOS}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.DATAABERTURAOS ? new Date(item.DATAABERTURAOS).toLocaleDateString('pt-BR') : '-'}</td>
-                  </tr>
-                ))}
-                {!Array.isArray(data) && (
-                  <tr><td colSpan={4} className="text-center p-4">Formato de dados inesperado.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          */}
-        </div>
+      {rankingData && (
+        <Table>
+          <TableCaption>
+            Ranking da Premiação (MVP com dados simulados).
+          </TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead className='w-[100px]'>Posição</TableHead>
+              <TableHead>Setor</TableHead>
+              <TableHead className='text-right'>Pontuação</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rankingData.map((entry) => (
+              <TableRow key={entry.SETOR}>
+                <TableCell className='font-medium'>{entry.RANK}º</TableCell>
+                <TableCell>{entry.SETOR}</TableCell>
+                {/* Formatando pontuação com 2 casas decimais */}
+                <TableCell className='text-right'>
+                  {entry.PONTUACAO.toFixed(2)}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </main>
   );

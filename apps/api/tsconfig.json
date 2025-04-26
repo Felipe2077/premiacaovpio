@@ -4,7 +4,9 @@
     "outDir": "./dist", // Pasta de saída do build JS
     "rootDir": "./src", // Pasta raiz do código TS
     "experimentalDecorators": true, // Habilita decorators (TypeORM)
-    "emitDecoratorMetadata": true // Habilita metadados (TypeORM)
+    "emitDecoratorMetadata": true, // Habilita metadados (TypeORM)
+    "baseUrl": "./",
+    "paths": { "@/*": ["src/*"] }
   },
   "include": ["src/**/*"], // Inclui todos os arquivos TS da pasta src
   "exclude": ["node_modules", "dist"] // Exclui pastas

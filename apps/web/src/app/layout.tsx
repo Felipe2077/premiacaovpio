@@ -1,8 +1,8 @@
 // apps/web/src/app/layout.tsx
-import Providers from '@/components/Providers';
+import Providers from '@/components/Providers'; // Usando o alias '@/'
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import '../styles/globals.css'; // Importa Tailwind/CSS Global
+import './globals.css'; // Caminho relativo padrão do create-next-app
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -19,7 +19,7 @@ export default function RootLayout({
   return (
     <html lang='pt-BR'>
       <body className={inter.className}>
-        <Providers>{children}</Providers> {/* Envolve com o Provider */}
+        <Providers>{children}</Providers> {/* <-- Provider aqui! */}
       </body>
     </html>
   );

@@ -1,28 +1,25 @@
 {
-  "extends": "../../packages/typescript-config/base.json",
   "compilerOptions": {
-    // Necessário para Next.js com React
-    "target": "es5",
+    "target": "ES2017",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
-    "noEmit": true, // Next.js cuida do build
+    "noEmit": true,
     "esModuleInterop": true,
     "module": "esnext",
-    "moduleResolution": "bundler", // ou "node"
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve", // Importante para React
+    "jsx": "preserve",
     "incremental": true,
-    // Configuração de Paths (opcional mas recomendado com App Router)
     "plugins": [
       {
         "name": "next"
       }
     ],
     "paths": {
-      "@/*": ["./src/*"] // Permite importar como '@/components/...'
+      "@/*": ["./src/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
