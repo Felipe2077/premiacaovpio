@@ -1,10 +1,13 @@
 // apps/api/src/modules/ranking/ranking.service.ts
-import { AppDataSource } from '@/database/data-source'; // Usando alias ou caminho relativo
+import { AppDataSource } from '@/database/data-source';
 import { CriterionEntity } from '@/entity/criterion.entity';
 import { ParameterValueEntity } from '@/entity/parameter-value.entity';
 import { PerformanceDataEntity } from '@/entity/performance-data.entity';
 import { SectorEntity } from '@/entity/sector.entity';
-import { EntradaRanking } from '@sistema-premiacao/shared-types';
+import {
+  EntradaRanking,
+  EntradaResultadoDetalhado,
+} from '@sistema-premiacao/shared-types';
 import {
   FindOptionsWhere,
   IsNull,
@@ -12,208 +15,225 @@ import {
   MoreThanOrEqual,
 } from 'typeorm';
 
+// Interface auxiliar para os resultados por critério
+interface CriterionResult {
+  sectorId: number;
+  sectorName: string;
+  criterionId: number;
+  criterionName: string;
+  performanceValue: number | null;
+  targetValue: number | null;
+  diffRatio: number | null;
+  rank?: number;
+  points: number | null; // <--- CORREÇÃO TS2322: Alterado de points?: number para points: number | null
+}
+
 export class RankingService {
-  // Repositórios do TypeORM para acessar as tabelas
   private sectorRepo = AppDataSource.getRepository(SectorEntity);
   private criterionRepo = AppDataSource.getRepository(CriterionEntity);
   private parameterRepo = AppDataSource.getRepository(ParameterValueEntity);
   private performanceRepo = AppDataSource.getRepository(PerformanceDataEntity);
-  // private auditLogRepo = AppDataSource.getRepository(AuditLogEntity); // Se precisar logar algo
 
   async getCurrentRanking(period?: string): Promise<EntradaRanking[]> {
     console.log(
       `[RankingService] Calculando ranking para o período: ${period || 'Último disponível'}`
     );
 
-    // --- PASSO 1: Buscar Dados Essenciais do Banco ---
     try {
-      // Definição do período (simplificado para MVP - ex: 'YYYY-MM-DD' do fim do mês)
-      // No futuro, receberemos isso como parâmetro e trataremos melhor
-      const targetDate = '2025-04-30'; // Fixo para nosso mock de Abril/2025
+      const targetDate = '2025-04-30'; // MVP Fixo
 
-      console.log(
-        `[RankingService] Buscando dados base (setores, critérios)...`
-      );
+      console.log(`[RankingService] Buscando dados base...`);
       const activeSectors = await this.sectorRepo.findBy({ ativo: true });
-      console.log(
-        '[RankingService] Setores ativos BUSCADOS:',
-        JSON.stringify(activeSectors, null, 2)
-      );
-
       const activeCriteria = await this.criterionRepo.findBy({ ativo: true });
-      console.log(
-        '[RankingService] Critérios ativos BUSCADOS:',
-        JSON.stringify(activeCriteria, null, 2)
-      );
+      // Log Detalhado Removido por Clareza - Adicionar se precisar depurar de novo
+      // console.log('[RankingService] Setores ativos BUSCADOS:', JSON.stringify(activeSectors, null, 2));
+      // console.log('[RankingService] Critérios ativos BUSCADOS:', JSON.stringify(activeCriteria, null, 2));
 
       if (!activeSectors.length || !activeCriteria.length) {
-        console.warn(
-          '[RankingService] Não foram encontrados setores ou critérios ativos.'
-        );
-        console.warn(
-          '[RankingService] CONDIÇÃO IF ATINGIDA: Não foram encontrados setores ou critérios ativos.'
-        );
-
+        console.warn('[RankingService] Sem setores ou critérios ativos.');
         return [];
       }
+      console.log(
+        `[RankingService] Setores: ${activeSectors.length}, Critérios: ${activeCriteria.length}`
+      );
 
       console.log(
         `[RankingService] Buscando dados de desempenho para ${targetDate}...`
       );
       const performanceData = await this.performanceRepo.find({
-        where: {
-          metricDate: targetDate, // Busca simples pela data exata do mock
-          // Poderia buscar por mês: metricDate >= inicioMes AND metricDate <= fimMes
-        },
+        where: { metricDate: targetDate },
       });
       console.log(
-        `[RankingService] ${performanceData.length} registros de desempenho encontrados.`
+        `[RankingService] Desempenho encontrado: ${performanceData.length}`
       );
 
       console.log(
         `[RankingService] Buscando parâmetros vigentes para ${targetDate}...`
       );
       const whereParams: FindOptionsWhere<ParameterValueEntity> = {
-        dataInicioEfetivo: LessThanOrEqual(targetDate), // Começou em ou antes de targetDate
-        dataFimEfetivo: IsNull(), // Ainda está vigente (sem data de fim) OU
+        dataInicioEfetivo: LessThanOrEqual(targetDate),
+        dataFimEfetivo: IsNull(),
       };
       const whereParamsExpired: FindOptionsWhere<ParameterValueEntity> = {
         dataInicioEfetivo: LessThanOrEqual(targetDate),
-        dataFimEfetivo: MoreThanOrEqual(targetDate), // Termina em ou depois de targetDate
+        dataFimEfetivo: MoreThanOrEqual(targetDate),
       };
-      // Busca parâmetros que estavam ativos na data alvo
       const currentParameters = await this.parameterRepo.find({
         where: [whereParams, whereParamsExpired],
       });
       console.log(
-        `[RankingService] ${currentParameters.length} parâmetros vigentes encontrados.`
-      );
-
-      // --- PASSO 2: Processar e Calcular Pontuações (Lógica Principal) ---
-      console.log(
-        '[RankingService] Processando dados e calculando pontuações...'
+        `[RankingService] Parâmetros encontrados: ${currentParameters.length}`
       );
 
       const sectorScores: {
-        [sectorId: number]: {
-          nome: string;
-          totalScore: number;
-          results: any[];
-        };
+        [sectorId: number]: { nome: string; totalScore: number };
       } = {};
+      activeSectors.forEach((s) => {
+        sectorScores[s.id] = { nome: s.nome, totalScore: 0 };
+      });
+      // console.log('[RankingService] Scores iniciais:', JSON.stringify(sectorScores));
 
-      // Inicializa score para todos os setores ativos
-      for (const sector of activeSectors) {
-        sectorScores[sector.id] = {
-          nome: sector.nome,
-          totalScore: 0,
-          results: [],
-        };
-      }
+      const detailedResults: EntradaResultadoDetalhado[] = [];
 
-      // Itera por cada critério para calcular pontos
+      // ----- INÍCIO CÁLCULO POR CRITÉRIO -----
       for (const criterion of activeCriteria) {
         console.log(
-          `[RankingService] Calculando para Critério: ${criterion.nome}`
+          `\n[RankingService] Processando Critério ID: ${criterion.id} (${criterion.nome})`
         );
-        const criterionResults: {
-          sectorId: number;
-          performanceValue: number | null;
-          targetValue: number | string | null;
-          diffPercent?: number;
-          rank?: number;
-          points?: number;
-        }[] = [];
+        const resultsForCriterion: CriterionResult[] = [];
 
-        // Busca performance e meta para cada setor neste critério
+        // 1. Coleta e Calcula Razão
         for (const sector of activeSectors) {
           const perf = performanceData.find(
             (p) => p.sectorId === sector.id && p.criterionId === criterion.id
           );
-          const value = perf ? perf.valor : null;
+          const rawValue = perf ? perf.valor : null;
 
-          // Lógica para encontrar a meta correta (pode ser específica do setor/critério ou geral)
           let targetParam = currentParameters.find(
             (p) =>
               p.criterionId === criterion.id &&
               p.sectorId === sector.id &&
-              p.nomeParametro.startsWith('META_') // Meta específica setor/critério
+              p.nomeParametro.startsWith('META_')
           );
           if (!targetParam) {
             targetParam = currentParameters.find(
               (p) =>
                 p.criterionId === criterion.id &&
                 !p.sectorId &&
-                p.nomeParametro.startsWith('META_') // Meta geral do critério
+                p.nomeParametro.startsWith('META_')
             );
           }
-          const target = targetParam ? targetParam.valor : null; // Valor da meta (ainda como string)
+          const targetString = targetParam ? targetParam.valor : null;
+          const targetValue = targetString ? parseFloat(targetString) : null;
 
-          criterionResults.push({
+          let diffRatio: number | null = null;
+          if (rawValue !== null && targetValue !== null && targetValue !== 0) {
+            diffRatio = rawValue / targetValue;
+          } else if (rawValue !== null && targetValue === 0) {
+            diffRatio = Infinity;
+          } else {
+            diffRatio = null;
+          }
+
+          // Não precisa mais logar aqui dentro, vamos logar o criterionResults completo depois
+          // console.log(`  Setor ${sector.id}: Valor=${rawValue}, Meta=${targetValue}, Razão=${diffRatio?.toFixed(3)}`);
+          resultsForCriterion.push({
             sectorId: sector.id,
-            performanceValue: value,
-            targetValue: target,
+            sectorName: sector.nome,
+            criterionId: criterion.id,
+            criterionName: criterion.nome,
+            performanceValue: rawValue,
+            targetValue: targetValue,
+            diffRatio: diffRatio,
+            points: null, // Inicializa points como null
           });
         }
 
-        // **-- INÍCIO DA LÓGICA DE CÁLCULO (Simplificada/TODO) --**
-
-        // TODO MVP.A.2.1: Calcular a "% de Diferença" ou Razão (Realizado vs Meta)
-        // - Levar em conta o criterion.sentido_melhor ('MAIOR' ou 'MENOR')
-        // - Converter targetValue (string) para number
-        // - Lidar com meta zero ou valor realizado nulo
-        // - Adicionar a propriedade 'diffPercent' ao criterionResults
-
-        // TODO MVP.A.2.2: Rankear os Setores para ESTE CRITÉRIO
-        // - Ordenar criterionResults com base na 'diffPercent' calculada, respeitando o 'sentido_melhor'.
-        // - Atribuir rank (1 a N) a cada setor. Adicionar 'rank' ao criterionResults.
-
-        // TODO MVP.A.2.3: Atribuir Pontos com base no Rank e Index
-        // - Usar o 'rank' e o 'criterion.index' (lembrar da lógica invertida para 10/11)
-        // - Definir a escala de pontos (1.0, 1.5, 2.0, 2.5) ou (2.5, 2.0, 1.5, 1.0)
-        // - Adicionar 'points' ao criterionResults.
-        // - Somar os pontos ao score total do setor: sectorScores[sector.id].totalScore += points;
-
-        // **-- FIM DA LÓGICA DE CÁLCULO (Simplificada/TODO) --**
-
-        // Por enquanto, vamos apenas logar os resultados intermediários por critério
-        console.log(
-          `[RankingService] Resultados intermediários para ${criterion.nome}:`,
-          criterionResults
-        );
-        // E adicionar uma pontuação FAKE para teste:
-        for (const result of criterionResults) {
-          const fakePoints = Math.random() * 1.5 + 1; // Pontos aleatórios entre 1 e 2.5
-
-          const currentSectorScore = sectorScores[result.sectorId];
-          if (currentSectorScore) {
-            // Se existe, atualiza score e resultados
-            currentSectorScore.totalScore += fakePoints;
-            currentSectorScore.results.push({
-              criterio: criterion.nome,
-              valor: result.performanceValue,
-              meta: result.targetValue,
-              pontos: parseFloat(fakePoints.toFixed(2)), // Arredonda os pontos fake
-            });
+        // 2. Rankear Setores
+        resultsForCriterion.sort((a, b) => {
+          if (a.diffRatio === null) return 1;
+          if (b.diffRatio === null) return -1;
+          if (a.diffRatio === Infinity)
+            return criterion.sentido_melhor === 'MAIOR' ? -1 : 1; // Infinito é "melhor" se maior for melhor, "pior" se menor for melhor
+          if (b.diffRatio === Infinity)
+            return criterion.sentido_melhor === 'MAIOR' ? 1 : -1;
+          if (criterion.sentido_melhor === 'MAIOR') {
+            return b.diffRatio - a.diffRatio;
           } else {
-            // Isso não deveria acontecer com a lógica atual, mas é bom logar se ocorrer
+            return a.diffRatio - b.diffRatio;
+          }
+        });
+        resultsForCriterion.forEach((result, index) => {
+          result.rank = index + 1;
+        });
+
+        // 3. Atribuir Pontos e Acumular Score + Popular detailedResults
+        const useInvertedScale =
+          criterion.index === 10 || criterion.index === 11;
+        resultsForCriterion.forEach((result) => {
+          let points: number | null = null;
+          switch (result.rank) {
+            case 1:
+              points = useInvertedScale ? 2.5 : 1.0;
+              break;
+            case 2:
+              points = useInvertedScale ? 2.0 : 1.5;
+              break;
+            case 3:
+              points = useInvertedScale ? 1.5 : 2.0;
+              break;
+            case 4:
+              points = useInvertedScale ? 1.0 : 2.5;
+              break;
+            default:
+              points = null;
+          }
+          result.points = points; // Atribui os pontos calculados (number | null)
+
+          // --- CORREÇÃO TS2532: Garantir que o if envolva todas as operações ---
+          const currentSectorScore = sectorScores[result.sectorId];
+          if (currentSectorScore && points !== null) {
+            // Verifica se o setor existe E se os pontos são válidos
+            currentSectorScore.totalScore += points; // Acumula no score total
+            console.log(
+              `  Setor ${result.sectorId} (${result.sectorName}): Rank=${result.rank}, Pontos=${points} (Invertido=${useInvertedScale}) p/ Critério ${criterion.nome}`
+            );
+
+            // Guarda resultado detalhado DENTRO DO IF para garantir consistência
+            detailedResults.push({
+              // --- CORREÇÃO TS2561: Usar 'setorId' (minúsculo) ---
+              setorId: result.sectorId,
+              //----------------------------------------------------
+              setorNome: result.sectorName,
+              criterioId: result.criterionId,
+              criterioNome: result.criterionName,
+              periodo: targetDate.substring(0, 7),
+              valorRealizado: result.performanceValue,
+              valorMeta: result.targetValue,
+              percentualAtingimento: result.diffRatio,
+              pontos: result.points, // points aqui é number | null
+            });
+          } else if (!currentSectorScore) {
             console.error(
-              `ERRO DE LÓGICA: Setor com ID ${result.sectorId} encontrado em criterionResults mas não em sectorScores!`
+              `ERRO DE LÓGICA: Setor com ID ${result.sectorId} não encontrado em sectorScores!`
             );
           }
-        }
-      } // Fim do loop de critérios
+          // --- FIM DA CORREÇÃO TS2532 ---
+        });
+      } // ----- FIM CÁLCULO POR CRITÉRIO -----
+
+      console.log(
+        '[RankingService] Scores FINAIS antes de ranquear:',
+        JSON.stringify(sectorScores)
+      );
 
       // --- PASSO 3: Calcular Ranking Final ---
-      console.log('[RankingService] Calculando ranking final...');
-
       const finalRankingArray = Object.values(sectorScores)
-        .sort((a, b) => a.totalScore - b.totalScore) // Ordena pelo totalScore (MENOR é melhor!)
+        .sort((a, b) => a.totalScore - b.totalScore)
         .map((score, index) => ({
-          // Mapeia para o formato de saída
           RANK: index + 1,
           SETOR: score.nome,
-          PONTUACAO: parseFloat(score.totalScore.toFixed(2)), // Formata para 2 decimais
+          PONTUACAO: parseFloat(score.totalScore.toFixed(2)),
         }));
 
       console.log(
@@ -223,8 +243,14 @@ export class RankingService {
       return finalRankingArray;
     } catch (error) {
       console.error('[RankingService] Erro ao calcular ranking:', error);
-      // Logar erro em um sistema de log mais robusto em produção
-      throw new Error('Falha ao calcular ranking.'); // Relança o erro para a camada da API tratar
+      throw new Error('Falha ao calcular ranking.');
     }
   }
+
+  // TODO: Criar método para retornar 'detailedResults' para o endpoint /api/results
+  // async getDetailedResults(period?: string): Promise<EntradaResultadoDetalhado[]> {
+  //    // Lógica similar, mas retorna detailedResults em vez de finalRankingArray
+  //    // ... (pode reusar partes do cálculo acima) ...
+  //    return detailedResults;
+  // }
 }
