@@ -2,27 +2,13 @@
 'use client';
 
 import RankingTable from '@/components/competition/RankingTable';
-import {
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link'; // <-- Importar Link que faltava no seu base
 import { useMemo } from 'react'; // <-- React importado (boa prática)
 // Importar nossos tipos compartilhados
-import { formatNumber, formatPercent } from '@/lib/utils';
+import DetailedResultsTable from '@/components/competition/DetailedResultsTable';
 import {
   Criterio,
   EntradaRanking,
@@ -274,6 +260,10 @@ export default function HomePage() {
         {/* Seção Ranking Final */}
         <section>
           <h2 className='text-2xl font-semibold mb-1'>🏆 Ranking Atual</h2>
+          <p className='text-sm text-gray-600 dark:text-gray-400 italic mb-3'>
+            Classificação final baseada na soma dos pontos por critério (Menor
+            pontuação = Melhor posição).
+          </p>
           <RankingTable
             data={rankingData}
             isLoading={isLoadingRanking}
@@ -286,122 +276,13 @@ export default function HomePage() {
           <h2 className='text-2xl font-semibold mb-3'>
             📊 Desempenho Detalhado por Critério
           </h2>
-          {/* Usando isLoading combinado */}
-          {isLoading && <p>Carregando detalhes...</p>}
-          {!isLoading &&
-            detailedResults &&
-            uniqueCriteria.length > 0 &&
-            Object.keys(resultsBySector).length > 0 &&
-            activeCriteria && ( // Só renderiza se tudo estiver pronto
-              <div className='overflow-x-auto border rounded-md'>
-                <Table>
-                  <TableCaption>
-                    Pontuação por critério/filial. Passe o mouse sobre os pontos
-                    para ver detalhes.
-                  </TableCaption>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className='sticky left-0 bg-background z-10 font-semibold min-w-[150px]'>
-                        Critério
-                      </TableHead>
-                      {/* Cabeçalho fixo */}
-                      {uniqueCriteria.map(
-                        (
-                          criterion // <-- CORRETO: Mapeia uniqueCriteria
-                        ) => (
-                          <TableHead
-                            key={criterion.id}
-                            className='text-center font-semibold min-w-[90px] px-1 text-xs whitespace-normal'
-                            // min-w-[90px] ou [80px]? Teste!
-                            // px-1: Reduz padding horizontal
-                            // text-xs: Diminui fonte
-                            // whitespace-normal: Permite quebra de linha
-                            // --- FIM AJUSTES ---
-                          >
-                            {criterion.name} {/* Exibe o nome do critério */}
-                          </TableHead>
-                        )
-                      )}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {/* Verifica se há dados E critérios para o cabeçalho */}
-                    {Object.keys(resultsBySector).length === 0 ||
-                    uniqueCriteria.length === 0 ? (
-                      // Mostra mensagem se não houver dados ou critérios
-                      <TableRow>
-                        <TableCell
-                          colSpan={uniqueCriteria.length + 1}
-                          className='text-center p-1'
-                        >
-                          Nenhum dado detalhado para exibir no período.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      // Itera sobre os SETORES (resultsBySector) para criar as LINHAS
-                      Object.entries(resultsBySector).map(
-                        ([sectorIdStr, sectorData]) => (
-                          <TableRow key={sectorIdStr}>
-                            {/* Primeira CÉLULA é o nome do setor (coluna fixa) */}
-                            <TableCell className='font-semibold sticky left-0 bg-background z-10'>
-                              {sectorData.sectorName}
-                            </TableCell>
-                            {/* Itera sobre os CRITÉRIOS (uniqueCriteria) para criar as COLUNAS/CÉLULAS restantes */}
-                            {uniqueCriteria.map((criterion) => {
-                              // Busca o resultado específico para este SETOR e este CRITÉRIO
-                              const result =
-                                sectorData.criteriaResults[criterion.id];
-                              const pontos = result?.pontos;
-                              const cellStyle = getPointsCellStyle(
-                                pontos,
-                                criterion.id
-                              );
-
-                              return (
-                                <TableCell
-                                  key={`${sectorIdStr}-${criterion.id}`} // Chave única da célula
-                                  className='text-center p-1 sm:p-2'
-                                >
-                                  {/* Renderiza o Tooltip e os Pontos SE houver resultado */}
-                                  {result ? (
-                                    <Tooltip delayDuration={200}>
-                                      <TooltipTrigger asChild>
-                                        <span
-                                          className={`cursor-default ${cellStyle}`}
-                                        >
-                                          {formatNumber(pontos)}
-                                        </span>
-                                      </TooltipTrigger>
-                                      <TooltipContent className='text-xs bg-popover text-popover-foreground shadow-md p-2 rounded'>
-                                        <p>
-                                          Valor:{' '}
-                                          {formatNumber(result.valorRealizado)}
-                                        </p>
-                                        <p>
-                                          Meta: {formatNumber(result.valorMeta)}
-                                        </p>
-                                        <p>
-                                          % Ating.:{' '}
-                                          {formatPercent(
-                                            result.percentualAtingimento
-                                          )}
-                                        </p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  ) : (
-                                    <span className='text-gray-400'>-</span> // Mostra '-' se não houver dados
-                                  )}
-                                </TableCell>
-                              );
-                            })}
-                          </TableRow>
-                        )
-                      )
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
+          <DetailedResultsTable
+            resultsBySector={resultsBySector}
+            uniqueCriteria={uniqueCriteria}
+            activeCriteria={activeCriteria} // Passa os critérios ativos para a lógica de cor
+            isLoading={isLoadingDetails || isLoadingCriteria} // Passa estado de loading combinado relevante
+            error={errorDetails || errorCriteria} // Passa erro combinado relevante
+          />
         </section>
 
         {/* Link admin */}
