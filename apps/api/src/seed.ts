@@ -1,15 +1,13 @@
 // apps/api/src/seed.ts
 import 'reflect-metadata';
-import { AppDataSource } from '../database/data-source'; // Ajuste o caminho se necessário
-import { AuditLogEntity } from '../entity/audit-log.entity';
-import { CriterionEntity } from '../entity/criterion.entity';
-import { ParameterValueEntity } from '../entity/parameter-value.entity';
-import { PerformanceDataEntity } from '../entity/performance-data.entity';
-import { RoleEntity } from '../entity/role.entity';
-import { SectorEntity } from '../entity/sector.entity';
-import { UserEntity } from '../entity/user.entity';
-// Importe outros tipos/interfaces de shared-types se precisar para os mocks
-// import { ParametroValor } from '@sistema-premiacao/shared-types';
+import { AppDataSource } from './database/data-source'; // Ajuste o caminho se necessário
+import { AuditLogEntity } from './entity/audit-log.entity';
+import { CriterionEntity } from './entity/criterion.entity';
+import { ParameterValueEntity } from './entity/parameter-value.entity';
+import { PerformanceDataEntity } from './entity/performance-data.entity';
+import { RoleEntity } from './entity/role.entity';
+import { SectorEntity } from './entity/sector.entity';
+import { UserEntity } from './entity/user.entity';
 
 // --- Definição dos Dados Mock ---
 
@@ -20,8 +18,7 @@ const sectorsMock = [
   { id: 4, nome: 'SÃO SEBASTIÃO', ativo: true },
 ];
 
-const criteriaMock = [
-  // Baseado nas colunas da imagem PBI - AJUSTE OS INDEX e SENTIDO!
+const criteriaMock: Partial<CriterionEntity>[] = [
   {
     id: 1,
     nome: 'ATRASO',
@@ -61,7 +58,7 @@ const criteriaMock = [
     sentido_melhor: 'MENOR',
     ativo: true,
     unidade_medida: '%',
-  }, // Lógica especial no cálculo
+  },
   {
     id: 6,
     nome: 'ATESTADO FUNC',
@@ -69,7 +66,7 @@ const criteriaMock = [
     sentido_melhor: 'MENOR',
     ativo: true,
     unidade_medida: '%',
-  }, // Index 10 - lógica invertida?
+  },
   {
     id: 7,
     nome: 'COLISÃO',
@@ -85,7 +82,7 @@ const criteriaMock = [
     sentido_melhor: 'MENOR',
     ativo: true,
     unidade_medida: '%',
-  }, // Index 11 - lógica invertida?
+  },
   {
     id: 9,
     nome: 'IPK',
@@ -97,15 +94,16 @@ const criteriaMock = [
   {
     id: 10,
     nome: 'MEDIA KM/L',
-    index: 10,
+    index: 15,
     sentido_melhor: 'MAIOR',
     ativo: true,
     unidade_medida: 'KM/L',
-  },
+  }, // Mudei para 15 (ou outro número único)
+
   {
     id: 11,
     nome: 'KM OCIOSA',
-    index: 11,
+    index: 16,
     sentido_melhor: 'MENOR',
     ativo: true,
     unidade_medida: '%',
@@ -223,6 +221,7 @@ async function runSeed() {
     console.log('DataSource inicializado com sucesso!');
 
     // Pegar Repositórios
+    const queryRunner = AppDataSource.createQueryRunner(); // Usar QueryRunner para DELETE em cascata se necessário ou ordem
     const sectorRepo = AppDataSource.getRepository(SectorEntity);
     const criterionRepo = AppDataSource.getRepository(CriterionEntity);
     const roleRepo = AppDataSource.getRepository(RoleEntity);
@@ -235,15 +234,18 @@ async function runSeed() {
     // Para o MVP com synchronize: true, pode ser mais fácil limpar tudo,
     // mas em prod usaríamos delete({}) ou truncate com cuidado.
     console.log('Limpando dados antigos (se existirem)...');
-    await auditLogRepo.clear();
-    await performanceRepo.clear();
-    await parameterRepo.clear();
-    await userRepo.query('DELETE FROM user_roles'); // Limpar tabela de junção primeiro
-    await userRepo.clear();
-    await roleRepo.clear();
-    await criterionRepo.clear();
-    await sectorRepo.clear();
-    // Adicione clear para outras tabelas se necessário
+    await queryRunner.query('DELETE FROM user_roles'); // Limpa a tabela de junção Muitos-para-Muitos
+    await auditLogRepo.delete({}); // Deleta todos os logs (referenciam users)
+    await performanceRepo.delete({}); // Deleta dados de performance (referenciam sectors, criteria)
+    await parameterRepo.delete({}); // Deleta parâmetros (referenciam users, sectors, criteria)
+
+    // 2. Agora limpar as tabelas que eram referenciadas
+    await userRepo.delete({}); // Deleta usuários (NÃO use clear/truncate por causa de user_roles)
+    await roleRepo.delete({}); // Deleta perfis
+    await criterionRepo.delete({}); // Deleta critérios
+    await sectorRepo.delete({}); // Deleta setores
+
+    console.log('Tabelas limpas.');
 
     // Inserir Dados Mock (usando .save() que é mais flexível)
     console.log('Inserindo Setores...');
