@@ -10,6 +10,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@radix-ui/react-tooltip": "^1.2.4",
     "@sistema-premiacao/shared-types": "workspace:^",
     "@tanstack/react-query": "^5.74.4",
     "class-variance-authority": "^0.7.1",
