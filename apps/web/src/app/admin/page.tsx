@@ -144,8 +144,8 @@ export default function AdminConceptPage() {
                     {param.nomeParametro}
                   </TableCell>
                   <TableCell>{param.valor}</TableCell>
-                  <TableCell>{param.criterionId ?? '-'}</TableCell>
-                  <TableCell>{param.sectorId ?? '-'}</TableCell>
+                  <TableCell>{param.criterioId ?? '-'}</TableCell>
+                  <TableCell>{param.setorId ?? '-'}</TableCell>
                   <TableCell>
                     {formatDateTime(param.dataInicioEfetivo)}
                   </TableCell>
