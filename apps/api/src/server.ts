@@ -31,8 +31,23 @@ const fastify = Fastify({
 // ... (Restante do seu código: instancia RankingService, define rota /api/poc-data) ...
 const rankingService = new RankingService();
 
-fastify.get('/api/poc-data', async (request, reply) => {
-  // ... (lógica da rota) ...
+fastify.get('/api/poc-data', async (_request, reply) => {
+  console.log('!!! ROTA /api/poc-data ACIONADA !!!'); // Log inicial do handler
+  try {
+    fastify.log.info(
+      'Endpoint /api/poc-data chamado, buscando dados via RankingService...'
+    );
+
+    console.log('>>> PRESTES A CHAMAR rankingService.getCurrentRanking...'); // Log antes da chamada
+    const data = await rankingService.getCurrentRanking(); // Chama o método do serviço
+    console.log('<<< rankingService.getCurrentRanking RETORNOU:', data); // Log do retorno
+
+    reply.send(data); // <-- ENVIA OS DADOS RECEBIDOS DO SERVIÇO!
+  } catch (error) {
+    console.error('!!! ERRO NO HANDLER da ROTA /api/poc-data:', error);
+    fastify.log.error('Erro ao buscar dados via RankingService:', error); // Log do erro Fastify
+    reply.status(500).send({ error: 'Erro interno ao buscar dados.' });
+  }
 });
 
 // Função para iniciar o servidor (seu código aqui está ótimo!)

@@ -35,12 +35,25 @@ export class RankingService {
         `[RankingService] Buscando dados base (setores, critérios)...`
       );
       const activeSectors = await this.sectorRepo.findBy({ ativo: true });
+      console.log(
+        '[RankingService] Setores ativos BUSCADOS:',
+        JSON.stringify(activeSectors, null, 2)
+      );
+
       const activeCriteria = await this.criterionRepo.findBy({ ativo: true });
+      console.log(
+        '[RankingService] Critérios ativos BUSCADOS:',
+        JSON.stringify(activeCriteria, null, 2)
+      );
 
       if (!activeSectors.length || !activeCriteria.length) {
         console.warn(
           '[RankingService] Não foram encontrados setores ou critérios ativos.'
         );
+        console.warn(
+          '[RankingService] CONDIÇÃO IF ATINGIDA: Não foram encontrados setores ou critérios ativos.'
+        );
+
         return [];
       }
 
