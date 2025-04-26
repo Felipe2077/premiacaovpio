@@ -1,4 +1,4 @@
-// apps/web/src/components/competition/DetailedResultsTable.tsx
+// apps/web/src/components/competition/DetailedResultsTable.tsx (VERSÃO CORRIGIDA V2)
 'use client';
 
 import {
@@ -13,17 +13,16 @@ import {
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider, // Importa aqui se for usar SÓ neste componente
+  TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { formatNumber, formatPercent } from '@/lib/utils';
 import {
   Criterio,
   EntradaResultadoDetalhado,
 } from '@sistema-premiacao/shared-types';
-// Importa as funções de utilitários, incluindo a de estilo
-import { formatNumber, formatPercent } from '@/lib/utils';
 
-// Estruturas de dados esperadas como props
+// Interfaces locais (mantidas para este componente)
 interface SimpleSector {
   id: number;
   name: string;
@@ -36,7 +35,6 @@ interface SectorData {
   criteriaResults: CriterionResultMap;
 }
 
-// Define as propriedades que o componente espera receber
 interface DetailedResultsTableProps {
   resultsBySector: Record<number, SectorData>;
   uniqueCriteria: Pick<Criterio, 'id' | 'nome'>[];
@@ -48,17 +46,17 @@ interface DetailedResultsTableProps {
 export function DetailedResultsTable({
   resultsBySector,
   uniqueCriteria,
-  activeCriteria, // Recebe como prop
+  activeCriteria,
   isLoading,
   error,
 }: DetailedResultsTableProps) {
+  // --- Função de Estilo COMPLETA ---
   const getPointsCellStyle = (
     points: number | null | undefined,
     criterionId: number | null | undefined
   ): string => {
     if (points === null || points === undefined)
       return 'text-gray-400 dark:text-gray-500';
-    // Agora acessa 'activeCriteria' diretamente da prop do componente
     if (!activeCriteria || criterionId === null || criterionId === undefined)
       return 'text-foreground';
 
@@ -67,27 +65,46 @@ export function DetailedResultsTable({
     const useInvertedScale = criterionIndex === 10 || criterionIndex === 11;
     const baseStyle = 'font-semibold px-2 py-1 rounded text-xs sm:text-sm ';
 
-    // ... (lógica das cores permanece a mesma) ...
     const isBestPoints = useInvertedScale ? points === 2.5 : points === 1.0;
-    // ... (resto da lógica de cores) ...
-    if (isBestPoints) return baseStyle + '...'; // green
-    // ... etc ...
-    return 'text-foreground';
-  };
+    const isGoodPoints = useInvertedScale ? points === 2.0 : points === 1.5;
+    const isBadPoints = useInvertedScale ? points === 1.5 : points === 2.0;
+    const isWorstPoints = useInvertedScale ? points === 1.0 : points === 2.5;
 
-  // Se estiver carregando os dados (combinado da página pai), mostra mensagem
+    // --- Bloco IF/ELSE IF que retorna as cores ---
+    if (isBestPoints)
+      return (
+        baseStyle +
+        'bg-green-100 text-green-800 dark:bg-green-800/30 dark:text-green-300'
+      );
+    if (isGoodPoints)
+      return (
+        baseStyle +
+        'bg-yellow-100 text-yellow-800 dark:bg-yellow-800/30 dark:text-yellow-300'
+      );
+    if (isBadPoints)
+      return (
+        baseStyle +
+        'bg-orange-100 text-orange-800 dark:bg-orange-800/30 dark:text-orange-300'
+      );
+    if (isWorstPoints)
+      return (
+        baseStyle +
+        'bg-red-100 text-red-800 dark:bg-red-800/30 dark:text-red-300'
+      );
+    // --- Fim do Bloco ---
+
+    return 'text-foreground'; // Fallback
+  };
+  // --------------------------------------
+
   if (isLoading) {
     return <p>Carregando detalhes...</p>;
   }
-
-  // Se houver erro específico dos detalhes (vindo da página pai)
   if (error) {
     return (
       <p className='text-red-500'>Erro ao carregar detalhes: {error.message}</p>
     );
   }
-
-  // Se não houver critérios ou dados por setor
   if (
     !uniqueCriteria ||
     uniqueCriteria.length === 0 ||
@@ -101,9 +118,7 @@ export function DetailedResultsTable({
     );
   }
 
-  // Renderiza a tabela se tudo estiver ok
   return (
-    // TooltipProvider pode ficar aqui ou no layout. Se só usar tooltip aqui, melhor aqui.
     <TooltipProvider>
       <div className='overflow-x-auto border rounded-md'>
         <Table>
@@ -138,21 +153,21 @@ export function DetailedResultsTable({
                     {uniqueCriteria.map((criterion) => {
                       const result = sectorData.criteriaResults[criterion.id];
                       const pontos = result?.pontos;
-                      // Chama getPointsCellStyle passando activeCriteria recebido via props
+                      // Chama a função getPointsCellStyle COMPLETA
                       const cellStyle = getPointsCellStyle(
                         pontos,
-                        criterion.id,
-                        activeCriteria
+                        criterion.id
                       );
 
                       return (
                         <TableCell
-                          key={`${sectorIdStr}-${criterion.id}`}
+                          key={`${sectorId}-${criterion.id}`}
                           className='text-center p-1 align-middle'
                         >
                           {result ? (
                             <Tooltip delayDuration={200}>
                               <TooltipTrigger asChild>
+                                {/* Aplica o estilo CORRETO */}
                                 <span
                                   className={`cursor-default inline-block ${cellStyle}`}
                                 >
