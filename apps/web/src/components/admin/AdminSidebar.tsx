@@ -2,7 +2,13 @@
 'use client'; // Necessário se usar hooks como usePathname no futuro para destacar link ativo
 
 import { Separator } from '@/components/ui/separator'; // Shadcn Separator
-import { History, LayoutDashboard, ShieldAlert, Wrench } from 'lucide-react'; // Ícones
+import {
+  CalendarDays,
+  History,
+  LayoutDashboard,
+  ShieldAlert,
+  Wrench,
+} from 'lucide-react'; // Ícones
 import Link from 'next/link';
 
 // Poderia receber props no futuro, como o pathname atual para destacar link ativo
@@ -16,11 +22,22 @@ export function AdminSidebar() {
     // { href: '/admin/users', label: 'Usuários', icon: Users }, // Exemplo para futuro
   ];
 
+  // Pega o mês e ano atuais para exibir
+  const currentPeriod = new Date().toLocaleDateString('pt-BR', {
+    month: 'long',
+    year: 'numeric',
+  });
+  // Capitaliza o mês
+  const formattedPeriod =
+    currentPeriod.charAt(0).toUpperCase() + currentPeriod.slice(1);
+
   return (
     <aside className='w-60 h-screen sticky top-0 border-r bg-muted/40 p-4 flex flex-col'>
-      {' '}
-      {/* Largura fixa, altura tela, fixa no topo, borda, fundo sutil, padding */}
       <h2 className='text-lg font-semibold mb-4 pl-2'>Painel Admin</h2>
+      <div className='flex items-center gap-2 text-sm text-green-600 mb-3 pl-2'>
+        <CalendarDays className='h-4 w-4' />
+        <span>{'Vigência: ' + formattedPeriod}</span>
+      </div>
       <Separator className='mb-4' />
       <nav className='flex flex-col gap-2'>
         {navLinks.map((link) => (
@@ -35,7 +52,6 @@ export function AdminSidebar() {
           </Link>
         ))}
       </nav>
-      {/* Pode adicionar mais itens no sidebar depois */}
     </aside>
   );
 }

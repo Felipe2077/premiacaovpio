@@ -9,7 +9,7 @@ export default function AdminLayout({
 }>) {
   return (
     // Usa Flexbox para criar layout de sidebar + conteúdo
-    <div className='flex min-h-screen w-full'>
+    <div className='flex  w-full'>
       {/* Garante altura e largura */}
       <AdminSidebar /> {/* Renderiza o menu lateral */}
       {/* Área de conteúdo principal que vai renderizar as páginas filhas */}

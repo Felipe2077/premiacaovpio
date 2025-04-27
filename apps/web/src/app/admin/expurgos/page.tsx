@@ -1,4 +1,4 @@
-// apps/web/src/app/admin/expurgos/page.tsx
+// apps/web/src/app/admin/expurgos/page.tsx (VERSÃO REALMENTE COMPLETA E CORRIGIDA)
 'use client';
 
 import { Badge } from '@/components/ui/badge';
@@ -44,34 +44,132 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import type { ExpurgoEventEntity } from '@/entity/expurgo-event.entity';
-import { formatDate } from '@/lib/utils';
-import type { Criterio, Setor } from '@sistema-premiacao/shared-types';
+import type { ExpurgoEventEntity } from '@/entity/expurgo-event.entity'; // OK, frontend usa entidade diretamente por ora
+import { formatDate } from '@/lib/utils'; // OK
+import type { Criterio, Setor } from '@sistema-premiacao/shared-types'; // OK
 import { useQuery } from '@tanstack/react-query';
 import React, { useState } from 'react';
-import { toast } from 'sonner'; // Só toast é necessário aqui
+import { toast } from 'sonner';
 
-// --- Funções de Fetch ---
+// --- Funções de Fetch COMPLETAS ---
+
 const fetchExpurgos = async (): Promise<ExpurgoEventEntity[]> => {
-  /* ... como antes ... */
+  const url = 'http://localhost:3001/api/expurgos';
+  console.log(`Workspace: Chamando ${url}`);
+  try {
+    const res = await fetch(url);
+    console.log(`Workspace: Status para ${url}: ${res.status}`);
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => `Erro ${res.status}`);
+      console.error(`Workspace failed for ${url}:`, errorBody);
+      throw new Error(`Erro ${res.status} ao buscar expurgos`);
+    }
+    const text = await res.text();
+    if (!text) {
+      console.log(`Workspace: Resposta OK para ${url} mas corpo vazio.`);
+      return [];
+    }
+    const data = JSON.parse(text);
+    console.log(`Workspace OK Parsed para ${url}:`, data);
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error(`Workspace EXCEPTION para ${url}:`, error);
+    if (error instanceof Error) throw error;
+    throw new Error('Erro desconhecido durante fetch ou parse de expurgos.');
+  }
 };
+
 const fetchActiveCriteriaSimple = async (): Promise<
   Pick<Criterio, 'id' | 'nome' | 'index'>[]
 > => {
-  /* ... como antes ... */
+  const url = 'http://localhost:3001/api/criteria/active';
+  console.log(`Workspace: Chamando ${url}`);
+  try {
+    const res = await fetch(url);
+    console.log(`Workspace: Status para ${url}: ${res.status}`);
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => `Erro ${res.status}`);
+      console.error(`Workspace failed for ${url}:`, errorBody);
+      throw new Error(`Erro ${res.status} ao buscar critérios ativos`);
+    }
+    const text = await res.text();
+    if (!text) {
+      console.log(`Workspace: Resposta OK para ${url} mas corpo vazio.`);
+      return [];
+    }
+    const data = JSON.parse(text);
+    console.log(`Workspace OK Parsed para ${url}:`, data);
+    // Adicionar validação mínima se quiser
+    if (
+      !Array.isArray(data) ||
+      !data.every(
+        (item) =>
+          typeof item.id === 'number' &&
+          typeof item.nome ===
+            'string' /*&& (typeof item.index === 'number' || item.index === null)*/
+      )
+    ) {
+      console.error(
+        'Formato inesperado recebido de /api/criteria/active:',
+        data
+      );
+      throw new Error('Resposta inválida da API de critérios.');
+    }
+    return data;
+  } catch (error) {
+    console.error(`Workspace EXCEPTION para ${url}:`, error);
+    if (error instanceof Error) throw error;
+    throw new Error('Erro desconhecido durante fetch ou parse de critérios.');
+  }
 };
+
 const fetchActiveSectorsSimple = async (): Promise<
   Pick<Setor, 'id' | 'nome'>[]
 > => {
-  /* ... como antes ... */
+  const url = 'http://localhost:3001/api/sectors/active';
+  console.log(`Workspace: Chamando ${url}`);
+  try {
+    const res = await fetch(url);
+    console.log(`Workspace: Status para ${url}: ${res.status}`);
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => `Erro ${res.status}`);
+      console.error(`Workspace failed for ${url}:`, errorBody);
+      throw new Error(`Erro ${res.status} ao buscar setores ativos`);
+    }
+    const text = await res.text();
+    if (!text) {
+      console.log(`Workspace: Resposta OK para ${url} mas corpo vazio.`);
+      return [];
+    }
+    const data = JSON.parse(text);
+    console.log(`Workspace OK Parsed para ${url}:`, data);
+    // Adicionar validação mínima se quiser
+    if (
+      !Array.isArray(data) ||
+      !data.every(
+        (item) => typeof item.id === 'number' && typeof item.nome === 'string'
+      )
+    ) {
+      console.error(
+        'Formato inesperado recebido de /api/sectors/active:',
+        data
+      );
+      throw new Error('Resposta inválida da API de setores.');
+    }
+    return data;
+  } catch (error) {
+    console.error(`Workspace EXCEPTION para ${url}:`, error);
+    if (error instanceof Error) throw error;
+    throw new Error('Erro desconhecido durante fetch ou parse de setores.');
+  }
 };
+// -----------------------------
 
 // --- Componente da Página ---
 export default function ExpurgosPage() {
-  // Estado do Modal
   const [isExpurgoModalOpen, setIsExpurgoModalOpen] = useState(false);
 
-  // Queries para buscar dados
+  // Queries - AGORA COM FETCHERS COMPLETOS
   const {
     data: expurgos,
     isLoading: isLoadingExpurgos,
@@ -80,18 +178,26 @@ export default function ExpurgosPage() {
     queryKey: ['expurgos'],
     queryFn: fetchExpurgos,
   });
-  const { data: activeCriteria } = useQuery({
+  const {
+    data: activeCriteria,
+    isLoading: isLoadingCriteria,
+    error: errorCriteria,
+  } = useQuery({
     queryKey: ['activeCriteriaSimple'],
     queryFn: fetchActiveCriteriaSimple,
     staleTime: Infinity,
   });
-  const { data: activeSectors } = useQuery({
+  const {
+    data: activeSectors,
+    isLoading: isLoadingSectors,
+    error: errorSectors,
+  } = useQuery({
     queryKey: ['activeSectorsSimple'],
     queryFn: fetchActiveSectorsSimple,
     staleTime: Infinity,
   });
 
-  // Handler Fake
+  // Handler Fake COMPLETO
   const handleRegisterExpurgo = (event: React.FormEvent) => {
     event.preventDefault();
     console.log('Simulando registrar expurgo...');
@@ -99,21 +205,27 @@ export default function ExpurgosPage() {
     setIsExpurgoModalOpen(false);
   };
 
-  // Filtra critérios elegíveis para expurgo (exemplo)
-  const eligibleCriteria = activeCriteria?.filter(
-    (c) =>
-      // Usando IDs que definimos como elegíveis (QUEBRA=3, DEFEITO=4, KM OCIOSA=11)
-      // ATENÇÃO: Se mudou o ID de KM OCIOSA no criteriaMock, ajuste aqui!
-      [3, 4, 11].includes(c.id)
-    // Ou [3, 4, 16] se o ID de KM Ociosa for 11 e seu index for 16 no mock? VERIFICAR SEED.
-    // Assumindo que os IDs dos critérios são 3, 4, 11 para Quebra, Defeito, KmOciosa.
-  );
+  // Filtra critérios elegíveis
+  const eligibleCriteria = activeCriteria?.filter((c) =>
+    [3, 4, 11].includes(c.id)
+  ); // CONFIRA OS IDs!
+
+  // Combina estados de loading e erro
+  const isLoading = isLoadingExpurgos || isLoadingCriteria || isLoadingSectors;
+  const error = errorExpurgos || errorCriteria || errorSectors;
 
   return (
-    // Provider é necessário para tooltips nesta página
     <TooltipProvider>
-      <div className='space-y-6'>
+      <div>
+        {/* Toaster precisa estar em algum lugar do layout pai ou aqui */}
+        {/* <Toaster position="top-right" richColors /> */}
         <h1 className='text-2xl font-bold'>Gestão de Expurgos</h1>
+
+        {error && (
+          <p className='text-red-500 font-semibold mb-4'>
+            Erro: {error instanceof Error ? error.message : 'Erro desconhecido'}
+          </p>
+        )}
 
         {/* Card de Expurgos */}
         <Card>
@@ -122,16 +234,16 @@ export default function ExpurgosPage() {
               <div>
                 <CardTitle>Expurgos Registrados (MVP)</CardTitle>
                 <CardDescription>
-                  Registro auditado de expurgos autorizados para eventos
-                  excepcionais.
+                  Demonstração do registro auditado de expurgos autorizados.
                 </CardDescription>
               </div>
+              {/* Botão e Modal */}
               <Dialog
                 open={isExpurgoModalOpen}
                 onOpenChange={setIsExpurgoModalOpen}
               >
                 <DialogTrigger asChild>
-                  <Button size='sm' variant='outline'>
+                  <Button size='sm' variant='outline' disabled={isLoading}>
                     Registrar Novo Expurgo
                   </Button>
                 </DialogTrigger>
@@ -149,9 +261,19 @@ export default function ExpurgosPage() {
                         <Label htmlFor='exp-setor' className='text-right'>
                           Filial
                         </Label>
-                        <Select required name='exp-setor'>
+                        <Select
+                          required
+                          name='exp-setor'
+                          disabled={!activeSectors}
+                        >
                           <SelectTrigger className='col-span-3'>
-                            <SelectValue placeholder='Selecione...' />
+                            <SelectValue
+                              placeholder={
+                                isLoadingSectors
+                                  ? 'Carregando...'
+                                  : 'Selecione...'
+                              }
+                            />
                           </SelectTrigger>
                           <SelectContent>
                             {activeSectors?.map((s) => (
@@ -166,9 +288,19 @@ export default function ExpurgosPage() {
                         <Label htmlFor='exp-crit' className='text-right'>
                           Critério
                         </Label>
-                        <Select required name='exp-crit'>
+                        <Select
+                          required
+                          name='exp-crit'
+                          disabled={!eligibleCriteria}
+                        >
                           <SelectTrigger className='col-span-3'>
-                            <SelectValue placeholder='Selecione elegível...' />
+                            <SelectValue
+                              placeholder={
+                                isLoadingCriteria
+                                  ? 'Carregando...'
+                                  : 'Selecione elegível...'
+                              }
+                            />
                           </SelectTrigger>
                           <SelectContent>
                             {eligibleCriteria?.map((c) => (
@@ -221,14 +353,10 @@ export default function ExpurgosPage() {
             </div>
             {/* Filtros Placeholders */}
             <div className='flex gap-2 pt-4'>
-              <Input
-                placeholder='Filtrar por Critério...'
-                className='max-w-xs'
-                disabled
-              />
+              <Input placeholder='Filtrar...' className='max-w-xs' disabled />
               <Select disabled>
                 <SelectTrigger className='w-[180px]'>
-                  <SelectValue placeholder='Filtrar por Filial...' />
+                  <SelectValue placeholder='Filtrar...' />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value='null'>...</SelectItem>
@@ -237,11 +365,16 @@ export default function ExpurgosPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {isLoadingExpurgos && <p>Carregando expurgos...</p>}
-            {errorExpurgos && (
-              <p className='text-red-500'>Erro: {errorExpurgos.message}</p>
+            {/* Usa isLoading combinado para tabela */}
+            {isLoading && <p>Carregando dados...</p>}
+            {!isLoading && error && (
+              <p className='text-red-500'>
+                Falha ao carregar alguns dados necessários.
+              </p>
             )}
-            {expurgos && (
+            {/* Mensagem genérica se houver erro */}
+            {/* Renderiza tabela apenas se não estiver carregando E não houver erro GERAL E tiver dados de expurgo */}
+            {!isLoading && !error && expurgos && (
               <Table>
                 <TableCaption>
                   Lista de eventos expurgados manualmente com autorização.
@@ -267,8 +400,12 @@ export default function ExpurgosPage() {
                   {expurgos.map((exp) => (
                     <TableRow key={exp.id}>
                       <TableCell>{formatDate(exp.dataEvento)}</TableCell>
-                      <TableCell>{exp.setor?.nome ?? '-'}</TableCell>
-                      <TableCell>{exp.criterio?.nome ?? '-'}</TableCell>
+                      <TableCell>
+                        {exp.setor?.nome ?? `ID ${exp.sectorId}`}
+                      </TableCell>
+                      <TableCell>
+                        {exp.criterio?.nome ?? `ID ${exp.criterionId}`}
+                      </TableCell>
                       <TableCell className='text-xs max-w-[200px] truncate'>
                         <Tooltip>
                           <TooltipTrigger className='hover:underline cursor-help'>
@@ -279,7 +416,10 @@ export default function ExpurgosPage() {
                           <TooltipContent>{exp.justificativa}</TooltipContent>
                         </Tooltip>
                       </TableCell>
-                      <TableCell>{exp.registradoPor?.nome ?? '-'}</TableCell>
+                      <TableCell>
+                        {exp.registradoPor?.nome ??
+                          `ID ${exp.registradoPorUserId}`}
+                      </TableCell>
                       <TableCell>
                         <Badge
                           variant={
@@ -296,7 +436,6 @@ export default function ExpurgosPage() {
                           {exp.status}
                         </Badge>
                       </TableCell>
-                      {/* Poderíamos adicionar botões de Ação desabilitados aqui */}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -308,6 +447,3 @@ export default function ExpurgosPage() {
     </TooltipProvider>
   );
 }
-
-// Não esqueça do export default se usar import default em outro lugar
-// export default ExpurgosPage;
