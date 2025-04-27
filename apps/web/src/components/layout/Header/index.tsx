@@ -1,4 +1,5 @@
 // apps/web/src/components/layout/Header.tsx
+import { Settings } from 'lucide-react';
 import Link from 'next/link';
 
 export function Header() {
@@ -8,20 +9,7 @@ export function Header() {
         <Link href='/' className='font-bold text-2xl mr-auto'>
           Premiação Viação Pioneira🥇🥈🥉
         </Link>
-        <Link
-          href='/'
-          className='text-sm sm:text-base hover:text-amber-300 transition-colors'
-        >
-          Visão Detalhada (B)
-        </Link>
 
-        {/* Links Placeholders */}
-        <Link
-          href='/visao-a'
-          className='text-sm sm:text-base hover:text-amber-300 transition-colors'
-        >
-          Visão Detalhada (A)
-        </Link>
         {/*
         <Link href="/visao-pbi" className="text-sm sm:text-base text-gray-500 cursor-not-allowed" aria-disabled="true" onClick={(e)=>e.preventDefault()}>
             Visão PBI
@@ -30,9 +18,13 @@ export function Header() {
 
         <Link
           href='/admin'
-          className='text-sm sm:text-base hover:text-amber-300 transition-colors'
+          className='flex items-center gap-2 bg-amber-100 hover:bg-amber-200 active:bg-amber-300 
+                 px-4 py-2 rounded-md transition-all duration-200 
+                 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400'
+          aria-label='Abrir configurações'
         >
-          Admin (Conceitual)
+          <Settings className='h-4 w-4 text-amber-800 group-hover:rotate-45 transition-transform duration-300' />
+          <span className='font-medium text-amber-900'>Ajustes</span>
         </Link>
       </nav>
     </header>
