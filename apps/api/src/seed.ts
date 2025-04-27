@@ -3,6 +3,7 @@ import 'reflect-metadata';
 import { AppDataSource } from './database/data-source';
 import { AuditLogEntity } from './entity/audit-log.entity';
 import { CriterionEntity } from './entity/criterion.entity';
+import { ExpurgoEventEntity } from './entity/expurgo-event.entity';
 import { ParameterValueEntity } from './entity/parameter-value.entity';
 import { PerformanceDataEntity } from './entity/performance-data.entity';
 import { RoleEntity } from './entity/role.entity';
@@ -187,6 +188,29 @@ const parametersMock = [
   }, // Assumi meta 5
   // ------------------------------
 ];
+// --- Mock de Eventos de Expurgo (Exemplos) ---
+// Lembre-se: QUEBRA=3, DEFEITO=4, KM OCIOSA=11 (IDs do criteriaMock)
+const expurgosMock: Partial<ExpurgoEventEntity>[] = [
+  {
+    criterionId: 4, // DEFEITO
+    sectorId: 2, // PARANOÁ
+    dataEvento: '2025-04-15', // Data do evento expurgado
+    descricaoEvento:
+      'Defeito no sensor X do veículo Y - Causa externa identificada.',
+    justificativa: 'Autorizado por Diretoria em RE-XYZ - Impacto chuva.',
+    status: 'APLICADO_MVP',
+    registradoPorUserId: 1, // Usuário Admin Sistema
+  },
+  {
+    criterionId: 11, // KM OCIOSA
+    sectorId: 4,
+    dataEvento: '2025-04-20',
+    descricaoEvento: 'Veículo Z ficou parado em bloqueio na via por 2h.',
+    justificativa: 'Autorizado por Gerente W - Evento externo comprovado.',
+    status: 'APLICADO_MVP',
+    registradoPorUserId: 1,
+  },
+];
 
 const performanceMock = [
   // Dados existentes...
@@ -208,13 +232,40 @@ const performanceMock = [
 ];
 
 const auditLogsMock = [
+  // Log do Seed anterior mantido
   {
-    timestamp: new Date().toISOString(),
-    userId: 1,
-    userName: 'Admin Sistema',
     actionType: 'SEED_EXECUTADO',
-    details: { message: 'Banco de dados populado com dados mock iniciais.' },
+    details: { message: 'Banco de dados populado com dados mock.' },
   },
+  // Exemplo de alteração de parâmetro
+  {
+    actionType: 'PARAMETRO_ALTERADO',
+    entityType: 'ParameterValueEntity', // Tabela/Entidade afetada
+    entityId: '1', // ID do registro de parâmetro afetado (exemplo)
+    details: {
+      // JSON com detalhes
+      nomeParametro: 'META_IPK',
+      valorAntigo: '2.90',
+      valorNovo: '3.00',
+      dataInicioEfetivo: '2025-04-01',
+    },
+    justificativa: 'Ajuste de meta para o Q2 conforme planejamento.',
+    // userId e userName serão preenchidos ao salvar
+  },
+  // Exemplo de Registro de Expurgo
+  {
+    actionType: 'EXPURGO_REGISTRADO',
+    entityType: 'ExpurgoEventEntity',
+    entityId: '1', // ID do registro de expurgo criado (exemplo)
+    details: {
+      criterioNome: 'DEFEITO', // Nome do critério para clareza no log
+      setorNome: 'PARANOÁ', // Nome do setor
+      dataEvento: '2025-04-15',
+    },
+    justificativa: 'Autorizado por Diretoria em RE-XYZ - Impacto chuva.',
+  },
+  // Exemplo de Login (poderia ser adicionado pela lógica de auth real)
+  // { actionType: 'LOGIN_SUCESSO', userId: 2, userName: 'Usuario Comum', ipAddress: '192.168.1.100' }
 ];
 
 // --- Função para Executar o Seed ---
@@ -225,7 +276,8 @@ async function runSeed() {
     await AppDataSource.initialize();
     console.log('DataSource inicializado com sucesso!');
 
-    const queryRunner = AppDataSource.createQueryRunner(); // Melhor usar queryRunner para limpar
+    // Pegar Repositórios
+    const queryRunner = AppDataSource.createQueryRunner();
     const sectorRepo = AppDataSource.getRepository(SectorEntity);
     const criterionRepo = AppDataSource.getRepository(CriterionEntity);
     const roleRepo = AppDataSource.getRepository(RoleEntity);
@@ -233,25 +285,29 @@ async function runSeed() {
     const parameterRepo = AppDataSource.getRepository(ParameterValueEntity);
     const performanceRepo = AppDataSource.getRepository(PerformanceDataEntity);
     const auditLogRepo = AppDataSource.getRepository(AuditLogEntity);
+    const expurgoEventRepo = AppDataSource.getRepository(ExpurgoEventEntity); // <-- Novo Repo
 
+    // Limpar tabelas na ordem inversa de dependência
     console.log('Limpando dados antigos (na ordem correta)...');
+    // Limpar tabelas que podem referenciar outras primeiro
+    await queryRunner.query('DELETE FROM expurgo_events'); // <-- Limpar Expurgos
     await queryRunner.query('DELETE FROM audit_logs');
     await queryRunner.query('DELETE FROM performance_data');
     await queryRunner.query('DELETE FROM parameter_values');
-    await queryRunner.query('DELETE FROM user_roles'); // Limpar tabela de junção
+    await queryRunner.query('DELETE FROM user_roles');
+    // Limpar tabelas referenciadas
     await queryRunner.query('DELETE FROM users');
     await queryRunner.query('DELETE FROM roles');
     await queryRunner.query('DELETE FROM criteria');
     await queryRunner.query('DELETE FROM sectors');
-    // Usar DELETE FROM em vez de clear() ou truncate() é mais seguro com FKs
-    // Se usar TRUNCATE, precisaria ser TRUNCATE ... RESTART IDENTITY CASCADE
     console.log('Tabelas limpas (usando DELETE).');
 
+    // Inserir Dados Mock
     console.log('Inserindo Setores...');
     await sectorRepo.save(sectorsMock);
 
     console.log('Inserindo Critérios...');
-    await criterionRepo.save(criteriaMockCorrigido); // Usa a lista corrigida
+    await criterionRepo.save(criteriaMockCorrigido); // Usa a lista com 'FURO POR ATRASO'
 
     console.log('Inserindo Perfis...');
     await roleRepo.save(rolesMock);
@@ -274,21 +330,33 @@ async function runSeed() {
       },
     ]);
     const adminUser = createdUsers.find((u) => u.email === 'admin@sistema.com');
+    const adminUserId = adminUser?.id || 1; // Garante um ID para FKs
+    const adminUserName = adminUser?.nome || 'Admin Sistema';
 
     console.log('Inserindo Parâmetros...');
     await parameterRepo.save(
-      parametersMock.map((p) => ({ ...p, createdByUserId: adminUser?.id }))
+      parametersMock.map((p) => ({ ...p, createdByUserId: adminUserId }))
     );
 
     console.log('Inserindo Dados de Desempenho...');
     await performanceRepo.save(performanceMock);
 
+    // --- INSERIR EXPURGOS ---
+    console.log('Inserindo Eventos de Expurgo Mock...');
+    await expurgoEventRepo.save(
+      expurgosMock.map((e) => ({ ...e, registradoPorUserId: adminUserId }))
+    );
+    // -------------------------
+
     console.log('Inserindo Logs de Auditoria...');
+    // Atribui userId/userName aos logs mock que não os têm
     await auditLogRepo.save(
       auditLogsMock.map((l) => ({
-        ...l,
-        userId: adminUser?.id,
-        userName: adminUser?.nome,
+        ...l, // 1. Espalha as propriedades que JÁ EXISTEM em 'l' (actionType, details, etc.)
+        // 2. Define userId: usa l.userId SE EXISTIR, senão usa adminUserId
+        userId: (l as any).userId ?? adminUserId, // Usar 'as any' aqui ou definir um tipo para o mock
+        // 3. Define userName: usa l.userName SE EXISTIR, senão usa adminUserName
+        userName: (l as any).userName ?? adminUserName,
       }))
     );
 
