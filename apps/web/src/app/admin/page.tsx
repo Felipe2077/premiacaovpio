@@ -1,6 +1,5 @@
 // apps/web/src/app/admin/page.tsx
 'use client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 export default function AdminDashboardPage() {
@@ -12,30 +11,6 @@ export default function AdminDashboardPage() {
         <p className='mb-6 text-sm text-gray-600 italic dark:text-gray-400'>
           Status rápido do sistema de premiação.
         </p>
-
-        {/* Card de Visão Geral (Stats Mock - A IMPLEMENTAR) */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Resumo</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p>
-              (Stats como # Params Ativos, # Logs Recentes, etc. virão aqui)
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Layout em Grid */}
-        <div className='grid grid-cols-1 lg:grid-cols-1 gap-6'>
-          <Card>
-            <CardHeader>
-              <CardTitle>Expurgos</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p>(Tabela de Expurgos virá para /admin/expurgos)</p>
-            </CardContent>
-          </Card>
-        </div>
       </div>
     </TooltipProvider>
   );
