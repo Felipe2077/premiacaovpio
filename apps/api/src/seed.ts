@@ -1,9 +1,10 @@
-// apps/api/src/seed.ts (COM "FURO POR ATRASO" ADICIONADO)
+// apps/api/src/seed.ts (VERSÃO INTEGRAL FINAL - SEM CÓDIGO COMENTADO)
 import 'reflect-metadata';
+import { DeepPartial } from 'typeorm';
 import { AppDataSource } from './database/data-source';
 import { AuditLogEntity } from './entity/audit-log.entity';
 import { CriterionEntity } from './entity/criterion.entity';
-import { ExpurgoEventEntity } from './entity/expurgo-event.entity';
+import { ExpurgoEventEntity } from './entity/expurgo-event.entity'; // Importar tipo ExpurgoStatus
 import { ParameterValueEntity } from './entity/parameter-value.entity';
 import { PerformanceDataEntity } from './entity/performance-data.entity';
 import { RoleEntity } from './entity/role.entity';
@@ -12,14 +13,15 @@ import { UserEntity } from './entity/user.entity';
 
 // --- Definição dos Dados Mock ---
 
-const sectorsMock = [
-  { id: 1, nome: 'GAMA', ativo: true },
-  { id: 2, nome: 'PARANOÁ', ativo: true },
-  { id: 3, nome: 'SANTA MARIA', ativo: true },
-  { id: 4, nome: 'SÃO SEBASTIÃO', ativo: true },
+const sectorsMock: DeepPartial<SectorEntity>[] = [
+  { nome: 'GAMA', ativo: true },
+  { nome: 'PARANOÁ', ativo: true },
+  { nome: 'SANTA MARIA', ativo: true },
+  { nome: 'SÃO SEBASTIÃO', ativo: true },
 ];
 
-const criteriaMockCorrigido: Partial<CriterionEntity>[] = [
+const criteriaMockCorrigido: DeepPartial<CriterionEntity>[] = [
+  // Garantindo que todos os IDs e Indexes estão aqui e são únicos
   {
     id: 1,
     nome: 'ATRASO',
@@ -99,7 +101,7 @@ const criteriaMockCorrigido: Partial<CriterionEntity>[] = [
     sentido_melhor: 'MAIOR',
     ativo: true,
     unidade_medida: 'KM/L',
-  }, // Index corrigido
+  },
   {
     id: 11,
     nome: 'KM OCIOSA',
@@ -107,7 +109,7 @@ const criteriaMockCorrigido: Partial<CriterionEntity>[] = [
     sentido_melhor: 'MENOR',
     ativo: true,
     unidade_medida: '%',
-  }, // Index corrigido
+  },
   {
     id: 12,
     nome: 'PEÇAS',
@@ -132,7 +134,6 @@ const criteriaMockCorrigido: Partial<CriterionEntity>[] = [
     ativo: true,
     unidade_medida: 'R$',
   },
-  // --- NOVO CRITÉRIO ---
   {
     id: 15,
     nome: 'FURO POR ATRASO',
@@ -140,18 +141,56 @@ const criteriaMockCorrigido: Partial<CriterionEntity>[] = [
     sentido_melhor: 'MENOR',
     ativo: true,
     unidade_medida: 'Qtd',
-  }, // Assumi Qtd e MENOR
-  // --------------------
+  },
 ];
 
-const rolesMock = [
-  { id: 1, nome: 'Admin' },
-  { id: 2, nome: 'Viewer' },
+// Removido IDs hardcoded
+const rolesMock: DeepPartial<RoleEntity>[] = [
+  { nome: 'Admin' },
+  { nome: 'Viewer' },
 ];
-// Não precisamos recriar usersMock aqui, ele será populado depois
 
-const parametersMock = [
-  // Metas existentes...
+// Tipo auxiliar para mock de log
+interface AuditLogMockInput {
+  actionType: string;
+  details?: Record<string, any>;
+  entityType?: string;
+  entityId?: string | number;
+  justificativa?: string;
+  userId?: number;
+  userName?: string;
+}
+const auditLogsMock: AuditLogMockInput[] = [
+  {
+    actionType: 'SEED_EXECUTADO',
+    details: { message: 'Banco de dados populado com dados mock.' },
+  },
+  {
+    actionType: 'PARAMETRO_ALTERADO',
+    entityType: 'ParameterValueEntity',
+    entityId: '1', // Assume ID 1 existe
+    details: {
+      nomeParametro: 'META_IPK',
+      valorAntigo: '2.90',
+      valorNovo: '3.00',
+      dataInicioEfetivo: '2025-04-01',
+    },
+    justificativa: 'Ajuste de meta para o Q2 conforme planejamento.',
+  },
+  {
+    actionType: 'EXPURGO_REGISTRADO',
+    entityType: 'ExpurgoEventEntity',
+    entityId: '1', // Assume ID 1 existe
+    details: {
+      criterioNome: 'DEFEITO',
+      setorNome: 'PARANOÁ',
+      dataEvento: '2025-04-15',
+    },
+    justificativa: 'Autorizado por Diretoria em RE-XYZ - Impacto chuva.',
+  },
+];
+
+const parametersMock: DeepPartial<ParameterValueEntity>[] = [
   {
     nomeParametro: 'META_IPK',
     valor: '3.00',
@@ -177,7 +216,6 @@ const parametersMock = [
     criterionId: 1,
     justificativa: 'Meta inicial Atraso Geral',
   },
-  // --- META PARA NOVO CRITÉRIO ---
   {
     nomeParametro: 'META_FURO_ATRASO',
     valor: '5',
@@ -185,96 +223,71 @@ const parametersMock = [
     dataFimEfetivo: null,
     criterionId: 15,
     justificativa: 'Meta inicial Furo por Atraso',
-  }, // Assumi meta 5
-  // ------------------------------
+  },
 ];
-// --- Mock de Eventos de Expurgo (Exemplos) ---
-// Lembre-se: QUEBRA=3, DEFEITO=4, KM OCIOSA=11 (IDs do criteriaMock)
-const expurgosMock: Partial<ExpurgoEventEntity>[] = [
+
+const performanceMock: DeepPartial<PerformanceDataEntity>[] = [
+  { sectorId: 1, criterionId: 1, metricDate: '2025-04-30', valor: 303 },
+  { sectorId: 1, criterionId: 9, metricDate: '2025-04-30', valor: 3.01 },
+  { sectorId: 1, criterionId: 15, metricDate: '2025-04-30', valor: 3 },
+  { sectorId: 2, criterionId: 1, metricDate: '2025-04-30', valor: 317 },
+  { sectorId: 2, criterionId: 9, metricDate: '2025-04-30', valor: 2.88 },
+  { sectorId: 2, criterionId: 15, metricDate: '2025-04-30', valor: 6 },
+  { sectorId: 3, criterionId: 1, metricDate: '2025-04-30', valor: 309 },
+  { sectorId: 3, criterionId: 9, metricDate: '2025-04-30', valor: 2.81 },
+  { sectorId: 3, criterionId: 15, metricDate: '2025-04-30', valor: 4 },
+  { sectorId: 4, criterionId: 1, metricDate: '2025-04-30', valor: 706 },
+  { sectorId: 4, criterionId: 9, metricDate: '2025-04-30', valor: 1.78 },
+  { sectorId: 4, criterionId: 15, metricDate: '2025-04-30', valor: 7 },
+  // Adicionar mais dados de performance para outros critérios (IDs 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14) para todas as 4 filiais para ter dados completos
+];
+
+// Tipagem explícita aqui também
+const expurgosMock: DeepPartial<ExpurgoEventEntity>[] = [
   {
-    criterionId: 4, // DEFEITO
-    sectorId: 2, // PARANOÁ
-    dataEvento: '2025-04-15', // Data do evento expurgado
-    descricaoEvento:
-      'Defeito no sensor X do veículo Y - Causa externa identificada.',
+    criterionId: 4,
+    sectorId: 2,
+    dataEvento: '2025-04-15',
+    descricaoEvento: 'Defeito sensor X - Causa externa.',
     justificativa: 'Autorizado por Diretoria em RE-XYZ - Impacto chuva.',
-    status: 'APLICADO_MVP',
-    registradoPorUserId: 1, // Usuário Admin Sistema
+    status: 'APROVADO', // Usa um tipo válido de ExpurgoStatus
+    // aprovadoPorUserId e justificativaAprovacao poderiam ser preenchidos aqui
   },
   {
-    criterionId: 11, // KM OCIOSA
-    sectorId: 4,
+    criterionId: 11,
+    sectorId: 3,
     dataEvento: '2025-04-20',
-    descricaoEvento: 'Veículo Z ficou parado em bloqueio na via por 2h.',
+    descricaoEvento: 'Veículo Z parado em bloqueio na via.',
     justificativa: 'Autorizado por Gerente W - Evento externo comprovado.',
-    status: 'APLICADO_MVP',
-    registradoPorUserId: 1,
+    status: 'PENDENTE', // Usa um tipo válido
   },
-];
-
-const performanceMock = [
-  // Dados existentes...
-  { sectorId: 1, criterionId: 1, metricDate: '2025-04-30', valor: 303 }, // Atraso GAMA
-  { sectorId: 1, criterionId: 9, metricDate: '2025-04-30', valor: 3.01 }, // IPK GAMA
-  { sectorId: 2, criterionId: 1, metricDate: '2025-04-30', valor: 317 }, // Atraso PARANOÁ
-  { sectorId: 2, criterionId: 9, metricDate: '2025-04-30', valor: 2.88 }, // IPK PARANOÁ
-  { sectorId: 3, criterionId: 1, metricDate: '2025-04-30', valor: 309 }, // Atraso SANTA MARIA
-  { sectorId: 3, criterionId: 9, metricDate: '2025-04-30', valor: 2.81 }, // IPK SANTA MARIA
-  { sectorId: 4, criterionId: 1, metricDate: '2025-04-30', valor: 706 }, // Atraso SÃO SEBASTIÃO
-  { sectorId: 4, criterionId: 9, metricDate: '2025-04-30', valor: 1.78 }, // IPK SÃO SEBASTIÃO
-  // --- DADOS PARA NOVO CRITÉRIO (ID 15) ---
-  { sectorId: 1, criterionId: 15, metricDate: '2025-04-30', valor: 3 }, // Furo Atraso GAMA
-  { sectorId: 2, criterionId: 15, metricDate: '2025-04-30', valor: 6 }, // Furo Atraso PARANOÁ
-  { sectorId: 3, criterionId: 15, metricDate: '2025-04-30', valor: 4 }, // Furo Atraso SANTA MARIA
-  { sectorId: 4, criterionId: 15, metricDate: '2025-04-30', valor: 7 }, // Furo Atraso SÃO SEBASTIÃO
-  // ---------------------------------------
-  // Adicionar dados para OUTROS CRITÉRIOS para ter tabelas mais completas!
-];
-
-const auditLogsMock = [
-  // Log do Seed anterior mantido
   {
-    actionType: 'SEED_EXECUTADO',
-    details: { message: 'Banco de dados populado com dados mock.' },
+    criterionId: 3,
+    sectorId: 1,
+    dataEvento: '2025-04-10',
+    descricaoEvento: 'Quebra por vandalismo.',
+    justificativa: 'Solicitado - Vandalismo BO anexo.',
+    status: 'REJEITADO', // Usa um tipo válido
+    justificativaAprovacao:
+      'Vandalismo não coberto pela política de expurgo atual.',
+    // aprovadoPorUserId poderia ser preenchido
   },
-  // Exemplo de alteração de parâmetro
-  {
-    actionType: 'PARAMETRO_ALTERADO',
-    entityType: 'ParameterValueEntity', // Tabela/Entidade afetada
-    entityId: '1', // ID do registro de parâmetro afetado (exemplo)
-    details: {
-      // JSON com detalhes
-      nomeParametro: 'META_IPK',
-      valorAntigo: '2.90',
-      valorNovo: '3.00',
-      dataInicioEfetivo: '2025-04-01',
-    },
-    justificativa: 'Ajuste de meta para o Q2 conforme planejamento.',
-    // userId e userName serão preenchidos ao salvar
-  },
-  // Exemplo de Registro de Expurgo
-  {
-    actionType: 'EXPURGO_REGISTRADO',
-    entityType: 'ExpurgoEventEntity',
-    entityId: '1', // ID do registro de expurgo criado (exemplo)
-    details: {
-      criterioNome: 'DEFEITO', // Nome do critério para clareza no log
-      setorNome: 'PARANOÁ', // Nome do setor
-      dataEvento: '2025-04-15',
-    },
-    justificativa: 'Autorizado por Diretoria em RE-XYZ - Impacto chuva.',
-  },
-  // Exemplo de Login (poderia ser adicionado pela lógica de auth real)
-  // { actionType: 'LOGIN_SUCESSO', userId: 2, userName: 'Usuario Comum', ipAddress: '192.168.1.100' }
 ];
 
 // --- Função para Executar o Seed ---
 async function runSeed() {
   console.log('Iniciando script de seed...');
+  let connectionInitialized = false; // Flag para controle
   try {
     console.log('Inicializando DataSource...');
-    await AppDataSource.initialize();
-    console.log('DataSource inicializado com sucesso!');
+    // Garante que só inicializa uma vez
+    if (!AppDataSource.isInitialized) {
+      await AppDataSource.initialize();
+      connectionInitialized = true;
+    } else {
+      console.log('DataSource já estava inicializado.');
+    }
+    console.log('DataSource pronto para uso!');
 
     // Pegar Repositórios
     const queryRunner = AppDataSource.createQueryRunner();
@@ -285,36 +298,41 @@ async function runSeed() {
     const parameterRepo = AppDataSource.getRepository(ParameterValueEntity);
     const performanceRepo = AppDataSource.getRepository(PerformanceDataEntity);
     const auditLogRepo = AppDataSource.getRepository(AuditLogEntity);
-    const expurgoEventRepo = AppDataSource.getRepository(ExpurgoEventEntity); // <-- Novo Repo
+    const expurgoEventRepo = AppDataSource.getRepository(ExpurgoEventEntity);
 
     // Limpar tabelas na ordem inversa de dependência
     console.log('Limpando dados antigos (na ordem correta)...');
-    // Limpar tabelas que podem referenciar outras primeiro
-    await queryRunner.query('DELETE FROM expurgo_events'); // <-- Limpar Expurgos
+    await queryRunner.query('DELETE FROM expurgo_events');
     await queryRunner.query('DELETE FROM audit_logs');
     await queryRunner.query('DELETE FROM performance_data');
     await queryRunner.query('DELETE FROM parameter_values');
     await queryRunner.query('DELETE FROM user_roles');
-    // Limpar tabelas referenciadas
     await queryRunner.query('DELETE FROM users');
     await queryRunner.query('DELETE FROM roles');
     await queryRunner.query('DELETE FROM criteria');
     await queryRunner.query('DELETE FROM sectors');
     console.log('Tabelas limpas (usando DELETE).');
 
-    // Inserir Dados Mock
+    // Inserir Dados Mock e LOGAR resultados
     console.log('Inserindo Setores...');
-    await sectorRepo.save(sectorsMock);
+    const savedSectors = await sectorRepo.save(sectorsMock);
+    console.log(` -> ${savedSectors.length} setores salvos.`);
 
     console.log('Inserindo Critérios...');
-    await criterionRepo.save(criteriaMockCorrigido); // Usa a lista com 'FURO POR ATRASO'
+    const savedCriteria = await criterionRepo.save(criteriaMockCorrigido);
+    console.log(
+      ` -> ${savedCriteria.length} critérios salvos. ID 9 salvo? ${savedCriteria.some((c) => c.id === 9)}`
+    ); // Verifica se ID 9 está nos salvos
 
     console.log('Inserindo Perfis...');
-    await roleRepo.save(rolesMock);
+    const savedRoles = await roleRepo.save(rolesMock); // Salva sem ID hardcoded
+    console.log(` -> ${savedRoles.length} perfis salvos.`);
+    const adminRole = savedRoles.find((r) => r.nome === 'Admin');
+    const viewerRole = savedRoles.find((r) => r.nome === 'Viewer');
+    if (!adminRole || !viewerRole)
+      throw new Error('Roles Admin/Viewer não encontrados após save!');
 
     console.log('Inserindo Usuários...');
-    const adminRole = await roleRepo.findOneByOrFail({ nome: 'Admin' });
-    const viewerRole = await roleRepo.findOneByOrFail({ nome: 'Viewer' });
     const createdUsers = await userRepo.save([
       {
         nome: 'Admin Sistema',
@@ -329,44 +347,67 @@ async function runSeed() {
         roles: [viewerRole],
       },
     ]);
+    console.log(` -> ${createdUsers.length} usuários salvos.`);
     const adminUser = createdUsers.find((u) => u.email === 'admin@sistema.com');
-    const adminUserId = adminUser?.id || 1; // Garante um ID para FKs
-    const adminUserName = adminUser?.nome || 'Admin Sistema';
+    const adminUserId = adminUser?.id;
+    const adminUserName = adminUser?.nome;
+    if (!adminUserId || !adminUserName)
+      throw new Error('Admin user não encontrado após save!');
 
     console.log('Inserindo Parâmetros...');
-    await parameterRepo.save(
-      parametersMock.map((p) => ({ ...p, createdByUserId: adminUserId }))
-    );
+    // Garantir que createdByUserId é number, não undefined
+    const paramsToSave = parametersMock.map((p) => ({
+      ...p,
+      createdByUserId: adminUserId,
+    }));
+    const savedParams = await parameterRepo.save(paramsToSave);
+    console.log(` -> ${savedParams.length} parâmetros salvos.`);
 
     console.log('Inserindo Dados de Desempenho...');
-    await performanceRepo.save(performanceMock);
+    const savedPerf = await performanceRepo.save(performanceMock);
+    console.log(` -> ${savedPerf.length} registros de desempenho salvos.`);
 
-    // --- INSERIR EXPURGOS ---
     console.log('Inserindo Eventos de Expurgo Mock...');
-    await expurgoEventRepo.save(
-      expurgosMock.map((e) => ({ ...e, registradoPorUserId: adminUserId }))
-    );
-    // -------------------------
+    // Garantir que registradoPorUserId é number
+    const expurgosToSave = expurgosMock.map((e) => ({
+      ...e,
+      registradoPorUserId: adminUserId,
+    }));
+    const savedExpurgos = await expurgoEventRepo.save(expurgosToSave);
+    console.log(` -> ${savedExpurgos.length} expurgos salvos.`);
 
     console.log('Inserindo Logs de Auditoria...');
-    // Atribui userId/userName aos logs mock que não os têm
-    await auditLogRepo.save(
-      auditLogsMock.map((l) => ({
-        ...l, // 1. Espalha as propriedades que JÁ EXISTEM em 'l' (actionType, details, etc.)
-        // 2. Define userId: usa l.userId SE EXISTIR, senão usa adminUserId
-        userId: (l as any).userId ?? adminUserId, // Usar 'as any' aqui ou definir um tipo para o mock
-        // 3. Define userName: usa l.userName SE EXISTIR, senão usa adminUserName
-        userName: (l as any).userName ?? adminUserName,
-      }))
-    );
+    // Mapeamento mais seguro para logs
+    const logsToSave = auditLogsMock.map((l) => {
+      const logEntry: DeepPartial<AuditLogEntity> = {
+        ...l, // Espalha as props compatíveis primeiro
+        // Converte entityId para string explicitamente se existir, senão undefined
+        entityId:
+          l.entityId !== undefined && l.entityId !== null
+            ? String(l.entityId)
+            : undefined,
+        // Define defaults para userId e userName
+        userId: l.userId ?? adminUserId,
+        userName: l.userName ?? adminUserName,
+      };
+      return logEntry;
+    });
+    const savedLogs = await auditLogRepo.save(logsToSave);
+    console.log(` -> ${savedLogs.length} logs salvos.`);
 
     console.log('Seed executado com sucesso!');
   } catch (error) {
     console.error('ERRO durante a execução do seed:', error);
   } finally {
-    if (AppDataSource.isInitialized) {
+    // Só destrói se este script inicializou a conexão
+    if (connectionInitialized && AppDataSource.isInitialized) {
       await AppDataSource.destroy();
       console.log('DataSource finalizado.');
+    } else if (AppDataSource.isInitialized) {
+      // Se foi inicializado externamente, não destruir aqui? Ou sempre destruir?
+      // Vamos manter o destroy por enquanto para garantir limpeza.
+      await AppDataSource.destroy();
+      console.log('DataSource (pré-existente?) finalizado.');
     }
   }
 }

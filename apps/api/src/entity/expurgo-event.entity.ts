@@ -1,4 +1,4 @@
-// apps/api/src/entity/expurgo-event.entity.ts (COM RELAÇÕES)
+// apps/api/src/entity/expurgo-event.entity.ts (CORRIGIDO)
 import {
   Column,
   CreateDateColumn,
@@ -12,11 +12,13 @@ import { CriterionEntity } from './criterion.entity';
 import { SectorEntity } from './sector.entity';
 import { UserEntity } from './user.entity';
 
+// --- TIPO CORRIGIDO ---
 export type ExpurgoStatus =
   | 'REGISTRADO'
   | 'APROVADO'
   | 'REJEITADO'
-  | 'APLICADO_MVP';
+  | 'APLICADO_MVP'
+  | 'PENDENTE'; // Adicionado PENDENTE
 
 @Entity({ name: 'expurgo_events' })
 @Index(['criterionId', 'sectorId', 'dataEvento'])
@@ -36,39 +38,44 @@ export class ExpurgoEventEntity {
   @Column({ type: 'text', nullable: true })
   descricaoEvento?: string;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text' }) // Justificativa da SOLICITAÇÃO
   justificativa!: string;
 
   @Column({ type: 'varchar', length: 20, default: 'APLICADO_MVP' })
-  status!: ExpurgoStatus;
+  status!: ExpurgoStatus; // Tipo correto
 
-  @Column({ type: 'int' })
+  @Column({ type: 'int' }) // Quem registrou
   registradoPorUserId!: number;
 
   @CreateDateColumn({ type: 'timestamp with time zone' })
   registradoEm!: Date;
 
-  @Column({ type: 'int', nullable: true })
+  @Column({ type: 'int', nullable: true }) // Quem aprovou/rejeitou
   aprovadoPorUserId?: number | null;
 
-  @Column({ type: 'timestamp with time zone', nullable: true })
+  @Column({ type: 'timestamp with time zone', nullable: true }) // Quando aprovou/rejeitou
   aprovadoEm?: Date | null;
 
-  // --- Relações HABILITADAS ---
-  @ManyToOne(() => CriterionEntity, { onDelete: 'RESTRICT' }) // Não deixa apagar critério se tiver expurgo
+  // --- NOVA PROPRIEDADE ADICIONADA ---
+  @Column({ type: 'text', nullable: true }) // Justificativa de quem aprovou/rejeitou
+  justificativaAprovacao?: string | null;
+  // ----------------------------------
+
+  // --- Relações ---
+  @ManyToOne(() => CriterionEntity, { onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'criterionId' })
-  criterio!: CriterionEntity; // Assume que critério é obrigatório
+  criterio!: CriterionEntity;
 
-  @ManyToOne(() => SectorEntity, { onDelete: 'RESTRICT' }) // Não deixa apagar setor se tiver expurgo
+  @ManyToOne(() => SectorEntity, { onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'sectorId' })
-  setor!: SectorEntity; // Assume que setor é obrigatório
+  setor!: SectorEntity;
 
-  @ManyToOne(() => UserEntity, { onDelete: 'SET NULL' }) // Se apagar user, log mantém registro com user null
+  @ManyToOne(() => UserEntity, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'registradoPorUserId' })
-  registradoPor!: UserEntity; // Assume que registrador é obrigatório
+  registradoPor!: UserEntity;
 
   @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'aprovadoPorUserId' })
   aprovadoPor?: UserEntity;
-  // ---------------------------
+  // -----------------
 }

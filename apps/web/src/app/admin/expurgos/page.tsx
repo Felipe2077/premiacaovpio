@@ -48,6 +48,7 @@ import type { ExpurgoEventEntity } from '@/entity/expurgo-event.entity'; // OK, 
 import { formatDate } from '@/lib/utils'; // OK
 import type { Criterio, Setor } from '@sistema-premiacao/shared-types'; // OK
 import { useQuery } from '@tanstack/react-query';
+import { Check, X } from 'lucide-react';
 import React, { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -209,6 +210,37 @@ export default function ExpurgosPage() {
   const eligibleCriteria = activeCriteria?.filter((c) =>
     [3, 4, 11].includes(c.id)
   ); // CONFIRA OS IDs!
+
+  const getStatusBadgeVariant = (
+    status: ExpurgoEventEntity['status']
+  ): 'default' | 'secondary' | 'destructive' | 'outline' => {
+    switch (status) {
+      case 'APROVADO':
+      case 'APLICADO_MVP': // Tratar mock como aprovado para cor
+        return 'default'; // Verde/Azul padrão do tema
+      case 'PENDENTE':
+        return 'secondary'; // Cinza/Amarelo padrão do tema
+      case 'REJEITADO':
+        return 'destructive'; // Vermelho padrão do tema
+      default:
+        return 'outline'; // Borda simples
+    }
+  };
+  const getStatusBadgeClass = (
+    status: ExpurgoEventEntity['status']
+  ): string => {
+    switch (status) {
+      case 'APROVADO':
+      case 'APLICADO_MVP':
+        return 'bg-green-600 hover:bg-green-700 text-white dark:bg-green-700 dark:text-green-100'; // Verde
+      case 'PENDENTE':
+        return 'bg-yellow-500 hover:bg-yellow-600 text-white dark:bg-yellow-700 dark:text-yellow-100'; // Amarelo/Laranja
+      case 'REJEITADO':
+        return 'bg-red-600 hover:bg-red-700 text-white dark:bg-red-700 dark:text-red-100'; // Vermelho
+      default:
+        return '';
+    }
+  };
 
   // Combina estados de loading e erro
   const isLoading = isLoadingExpurgos || isLoadingCriteria || isLoadingSectors;
@@ -387,6 +419,7 @@ export default function ExpurgosPage() {
                     <TableHead>Justificativa</TableHead>
                     <TableHead>Registrado Por</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead className='text-right'>Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -422,19 +455,52 @@ export default function ExpurgosPage() {
                       </TableCell>
                       <TableCell>
                         <Badge
-                          variant={
-                            exp.status === 'APLICADO_MVP'
-                              ? 'default'
-                              : 'secondary'
-                          }
-                          className={
-                            exp.status === 'APLICADO_MVP'
-                              ? 'bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-700 dark:text-blue-100'
-                              : ''
-                          }
+                          variant={getStatusBadgeVariant(exp.status)}
+                          className={getStatusBadgeClass(exp.status)}
                         >
                           {exp.status}
                         </Badge>
+                      </TableCell>
+                      <TableCell className='text-right'>
+                        {/* Mostra botões DESABILITADOS SÓ se o status for PENDENTE */}
+                        {exp.status === 'PENDENTE' && (
+                          <div className='flex gap-1 justify-end'>
+                            {/* Botão Aprovar (Fake) */}
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                {/* O ícone ou texto vai DENTRO do Botão */}
+                                <Button
+                                  variant='outline'
+                                  size='xs'
+                                  disabled
+                                  aria-label='Aprovar (desabilitado no MVP)'
+                                >
+                                  <Check className='h-4 w-4' />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                Aprovar (Funcionalidade Futura)
+                              </TooltipContent>
+                            </Tooltip>
+                            {/* Botão Rejeitar (Fake) */}
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant='destructive'
+                                  size='xs'
+                                  disabled
+                                  aria-label='Rejeitar (desabilitado no MVP)'
+                                >
+                                  <X className='h-8 w-8' />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                Rejeitar (Funcionalidade Futura)
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                        )}
+                        {/* Se não for PENDENTE, não mostra nada nesta coluna */}
                       </TableCell>
                     </TableRow>
                   ))}
