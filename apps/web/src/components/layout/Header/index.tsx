@@ -3,7 +3,7 @@ import Link from 'next/link';
 
 export function Header() {
   return (
-    <header className='bg-amber-100/70 text-black p-4 sticky top-0 z-50'>
+    <header className='bg-amber-100 text-black p-4 sticky top-0 z-50'>
       <nav className='container mx-auto flex flex-wrap gap-x-6 gap-y-2 items-center'>
         <Link href='/' className='font-bold text-2xl mr-auto'>
           Premiação Viação Pioneira🥇🥈🥉
