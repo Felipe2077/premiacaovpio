@@ -1,74 +1,74 @@
-// apps/api/src/entity/expurgo-event.entity.ts
+// apps/api/src/entity/expurgo-event.entity.ts (COM RELAÇÕES)
 import {
   Column,
   CreateDateColumn,
   Entity,
   Index,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { CriterionEntity } from './criterion.entity';
+import { SectorEntity } from './sector.entity';
+import { UserEntity } from './user.entity';
 
-// Define possíveis status (Enum seria melhor no futuro)
 export type ExpurgoStatus =
   | 'REGISTRADO'
   | 'APROVADO'
   | 'REJEITADO'
-  | 'APLICADO_MVP'; // APLICADO_MVP para mocks
+  | 'APLICADO_MVP';
 
-@Entity({ name: 'expurgo_events' }) // Nome da tabela no banco
-@Index(['criterionId', 'sectorId', 'dataEvento']) // Índice para buscas comuns
+@Entity({ name: 'expurgo_events' })
+@Index(['criterionId', 'sectorId', 'dataEvento'])
 export class ExpurgoEventEntity {
   @PrimaryGeneratedColumn()
   id!: number;
 
   @Column({ type: 'int' })
-  criterionId!: number; // FK para criteria.id
+  criterionId!: number;
 
   @Column({ type: 'int' })
-  sectorId!: number; // FK para sectors.id
+  sectorId!: number;
 
-  @Column({ type: 'date' }) // Data do evento original que está sendo expurgado/ajustado
-  dataEvento!: string; // Usando string 'YYYY-MM-DD', mas pode ser Date
+  @Column({ type: 'date' })
+  dataEvento!: string;
 
-  @Column({ type: 'text', nullable: true }) // Descrição opcional do evento específico
+  @Column({ type: 'text', nullable: true })
   descricaoEvento?: string;
 
-  // Poderíamos ter um campo para o valor exato do ajuste, mas para o MVP
-  // o simples registro do evento com justificativa pode ser suficiente.
-
-  @Column({ type: 'text' }) // Justificativa OBRIGATÓRIA (ex: "Autorizado por Diretor X - Falha Sensor Y")
+  @Column({ type: 'text' })
   justificativa!: string;
 
-  @Column({ type: 'varchar', length: 20, default: 'APLICADO_MVP' }) // Status - Default para mocks
+  @Column({ type: 'varchar', length: 20, default: 'APLICADO_MVP' })
   status!: ExpurgoStatus;
 
-  @Column({ type: 'int' }) // Quem registrou o expurgo no sistema
-  registradoPorUserId!: number; // FK para users.id
+  @Column({ type: 'int' })
+  registradoPorUserId!: number;
 
-  @CreateDateColumn({ type: 'timestamp with time zone' }) // Quando o registro foi criado
+  @CreateDateColumn({ type: 'timestamp with time zone' })
   registradoEm!: Date;
 
-  // Campos para fluxo de aprovação futuro (nullable por enquanto)
   @Column({ type: 'int', nullable: true })
-  aprovadoPorUserId?: number | null; // FK para users.id
+  aprovadoPorUserId?: number | null;
 
   @Column({ type: 'timestamp with time zone', nullable: true })
   aprovadoEm?: Date | null;
 
-  // --- Relações (Descomentar/Implementar depois) ---
-  // @ManyToOne(() => CriterionEntity)
-  // @JoinColumn({ name: 'criterionId' })
-  // criterio!: CriterionEntity;
+  // --- Relações HABILITADAS ---
+  @ManyToOne(() => CriterionEntity, { onDelete: 'RESTRICT' }) // Não deixa apagar critério se tiver expurgo
+  @JoinColumn({ name: 'criterionId' })
+  criterio!: CriterionEntity; // Assume que critério é obrigatório
 
-  // @ManyToOne(() => SectorEntity)
-  // @JoinColumn({ name: 'sectorId' })
-  // setor!: SectorEntity;
+  @ManyToOne(() => SectorEntity, { onDelete: 'RESTRICT' }) // Não deixa apagar setor se tiver expurgo
+  @JoinColumn({ name: 'sectorId' })
+  setor!: SectorEntity; // Assume que setor é obrigatório
 
-  // @ManyToOne(() => UserEntity)
-  // @JoinColumn({ name: 'registradoPorUserId' })
-  // registradoPor!: UserEntity;
+  @ManyToOne(() => UserEntity, { onDelete: 'SET NULL' }) // Se apagar user, log mantém registro com user null
+  @JoinColumn({ name: 'registradoPorUserId' })
+  registradoPor!: UserEntity; // Assume que registrador é obrigatório
 
-  // @ManyToOne(() => UserEntity, { nullable: true })
-  // @JoinColumn({ name: 'aprovadoPorUserId' })
-  // aprovadoPor?: UserEntity;
-  // --------------------------------------------------
+  @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'aprovadoPorUserId' })
+  aprovadoPor?: UserEntity;
+  // ---------------------------
 }

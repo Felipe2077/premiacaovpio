@@ -1,18 +1,24 @@
-// apps/api/src/modules/audit/audit.service.ts
+// apps/api/src/modules/audit/audit.service.ts (ATUALIZADO COM RELATIONS)
 import { AppDataSource } from '@/database/data-source';
 import { AuditLogEntity } from '@/entity/audit-log.entity';
+import { FindManyOptions } from 'typeorm';
 
 export class AuditLogService {
   private logRepo = AppDataSource.getRepository(AuditLogEntity);
 
-  // Busca os logs mais recentes (mockados pelo seed por enquanto)
   async getAuditLogs(limit: number = 50): Promise<AuditLogEntity[]> {
     console.log(`[AuditLogService] Buscando os últimos ${limit} logs...`);
     try {
-      const logs = await this.logRepo.find({
-        order: { timestamp: 'DESC' }, // Mais recentes primeiro
-        take: limit, // Limita a quantidade
-      });
+      const options: FindManyOptions<AuditLogEntity> = {
+        order: { timestamp: 'DESC' },
+        take: limit,
+        // --- ADICIONADO RELATIONS ---
+        relations: {
+          user: true, // Traz UserEntity aninhado (cuidado com senha hash!)
+        },
+        // --------------------------
+      };
+      const logs = await this.logRepo.find(options);
       console.log(`[AuditLogService] ${logs.length} logs encontrados.`);
       return logs;
     } catch (error) {
@@ -20,5 +26,4 @@ export class AuditLogService {
       throw new Error('Falha ao buscar logs de auditoria.');
     }
   }
-  // No futuro: método para criar logs -> this.logRepo.save(...)
 }

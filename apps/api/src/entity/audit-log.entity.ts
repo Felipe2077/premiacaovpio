@@ -1,50 +1,52 @@
-// apps/api/src/entity/audit-log.entity.ts
+// apps/api/src/entity/audit-log.entity.ts (COM RELAÇÕES)
 import {
   Column,
   CreateDateColumn,
   Entity,
   Index,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { UserEntity } from './user.entity';
 
 @Entity({ name: 'audit_logs' })
-@Index(['userId', 'actionType', 'timestamp']) // Índices comuns para busca
+@Index(['userId', 'actionType', 'timestamp'])
 @Index(['entityType', 'entityId'])
 export class AuditLogEntity {
   @PrimaryGeneratedColumn({ type: 'bigint' })
-  id!: string; // TypeORM recomenda string para bigint
+  id!: string;
 
   @CreateDateColumn({ type: 'timestamp with time zone' })
   timestamp!: Date;
 
-  @Column({ type: 'int', nullable: true }) // Pode ser ação do sistema
+  @Column({ type: 'int', nullable: true })
   userId?: number;
 
-  // Podemos duplicar o nome para facilitar consulta ou buscar via relação
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ type: 'varchar', length: 255, nullable: true }) // Mantém nome aqui para log rápido
   userName?: string;
 
   @Column({ type: 'varchar', length: 100 })
-  actionType!: string; // Ex: 'PARAMETRO_ALTERADO', 'LOGIN_FALHOU'
+  actionType!: string;
 
   @Column({ type: 'varchar', length: 100, nullable: true })
-  entityType?: string; // Ex: 'ParameterValueEntity', 'UserEntity'
+  entityType?: string;
 
-  @Column({ type: 'varchar', nullable: true }) // Usar varchar para IDs mistos
+  @Column({ type: 'varchar', nullable: true })
   entityId?: string;
 
-  @Column({ type: 'jsonb', nullable: true }) // JSONB é mais eficiente no Postgres
-  details?: Record<string, any>; // Guarda { oldValue: ..., newValue: ... } ou outros detalhes
+  @Column({ type: 'jsonb', nullable: true })
+  details?: Record<string, any>;
 
   @Column({ type: 'text', nullable: true })
-  justification?: string; // Justificativa para a ação
+  justification?: string;
 
   @Column({ type: 'varchar', length: 50, nullable: true })
   ipAddress?: string;
 
-  // --- Relação (Opcional agora) ---
-  // @ManyToOne(() => UserEntity, { nullable: true })
-  // @JoinColumn({ name: 'userId' })
-  // user?: UserEntity;
-  // ------------------------------
+  // --- Relação HABILITADA ---
+  @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' }) // Permite user nulo (ação do sistema)
+  @JoinColumn({ name: 'userId' }) // FK nesta tabela
+  user?: UserEntity; // Propriedade para acessar o usuário
+  // -------------------------
 }
