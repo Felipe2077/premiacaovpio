@@ -22,6 +22,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -38,6 +39,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'; // Removido TableCaption não usado aqui
+import { Textarea } from '@/components/ui/textarea';
 import {
   Tooltip,
   TooltipContent,
@@ -207,7 +209,6 @@ export default function ParametersPage() {
                 onOpenChange={setIsParamModalOpen}
               >
                 <DialogTrigger asChild>
-                  {/* Desabilitar botão se dados dos selects ainda não carregaram */}
                   <Button
                     size='sm'
                     disabled={isLoadingCriteria || isLoadingSectors}
@@ -216,19 +217,125 @@ export default function ParametersPage() {
                   </Button>
                 </DialogTrigger>
                 <DialogContent className='sm:max-w-[500px]'>
-                  {/* Conteúdo do Dialog Novo Parâmetro ... */}
+                  {' '}
+                  {/* Largura padrão */}
                   <DialogHeader>
                     <DialogTitle>Definir Novo Parâmetro/Meta</DialogTitle>
-                    <DialogDescription> ... </DialogDescription>
+                    <DialogDescription>
+                      Preencha os detalhes. A vigência começará na data de
+                      início informada. A justificativa é obrigatória.
+                    </DialogDescription>
                   </DialogHeader>
+                  {/* --- FORMULÁRIO COMPLETO --- */}
                   <form onSubmit={handleSaveParameter}>
                     <div className='grid gap-4 py-4'>
-                      {/* ... Campos ... */}
+                      {/* Nome Parâmetro */}
+                      <div className='grid grid-cols-4 items-center gap-4'>
+                        <Label htmlFor='param-name' className='text-right'>
+                          Nome
+                        </Label>
+                        <Input
+                          id='param-name'
+                          placeholder='Ex: META_IPK_GAMA, PESO_CRITERIO_X'
+                          className='col-span-3'
+                          required
+                        />
+                      </div>
+                      {/* Valor */}
+                      <div className='grid grid-cols-4 items-center gap-4'>
+                        <Label htmlFor='param-value' className='text-right'>
+                          Valor
+                        </Label>
+                        <Input
+                          id='param-value'
+                          placeholder='Ex: 3.1, 150, true'
+                          className='col-span-3'
+                          required
+                        />
+                      </div>
+                      {/* Critério (Select) */}
+                      <div className='grid grid-cols-4 items-center gap-4'>
+                        <Label htmlFor='param-crit' className='text-right'>
+                          Critério (Opc)
+                        </Label>
+                        <Select name='param-crit' disabled={isLoadingCriteria}>
+                          <SelectTrigger className='col-span-3'>
+                            <SelectValue
+                              placeholder={
+                                isLoadingCriteria
+                                  ? 'Carregando...'
+                                  : 'Geral ou Específico...'
+                              }
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value='null'>Nenhum (Geral)</SelectItem>
+                            {/* Popula com dados da API */}
+                            {activeCriteria?.map((c) => (
+                              <SelectItem key={c.id} value={String(c.id)}>
+                                {c.nome}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {/* Setor (Select) */}
+                      <div className='grid grid-cols-4 items-center gap-4'>
+                        <Label htmlFor='param-setor' className='text-right'>
+                          Setor (Opc)
+                        </Label>
+                        <Select name='param-setor' disabled={isLoadingSectors}>
+                          <SelectTrigger className='col-span-3'>
+                            <SelectValue
+                              placeholder={
+                                isLoadingSectors
+                                  ? 'Carregando...'
+                                  : 'Geral ou Específico...'
+                              }
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value='null'>Nenhum (Geral)</SelectItem>
+                            {/* Popula com dados da API */}
+                            {activeSectors?.map((s) => (
+                              <SelectItem key={s.id} value={String(s.id)}>
+                                {s.nome}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {/* Início Vigência */}
+                      <div className='grid grid-cols-4 items-center gap-4'>
+                        <Label htmlFor='param-date' className='text-right'>
+                          Início Vigência
+                        </Label>
+                        <Input
+                          id='param-date'
+                          type='date'
+                          defaultValue={todayStr}
+                          className='col-span-3'
+                          required
+                        />
+                      </div>
+                      {/* Justificativa */}
+                      <div className='grid grid-cols-4 items-center gap-4'>
+                        <Label htmlFor='param-just' className='text-right'>
+                          Justificativa
+                        </Label>
+                        <Textarea
+                          id='param-just'
+                          placeholder='Detalhe o motivo da criação/alteração...'
+                          className='col-span-3'
+                          required
+                        />
+                      </div>
                     </div>
                     <DialogFooter>
                       <Button type='submit'>Salvar (Simulação)</Button>
                     </DialogFooter>
                   </form>
+                  {/* --- FIM FORMULÁRIO COMPLETO --- */}
                 </DialogContent>
               </Dialog>
               {/* --- FIM Botão/Modal NOVO PARÂMETRO --- */}
@@ -368,8 +475,7 @@ export default function ParametersPage() {
           }}
         >
           {/* Aumentar largura máxima do modal em telas sm ou maiores */}
-          <DialogContent className='sm:max-w-2xl'>
-            {/* <-- MUDANÇA AQUI (ex: 2xl) */}
+          <DialogContent className='sm:max-w-4xl'>
             <DialogHeader>
               <DialogTitle>
                 Histórico de Alterações: {historyParam?.nomeParametro}

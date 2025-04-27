@@ -17,3 +17,35 @@ export interface EntradaResultadoDetalhado {
   percentualAtingimento?: number | null; // Ou diferença, a definir
   pontos: number | null; // Pontuação específica do critério
 }
+
+interface RelatedUser {
+  id: number;
+  nome: string /* outros campos? */;
+}
+interface RelatedCriterion {
+  id: number;
+  nome: string /* outros campos? */;
+}
+interface RelatedSector {
+  id: number;
+  nome: string /* outros campos? */;
+}
+
+export interface ExpurgoEventEntity {
+  id: number;
+  criterionId: number;
+  sectorId: number;
+  dataEvento: string; // Ou Date
+  descricaoEvento?: string;
+  justificativa: string;
+  status: string; // Ou o tipo ExpurgoStatus se exportado de shared-types
+  registradoPorUserId: number;
+  registradoEm: string; // Ou Date
+  aprovadoPorUserId?: number | null;
+  aprovadoEm?: string | Date | null;
+  // Dados relacionados que a API agora envia:
+  criterio?: RelatedCriterion | null;
+  setor?: RelatedSector | null;
+  registradoPor?: RelatedUser | null;
+  aprovadoPor?: RelatedUser | null;
+}

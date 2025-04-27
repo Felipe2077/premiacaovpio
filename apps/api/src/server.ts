@@ -9,6 +9,7 @@ import { AuditLogService } from '@/modules/audit/audit.service';
 import { ExpurgoService } from '@/modules/expurgos/expurgo.service';
 import { ParameterService } from '@/modules/parameters/parameter.service';
 import { RankingService } from '@/modules/ranking/ranking.service';
+import { SectorEntity } from './entity/sector.entity';
 
 dotenv.config();
 
@@ -122,12 +123,43 @@ const start = async () => {
           error instanceof Error
             ? error.message
             : 'Erro desconhecido no servidor';
-        return reply
-          .status(500)
-          .send({
-            message: 'Erro interno ao buscar critérios ativos',
-            error: errorMessage,
-          });
+        return reply.status(500).send({
+          message: 'Erro interno ao buscar critérios ativos',
+          error: errorMessage,
+        });
+      }
+    });
+
+    // --- NOVA ROTA PARA SETORES ATIVOS ---
+    fastify.get('/api/sectors/active', async (request, reply) => {
+      fastify.log.info('Recebida requisição GET /api/sectors/active');
+      try {
+        // Pega o repositório DENTRO do handler
+        const sectorRepo = AppDataSource.getRepository(SectorEntity);
+
+        const activeSectors = await sectorRepo.find({
+          where: { ativo: true },
+          select: ['id', 'nome'], // Apenas ID e Nome, como esperado pelo fetcher do frontend
+          order: { nome: 'ASC' }, // Ordena por nome A-Z
+        });
+
+        if (!activeSectors) {
+          fastify.log.warn(
+            'Nenhum setor ativo encontrado no banco (find retornou null/undefined?).'
+          );
+          return reply.send([]);
+        }
+
+        fastify.log.info(`Retornando ${activeSectors.length} setores ativos.`);
+        return reply.send(activeSectors); // Envia a lista como JSON
+      } catch (error: any) {
+        fastify.log.error('Erro ao buscar setores ativos:', error);
+        const errorMessage =
+          error instanceof Error ? error.message : 'Erro desconhecido';
+        return reply.status(500).send({
+          message: 'Erro interno ao buscar setores ativos',
+          error: errorMessage,
+        });
       }
     });
     // --- Fim das Rotas ---
