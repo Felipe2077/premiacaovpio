@@ -32,3 +32,20 @@ export const formatPercent = (ratio: number | null | undefined): string => {
   if (!isFinite(ratio)) return 'N/A'; // Trata Infinity
   return `${(ratio * 100).toFixed(1)}%`; // Formata como porcentagem
 };
+
+// --- FUNÇÃO formatDate ---
+export const formatDate = (
+  isoString: string | Date | undefined | null
+): string => {
+  if (!isoString) return '-';
+  try {
+    // Retorna apenas a data no formato DD/MM/AAAA
+    return new Date(isoString).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+  } catch {
+    return String(isoString); // Retorna string original se falhar
+  }
+};
