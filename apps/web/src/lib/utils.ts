@@ -6,13 +6,25 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export const formatNumber = (
-  num: number | null | undefined,
+  num: number | string | null | undefined,
   decimals = 2
 ): string => {
-  if (num === null || num === undefined || !isFinite(num)) return '-';
-  // Use toLocaleString para formato PT-BR se desejar (ex: 1.500,50)
-  // return num.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-  return num.toFixed(decimals); // Simples com ponto decimal
+  if (num === null || num === undefined) return '-'; // Retorna '-' para nulo ou indefinido
+
+  let numericValue: number;
+
+  // Tenta converter se for string
+  if (typeof num === 'string') {
+    numericValue = parseFloat(num);
+  } else {
+    numericValue = num; // Assume que já é número
+  }
+
+  // Verifica se a conversão falhou ou se não é um número finito
+  if (isNaN(numericValue) || !isFinite(numericValue)) return '-';
+
+  // Formata o número válido
+  return numericValue.toFixed(decimals);
 };
 
 export const formatPercent = (ratio: number | null | undefined): string => {

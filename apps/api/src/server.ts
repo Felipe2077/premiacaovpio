@@ -1,23 +1,26 @@
-// apps/api/src/server.ts
+// apps/api/src/server.ts (ATUALIZADO COM NOVO SERVIÇO E ROTA)
 import { AppDataSource } from '@/database/data-source';
-import { CriterionEntity } from '@/entity/criterion.entity';
-import { AuditLogService } from '@/modules/audit/audit.service'; // Importado
-import { ParameterService } from '@/modules/parameters/parameter.service'; // Importado
-import { RankingService } from '@/modules/ranking/ranking.service';
 import cors from '@fastify/cors';
 import * as dotenv from 'dotenv';
 import Fastify from 'fastify';
+// Importa todos os serviços
+import { CriterionEntity } from '@/entity/criterion.entity';
+import { AuditLogService } from '@/modules/audit/audit.service';
+import { ExpurgoService } from '@/modules/expurgos/expurgo.service';
+import { ParameterService } from '@/modules/parameters/parameter.service';
+import { RankingService } from '@/modules/ranking/ranking.service';
 
 dotenv.config();
 
 const fastify = Fastify({ logger: true });
 
-// --- Instanciar Serviços ---
+// --- Instanciar TODOS os Serviços ---
 const rankingService = new RankingService();
-const parameterService = new ParameterService(); // Instanciado
-const auditLogService = new AuditLogService(); // Instanciado
+const parameterService = new ParameterService();
+const auditLogService = new AuditLogService();
+const expurgoService = new ExpurgoService(); // Instanciado
 
-// Função async para registrar plugins e rotas e iniciar o servidor
+// Função start async
 const start = async () => {
   try {
     // Registrar CORS
@@ -25,7 +28,7 @@ const start = async () => {
       origin: [
         'http://localhost:3000',
         'http://127.0.0.1:3000',
-        /http:\/\/192\.168\.\d+\.\d+:3000/, // Permite IPs locais
+        /http:\/\/192\.168\.\d+\.\d+:3000/,
       ],
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     });
@@ -39,72 +42,69 @@ const start = async () => {
 
     // --- Registrar Rotas ---
     fastify.get('/api/ranking', async (request, reply) => {
-      // Rota para ranking final
       try {
-        // TODO: Pegar período do request.query?
         const data = await rankingService.getCurrentRanking();
         reply.send(data);
       } catch (error: any) {
         fastify.log.error(`Erro em /api/ranking: ${error.message}`);
-        reply.status(500).send({
-          error: error.message || 'Erro interno ao calcular ranking.',
-        });
+        reply.status(500).send({ error: error.message || 'Erro.' });
       }
     });
 
     fastify.get('/api/results', async (request, reply) => {
-      // Rota para resultados detalhados
       try {
-        // TODO: Pegar período do request.query?
         const data = await rankingService.getDetailedResults();
         reply.send(data);
       } catch (error: any) {
         fastify.log.error(`Erro em /api/results: ${error.message}`);
-        reply.status(500).send({
-          error:
-            error.message || 'Erro interno ao buscar resultados detalhados.',
-        });
+        reply.status(500).send({ error: error.message || 'Erro.' });
       }
     });
 
+    // Handler agora usa o serviço atualizado (retorna dados com nomes)
     fastify.get('/api/parameters/current', async (request, reply) => {
-      // Rota para parâmetros
       try {
         const data = await parameterService.getCurrentParameters();
         reply.send(data);
       } catch (error: any) {
         fastify.log.error(`Erro em /api/parameters/current: ${error.message}`);
-        reply.status(500).send({
-          error: error.message || 'Erro interno ao buscar parâmetros.',
-        });
+        reply.status(500).send({ error: error.message || 'Erro.' });
       }
     });
 
+    // Handler agora usa o serviço atualizado (retorna dados com user)
     fastify.get('/api/audit-logs', async (request, reply) => {
-      // Rota para logs
       try {
-        // TODO: Pegar limit do request.query?
-        const data = await auditLogService.getAuditLogs(50); // Pega últimos 50
+        const data = await auditLogService.getAuditLogs(50);
         reply.send(data);
       } catch (error: any) {
         fastify.log.error(`Erro em /api/audit-logs: ${error.message}`);
-        reply
-          .status(500)
-          .send({ error: error.message || 'Erro interno ao buscar logs.' });
+        reply.status(500).send({ error: error.message || 'Erro.' });
       }
     });
-    // Rota para buscar critérios ativos (id, nome, index)
+
+    // --- NOVA ROTA EXPURGOS ---
+    fastify.get('/api/expurgos', async (request, reply) => {
+      try {
+        const data = await expurgoService.getExpurgos(50);
+        reply.send(data);
+      } catch (error: any) {
+        fastify.log.error(`Erro em /api/expurgos: ${error.message}`);
+        reply.status(500).send({ error: error.message || 'Erro.' });
+      }
+    });
+    // --- NOVA ROTA PARA CRITÉRIOS ATIVOS ---
     fastify.get('/api/criteria/active', async (request, reply) => {
       fastify.log.info('Recebida requisição GET /api/criteria/active');
       try {
+        // Pega o repositório DENTRO do handler
         const criterionRepo = AppDataSource.getRepository(CriterionEntity);
-        // ----------------------------------------------------
 
-        // Agora sim podemos usar criterionRepo
         const activeCriteria = await criterionRepo.find({
           where: { ativo: true },
-          select: ['id', 'nome', 'index'], // Seleciona apenas os campos necessários
-          order: { id: 'ASC' },
+          // Seleciona apenas os campos que o frontend precisa (otimização)
+          select: ['id', 'nome', 'index'],
+          order: { id: 'ASC' }, // Ordena para consistência
         });
 
         if (!activeCriteria || activeCriteria.length === 0) {
@@ -115,28 +115,27 @@ const start = async () => {
         fastify.log.info(
           `Retornando ${activeCriteria.length} critérios ativos.`
         );
-        return reply.send(activeCriteria);
+        return reply.send(activeCriteria); // Envia a lista como JSON
       } catch (error: any) {
-        // Tipar error como any ou unknown
         fastify.log.error('Erro ao buscar critérios ativos:', error);
         const errorMessage =
           error instanceof Error
             ? error.message
             : 'Erro desconhecido no servidor';
-        return reply.status(500).send({
-          message: 'Erro interno ao buscar critérios ativos',
-          error: errorMessage,
-        });
+        return reply
+          .status(500)
+          .send({
+            message: 'Erro interno ao buscar critérios ativos',
+            error: errorMessage,
+          });
       }
     });
-
     // --- Fim das Rotas ---
 
     // --- Listen ---
     const port = Number(process.env.API_PORT) || 3001;
     const host = process.env.HOST || '0.0.0.0';
     await fastify.listen({ port: port, host: host });
-    // Fastify já loga que está escutando
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
