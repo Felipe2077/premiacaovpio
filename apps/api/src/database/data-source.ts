@@ -4,6 +4,7 @@ import 'reflect-metadata';
 import { DataSource } from 'typeorm';
 import { AuditLogEntity } from '../entity/audit-log.entity'; // Criar este arquivo
 import { CriterionEntity } from '../entity/criterion.entity';
+import { ExpurgoEventEntity } from '../entity/expurgo-event.entity'; // <-- Importar nova entidade
 import { ParameterValueEntity } from '../entity/parameter-value.entity'; // Criar este arquivo
 import { PerformanceDataEntity } from '../entity/performance-data.entity'; // Criar este arquivo
 import { RoleEntity } from '../entity/role.entity'; // Criar este arquivo
@@ -43,6 +44,7 @@ export const AppDataSource = new DataSource({
     AuditLogEntity,
     UserEntity,
     RoleEntity,
+    ExpurgoEventEntity,
   ],
   migrations: [],
   subscribers: [],
