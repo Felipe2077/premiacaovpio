@@ -57,7 +57,7 @@ export default function HomePage() {
         {/* --- NOVA SEÇÃO: Desempenho vs Meta --- */}
         <section>
           <h2 className='text-2xl font-semibold mb-3'>📈 Desempenho vs Meta</h2>
-          <PerformanceTable // <-- Renderiza a nova tabela
+          <PerformanceTable
             resultsBySector={resultsBySector}
             uniqueCriteria={uniqueCriteria}
             activeCriteria={activeCriteria} // Passa activeCriteria para a lógica de progresso/cor

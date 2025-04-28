@@ -147,7 +147,7 @@ export function PerformanceTable({
                   key={criterion.id}
                   className='text-center font-semibold min-w-[120px] px-1 py-2 text-xs whitespace-normal align-top'
                 >
-                  {criterion.nome} <br />{' '}
+                  {criterion.name} <br />
                   <span className='text-muted-foreground font-normal'>
                     (Valor / Meta / %)
                   </span>
@@ -180,7 +180,7 @@ export function PerformanceTable({
                             <div className='flex flex-col items-center gap-1'>
                               {/* Mostra Valor / Meta */}
                               <span className='text-xs'>
-                                {formatNumber(result.valorRealizado)} /{' '}
+                                {formatNumber(result.valorRealizado)} /
                                 {formatNumber(result.valorMeta)}
                               </span>
                               {/* Mostra % Atingimento */}
@@ -199,7 +199,7 @@ export function PerformanceTable({
                                   />
                                 </TooltipTrigger>
                                 <TooltipContent className='text-xs'>
-                                  {formatPercent(result.percentualAtingimento)}{' '}
+                                  {formatPercent(result.percentualAtingimento)}
                                   da meta
                                 </TooltipContent>
                               </Tooltip>
