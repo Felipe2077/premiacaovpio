@@ -33,7 +33,7 @@ interface SectorData {
   criteriaResults: CriterionResultMap;
 }
 
-interface DetailedResultsTableProps {
+interface PointsTableProps {
   resultsBySector: Record<number, SectorData>;
   uniqueCriteria: Pick<Criterio, 'id' | 'nome'>[];
   activeCriteria: Pick<Criterio, 'id' | 'index'>[] | undefined | null;
@@ -41,13 +41,13 @@ interface DetailedResultsTableProps {
   error: Error | null;
 }
 
-export function DetailedResultsTable({
+export function PointsTable({
   resultsBySector,
   uniqueCriteria,
   activeCriteria,
   isLoading,
   error,
-}: DetailedResultsTableProps) {
+}: PointsTableProps) {
   // --- Função de Estilo COMPLETA ---
   const getPointsCellStyle = (
     points: number | null | undefined,
@@ -245,4 +245,4 @@ export function DetailedResultsTable({
   );
 }
 
-export default DetailedResultsTable;
+export default PointsTable;

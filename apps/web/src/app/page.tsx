@@ -4,7 +4,8 @@
 import FilterControls from '@/components/filters/FilterControls';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
-import DetailedResultsTable from '@/components/competition/DetailedResultsTable';
+import PerformanceTable from '@/components/competition/PerformanceTable';
+import PointsTable from '@/components/competition/PointsTable';
 import RankingTable from '@/components/competition/RankingTable';
 import { useCompetitionData } from '@/hooks/useCompetitionData'; // <-- IMPORTAR HOOK
 
@@ -53,13 +54,25 @@ export default function HomePage() {
           />
         </section>
 
+        {/* --- NOVA SEÇÃO: Desempenho vs Meta --- */}
+        <section>
+          <h2 className='text-2xl font-semibold mb-3'>📈 Desempenho vs Meta</h2>
+          <PerformanceTable // <-- Renderiza a nova tabela
+            resultsBySector={resultsBySector}
+            uniqueCriteria={uniqueCriteria}
+            activeCriteria={activeCriteria} // Passa activeCriteria para a lógica de progresso/cor
+            isLoading={isLoading}
+            error={error}
+          />
+        </section>
+        {/* --------------------------------------- */}
         {/* Seção Detalhes por Critério */}
         <section>
           <h2 className='text-2xl font-semibold mb-3'>
             📊 Desempenho Detalhado por Critério
           </h2>
           {/* Passa os dados e estados do hook para o componente */}
-          <DetailedResultsTable
+          <PointsTable
             resultsBySector={resultsBySector}
             uniqueCriteria={uniqueCriteria}
             activeCriteria={activeCriteria} // Passa critérios ativos para lógica de cor
