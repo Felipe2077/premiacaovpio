@@ -52,8 +52,8 @@ export function AdminSidebar() {
               className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-all
                 ${
                   isActive
-                    ? 'bg-muted text-primary font-medium'
-                    : 'text-muted-foreground hover:text-primary hover:bg-muted'
+                    ? 'bg-amber-100 text-primary font-medium'
+                    : 'text-muted-foreground hover:text-primary hover:bg-amber-50'
                 }`}
             >
               <link.icon className='h-4 w-4' />
