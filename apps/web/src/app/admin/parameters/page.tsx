@@ -212,6 +212,7 @@ export default function ParametersPage() {
                   <Button
                     size='sm'
                     disabled={isLoadingCriteria || isLoadingSectors}
+                    className='cursor-pointer'
                   >
                     + Novo Parâmetro/Meta
                   </Button>
@@ -447,6 +448,7 @@ export default function ParametersPage() {
                                   size='icon'
                                   onClick={() => handleShowHistory(param)}
                                   aria-label='Ver histórico'
+                                  className='cursor-pointer'
                                 >
                                   <History className='h-4 w-4 text-muted-foreground hover:text-primary' />
                                 </Button>

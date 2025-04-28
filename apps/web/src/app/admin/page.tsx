@@ -121,8 +121,7 @@ export default function AdminOverviewPage() {
         {/* Exibição de Erro Geral */}
         {error && !isLoading && (
           <Alert variant='destructive' className='mb-4'>
-            {' '}
-            {/* ... Alert JSX ... */}{' '}
+            {/* ... Alert JSX ... */}
           </Alert>
         )}
 
@@ -131,91 +130,91 @@ export default function AdminOverviewPage() {
         <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6'>
           {/* Card Parâmetros */}
           <Card>
-            {' '}
-            <CardHeader>
-              {' '}
-              <CardTitle>Parâmetros Vigentes</CardTitle>{' '}
-              <Wrench className='h-4 w-4 text-muted-foreground' />{' '}
-            </CardHeader>{' '}
+            <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+              <CardTitle>Parâmetros Vigentes</CardTitle>
+              <Wrench className='h-4 w-4 text-muted-foreground' />
+            </CardHeader>
             <CardContent>
-              {' '}
               {isLoadingParams ? (
                 <Skeleton className='h-8 w-1/3' />
               ) : (
                 <div className='text-2xl font-bold'>
                   {numParametrosVigentes}
                 </div>
-              )}{' '}
+              )}
               <p className='text-xs text-muted-foreground'>
                 Regras e metas ativas.
-              </p>{' '}
-            </CardContent>{' '}
+              </p>
+            </CardContent>
             <CardFooter>
-              {' '}
               <Link href='/admin/parameters'>
-                <Button variant='outline' size='sm' className='w-full'>
+                <Button
+                  variant='outline'
+                  size='sm'
+                  className='w-full cursor-pointer'
+                >
                   Gerenciar <ArrowRight className='ml-auto h-4 w-4' />
                 </Button>
-              </Link>{' '}
-            </CardFooter>{' '}
+              </Link>
+            </CardFooter>
           </Card>
           {/* Card Logs / Eventos */}
           <Card>
-            {' '}
-            <CardHeader>
-              {' '}
-              <CardTitle>Eventos Recentes</CardTitle>{' '}
-              <History className='h-4 w-4 text-muted-foreground' />{' '}
-            </CardHeader>{' '}
+            <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+              <CardTitle>Eventos Recentes</CardTitle>
+              <History className='h-4 w-4 text-muted-foreground' />
+            </CardHeader>
             <CardContent>
-              {' '}
               {isLoadingLogs ? (
                 <Skeleton className='h-8 w-1/3' />
               ) : (
                 <div className='text-2xl font-bold'>{numLogsRecentes}</div>
-              )}{' '}
+              )}
               <p className='text-xs text-muted-foreground'>
                 Últimos logs de auditoria.
-              </p>{' '}
-            </CardContent>{' '}
+              </p>
+            </CardContent>
             <CardFooter>
-              {' '}
               <Link href='/admin/audit-logs'>
-                <Button variant='outline' size='sm' className='w-full'>
+                <Button
+                  variant='outline'
+                  size='sm'
+                  className='w-full cursor-pointer'
+                >
                   Ver Eventos <ArrowRight className='ml-auto h-4 w-4' />
                 </Button>
-              </Link>{' '}
-            </CardFooter>{' '}
+              </Link>
+            </CardFooter>
           </Card>
           {/* Card Expurgos */}
           <Card>
-            {' '}
-            <CardHeader>
-              {' '}
-              <CardTitle>Expurgos Registrados</CardTitle>{' '}
-              <ShieldAlert className='h-4 w-4 text-muted-foreground' />{' '}
-            </CardHeader>{' '}
+            <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+              <CardTitle>Expurgos Registrados</CardTitle>
+              <ShieldAlert className='h-4 w-4 text-muted-foreground' />
+            </CardHeader>
             <CardContent>
-              {' '}
               {isLoadingExpurgos ? (
                 <Skeleton className='h-8 w-1/3' />
               ) : (
                 <div className='text-2xl font-bold'>
                   {numExpurgosRegistrados}
                 </div>
-              )}{' '}
+              )}
               <p className='text-xs text-muted-foreground'>
                 Eventos excepcionais tratados.
-              </p>{' '}
-            </CardContent>{' '}
+              </p>
+            </CardContent>
             <CardFooter>
-              {' '}
               <Link href='/admin/expurgos'>
-                <Button variant='outline' size='sm' className='w-full'>
+                <Button
+                  variant='outline'
+                  size='sm'
+                  className='w-full cursor-pointer'
+                >
                   Gerenciar Expurgos <ArrowRight className='ml-auto h-4 w-4' />
                 </Button>
-              </Link>{' '}
-            </CardFooter>{' '}
+              </Link>
+            </CardFooter>
           </Card>
           {/* **NOVO:** Card Dias Restantes */}
           <Card>
@@ -227,13 +226,12 @@ export default function AdminOverviewPage() {
             </CardHeader>
             <CardContent>
               <div className='text-2xl font-bold'>
-                {diasRestantes}{' '}
+                {diasRestantes}
                 {diasRestantes === 1 ? 'dia restante' : 'dias restantes'}
               </div>
               <p className='text-xs text-muted-foreground'>
-                {' '}
                 Para o fim do mês atual ({fimDoMes.toLocaleDateString('pt-BR')}
-                ).{' '}
+                ).
               </p>
             </CardContent>
             {/* Sem footer neste card talvez */}

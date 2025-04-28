@@ -275,7 +275,12 @@ export default function ExpurgosPage() {
                 onOpenChange={setIsExpurgoModalOpen}
               >
                 <DialogTrigger asChild>
-                  <Button size='sm' variant='outline' disabled={isLoading}>
+                  <Button
+                    size='sm'
+                    variant='outline'
+                    disabled={isLoading}
+                    className='cursor-pointer'
+                  >
                     Registrar Novo Expurgo
                   </Button>
                 </DialogTrigger>
