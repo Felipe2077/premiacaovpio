@@ -78,6 +78,25 @@ export const MySqlDataSource = new DataSource({
   logging: ['query', 'error'],
   entities: [], // Sem entidades por enquanto
 });
+export const OracleDataSource = new DataSource({
+  name: 'oracle_erp', // Nome para esta conexão específica
+  type: 'oracle',
+  // Usa as novas variáveis do .env
+  host: process.env.ORACLE_HOST,
+  port: Number(process.env.ORACLE_PORT) || 1521,
+  // Use serviceName OU sid, dependendo do que sua string de conexão usa
+  serviceName: process.env.ORACLE_SERVICE_NAME,
+  // sid: process.env.ORACLE_SID,
+  username: process.env.ORACLE_USER, // Usuário glbconsult
+  password: process.env.ORACLE_PASSWORD, // Senha do glbconsult
+  synchronize: false, // NUNCA sincronizar schema Oracle
+  logging: ['query', 'error'], // Logar queries e erros
+  entities: [
+    // Não precisamos de entidades aqui para query bruta
+  ],
+  // Pode precisar passar o libDir aqui se initOracleClient não funcionar globalmente
+  // driverOptions: { libDir: process.env.ORACLE_HOME }
+});
 // --------------------------
 
 // Inicializa a conexão ao carregar este arquivo (opcional, pode inicializar no server.ts)
