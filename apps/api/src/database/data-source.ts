@@ -12,13 +12,6 @@ import { RoleEntity } from '../entity/role.entity'; // Criar este arquivo
 import { SectorEntity } from '../entity/sector.entity';
 import { UserEntity } from '../entity/user.entity'; // Criar este arquivo
 
-// --- DEBUG dotenv DENTRO DE data-source.ts ---
-console.log('[data-source.ts] Script iniciado.');
-console.log('[data-source.ts] Diretório atual (cwd):', process.cwd());
-console.log('[data-source.ts] Diretório do arquivo (__dirname):', __dirname);
-
-// Tenta carregar .env da pasta apps/api (um nível acima de src/database)
-
 dotenv.config();
 // --- DEBUG dotenv DENTRO DE data-source.ts ---
 console.log('[data-source.ts] Script iniciado.');
