@@ -144,7 +144,6 @@ const criteriaMockCorrigido: DeepPartial<CriterionEntity>[] = [
   },
 ];
 
-// Removido IDs hardcoded
 const rolesMock: DeepPartial<RoleEntity>[] = [
   { nome: 'Admin' },
   { nome: 'Viewer' },
@@ -224,22 +223,172 @@ const parametersMock: DeepPartial<ParameterValueEntity>[] = [
     criterionId: 15,
     justificativa: 'Meta inicial Furo por Atraso',
   },
+  {
+    nomeParametro: 'META_FURO_VIAGEM',
+    valor: '1.5',
+    dataInicioEfetivo: '2025-04-01',
+    dataFimEfetivo: null,
+    criterionId: 2,
+    justificativa: 'Meta Furo Viagem (%)',
+  },
+  {
+    nomeParametro: 'META_QUEBRA',
+    valor: '2',
+    dataInicioEfetivo: '2025-04-01',
+    dataFimEfetivo: null,
+    criterionId: 3,
+    justificativa: 'Meta Quebras (Qtd)',
+  },
+  {
+    nomeParametro: 'META_DEFEITO',
+    valor: '15',
+    dataInicioEfetivo: '2025-04-01',
+    dataFimEfetivo: null,
+    criterionId: 4,
+    justificativa: 'Meta Defeitos (Qtd)',
+  },
+  {
+    nomeParametro: 'META_FALTA_FUNC',
+    valor: '3.0',
+    dataInicioEfetivo: '2025-04-01',
+    dataFimEfetivo: null,
+    criterionId: 5,
+    justificativa: 'Meta Falta Func (%)',
+  },
+  {
+    nomeParametro: 'META_ATESTADO_FUNC',
+    valor: '5.0',
+    dataInicioEfetivo: '2025-04-01',
+    dataFimEfetivo: null,
+    criterionId: 6,
+    justificativa: 'Meta Atestado Func (%)',
+  },
+  {
+    nomeParametro: 'META_COLISAO',
+    valor: '0',
+    dataInicioEfetivo: '2025-04-01',
+    dataFimEfetivo: null,
+    criterionId: 7,
+    justificativa: 'Meta Colisões (Qtd)',
+  },
+  {
+    nomeParametro: 'META_FALTA_FROTA',
+    valor: '1.0',
+    dataInicioEfetivo: '2025-04-01',
+    dataFimEfetivo: null,
+    criterionId: 8,
+    justificativa: 'Meta Falta Frota (%)',
+  },
+  {
+    nomeParametro: 'META_MEDIA_KM_L',
+    valor: '2.5',
+    dataInicioEfetivo: '2025-04-01',
+    dataFimEfetivo: null,
+    criterionId: 10,
+    justificativa: 'Meta Média KM/L',
+  },
+  {
+    nomeParametro: 'META_KM_OCIOSA',
+    valor: '10.0',
+    dataInicioEfetivo: '2025-04-01',
+    dataFimEfetivo: null,
+    criterionId: 11,
+    justificativa: 'Meta KM Ociosa (%)',
+  },
+  {
+    nomeParametro: 'META_PECAS',
+    valor: '20000',
+    dataInicioEfetivo: '2025-04-01',
+    dataFimEfetivo: null,
+    criterionId: 12,
+    justificativa: 'Meta Peças (R$)',
+  },
+  {
+    nomeParametro: 'META_PNEUS',
+    valor: '10000',
+    dataInicioEfetivo: '2025-04-01',
+    dataFimEfetivo: null,
+    criterionId: 13,
+    justificativa: 'Meta Pneus (R$)',
+  },
+  {
+    nomeParametro: 'META_COMBUSTIVEL',
+    valor: '90000',
+    dataInicioEfetivo: '2025-04-01',
+    dataFimEfetivo: null,
+    criterionId: 14,
+    justificativa: 'Meta Combustível (R$)',
+  },
 ];
 
 const performanceMock: DeepPartial<PerformanceDataEntity>[] = [
-  { sectorId: 1, criterionId: 1, metricDate: '2025-04-30', valor: 303 },
-  { sectorId: 1, criterionId: 9, metricDate: '2025-04-30', valor: 3.01 },
-  { sectorId: 1, criterionId: 15, metricDate: '2025-04-30', valor: 3 },
-  { sectorId: 2, criterionId: 1, metricDate: '2025-04-30', valor: 317 },
-  { sectorId: 2, criterionId: 9, metricDate: '2025-04-30', valor: 2.88 },
-  { sectorId: 2, criterionId: 15, metricDate: '2025-04-30', valor: 6 },
-  { sectorId: 3, criterionId: 1, metricDate: '2025-04-30', valor: 309 },
-  { sectorId: 3, criterionId: 9, metricDate: '2025-04-30', valor: 2.81 },
-  { sectorId: 3, criterionId: 15, metricDate: '2025-04-30', valor: 4 },
-  { sectorId: 4, criterionId: 1, metricDate: '2025-04-30', valor: 706 },
-  { sectorId: 4, criterionId: 9, metricDate: '2025-04-30', valor: 1.78 },
-  { sectorId: 4, criterionId: 15, metricDate: '2025-04-30', valor: 7 },
-  // Adicionar mais dados de performance para outros critérios (IDs 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14) para todas as 4 filiais para ter dados completos
+  // --- GAMA (sectorId: 1) ---
+  { sectorId: 1, criterionId: 1, metricDate: '2025-04-30', valor: 303 }, // Atraso (Meta 350, MENOR) -> BOM
+  { sectorId: 1, criterionId: 2, metricDate: '2025-04-30', valor: 1.2 }, // Furo Viagem (Meta 1.5, MENOR) -> BOM
+  { sectorId: 1, criterionId: 3, metricDate: '2025-04-30', valor: 1 }, // Quebra (Meta 2, MENOR) -> BOM
+  { sectorId: 1, criterionId: 4, metricDate: '2025-04-30', valor: 10 }, // Defeito (Meta 15, MENOR) -> BOM
+  { sectorId: 1, criterionId: 5, metricDate: '2025-04-30', valor: 2.5 }, // Falta Func (Meta 3.0, MENOR) -> BOM
+  { sectorId: 1, criterionId: 6, metricDate: '2025-04-30', valor: 4.0 }, // Atestado (Meta 5.0, MENOR) -> BOM
+  { sectorId: 1, criterionId: 7, metricDate: '2025-04-30', valor: 0 }, // Colisao (Meta 0, MENOR) -> BOM
+  { sectorId: 1, criterionId: 8, metricDate: '2025-04-30', valor: 0.5 }, // Falta Frota (Meta 1.0, MENOR) -> BOM
+  { sectorId: 1, criterionId: 9, metricDate: '2025-04-30', valor: 3.01 }, // IPK (Meta 3.00, MAIOR) -> BOM
+  { sectorId: 1, criterionId: 10, metricDate: '2025-04-30', valor: 2.6 }, // Media KM/L (Meta 2.5, MAIOR) -> BOM
+  { sectorId: 1, criterionId: 11, metricDate: '2025-04-30', valor: 9.0 }, // KM Ociosa (Meta 10.0, MENOR) -> BOM
+  { sectorId: 1, criterionId: 12, metricDate: '2025-04-30', valor: 18500 }, // Peças (Meta 20k, MENOR) -> BOM
+  { sectorId: 1, criterionId: 13, metricDate: '2025-04-30', valor: 9800 }, // Pneus (Meta 10k, MENOR) -> BOM
+  { sectorId: 1, criterionId: 14, metricDate: '2025-04-30', valor: 88000 }, // Combustivel (Meta 90k, MENOR) -> BOM
+  { sectorId: 1, criterionId: 15, metricDate: '2025-04-30', valor: 3 }, // Furo Atraso (Meta 5, MENOR) -> BOM
+
+  // --- PARANOÁ (sectorId: 2) ---
+  { sectorId: 2, criterionId: 1, metricDate: '2025-04-30', valor: 317 }, // Atraso (Meta 320, MENOR) -> OK
+  { sectorId: 2, criterionId: 2, metricDate: '2025-04-30', valor: 1.6 }, // Furo Viagem (Meta 1.5, MENOR) -> RUIM
+  { sectorId: 2, criterionId: 3, metricDate: '2025-04-30', valor: 2 }, // Quebra (Meta 2, MENOR) -> OK
+  { sectorId: 2, criterionId: 4, metricDate: '2025-04-30', valor: 12 }, // Defeito (Meta 15, MENOR) -> BOM
+  { sectorId: 2, criterionId: 5, metricDate: '2025-04-30', valor: 3.1 }, // Falta Func (Meta 3.0, MENOR) -> RUIM
+  { sectorId: 2, criterionId: 6, metricDate: '2025-04-30', valor: 5.5 }, // Atestado (Meta 5.0, MENOR) -> RUIM
+  { sectorId: 2, criterionId: 7, metricDate: '2025-04-30', valor: 0 }, // Colisao (Meta 0, MENOR) -> BOM
+  { sectorId: 2, criterionId: 8, metricDate: '2025-04-30', valor: 1.1 }, // Falta Frota (Meta 1.0, MENOR) -> RUIM
+  { sectorId: 2, criterionId: 9, metricDate: '2025-04-30', valor: 2.88 }, // IPK (Meta 3.00, MAIOR) -> RUIM
+  { sectorId: 2, criterionId: 10, metricDate: '2025-04-30', valor: 2.4 }, // Media KM/L (Meta 2.5, MAIOR) -> RUIM
+  { sectorId: 2, criterionId: 11, metricDate: '2025-04-30', valor: 10.5 }, // KM Ociosa (Meta 10.0, MENOR) -> RUIM
+  { sectorId: 2, criterionId: 12, metricDate: '2025-04-30', valor: 21000 }, // Peças (Meta 20k, MENOR) -> RUIM
+  { sectorId: 2, criterionId: 13, metricDate: '2025-04-30', valor: 11000 }, // Pneus (Meta 10k, MENOR) -> RUIM
+  { sectorId: 2, criterionId: 14, metricDate: '2025-04-30', valor: 92500 }, // Combustivel (Meta 90k, MENOR) -> RUIM
+  { sectorId: 2, criterionId: 15, metricDate: '2025-04-30', valor: 6 }, // Furo Atraso (Meta 5, MENOR) -> RUIM
+
+  // --- SANTA MARIA (sectorId: 3) --- (Valores intermediários)
+  { sectorId: 3, criterionId: 1, metricDate: '2025-04-30', valor: 309 }, // Atraso (Meta 320) -> BOM
+  { sectorId: 3, criterionId: 2, metricDate: '2025-04-30', valor: 1.4 }, // Furo % (Meta 1.5) -> BOM
+  { sectorId: 3, criterionId: 3, metricDate: '2025-04-30', valor: 3 }, // Quebra (Meta 2) -> RUIM
+  { sectorId: 3, criterionId: 4, metricDate: '2025-04-30', valor: 18 }, // Defeito (Meta 15) -> RUIM
+  { sectorId: 3, criterionId: 5, metricDate: '2025-04-30', valor: 2.8 }, // Falta % (Meta 3.0) -> BOM
+  { sectorId: 3, criterionId: 6, metricDate: '2025-04-30', valor: 4.8 }, // Atestado % (Meta 5.0) -> BOM
+  { sectorId: 3, criterionId: 7, metricDate: '2025-04-30', valor: 1 }, // Colisao (Meta 0) -> RUIM
+  { sectorId: 3, criterionId: 8, metricDate: '2025-04-30', valor: 0.8 }, // Falta % (Meta 1.0) -> BOM
+  { sectorId: 3, criterionId: 9, metricDate: '2025-04-30', valor: 2.81 }, // IPK (Meta 3.00) -> RUIM
+  { sectorId: 3, criterionId: 10, metricDate: '2025-04-30', valor: 2.55 }, // Media KM/L (Meta 2.5) -> BOM
+  { sectorId: 3, criterionId: 11, metricDate: '2025-04-30', valor: 11.0 }, // KM Ociosa (Meta 10.0) -> RUIM
+  { sectorId: 3, criterionId: 12, metricDate: '2025-04-30', valor: 19500 }, // Peças (Meta 20k) -> BOM
+  { sectorId: 3, criterionId: 13, metricDate: '2025-04-30', valor: 12000 }, // Pneus (Meta 10k) -> RUIM
+  { sectorId: 3, criterionId: 14, metricDate: '2025-04-30', valor: 89000 }, // Combustivel (Meta 90k) -> BOM
+  { sectorId: 3, criterionId: 15, metricDate: '2025-04-30', valor: 4 }, // Furo Atraso (Meta 5) -> BOM
+
+  // --- SÃO SEBASTIÃO (sectorId: 4) --- (Valores geralmente 'ruins' para teste)
+  { sectorId: 4, criterionId: 1, metricDate: '2025-04-30', valor: 706 }, // Atraso (Meta 320) -> RUIM
+  { sectorId: 4, criterionId: 2, metricDate: '2025-04-30', valor: 2.0 }, // Furo % (Meta 1.5) -> RUIM
+  { sectorId: 4, criterionId: 3, metricDate: '2025-04-30', valor: 4 }, // Quebra (Meta 2) -> RUIM
+  { sectorId: 4, criterionId: 4, metricDate: '2025-04-30', valor: 20 }, // Defeito (Meta 15) -> RUIM
+  { sectorId: 4, criterionId: 5, metricDate: '2025-04-30', valor: 4.0 }, // Falta % (Meta 3.0) -> RUIM
+  { sectorId: 4, criterionId: 6, metricDate: '2025-04-30', valor: 6.0 }, // Atestado % (Meta 5.0) -> RUIM
+  { sectorId: 4, criterionId: 7, metricDate: '2025-04-30', valor: 1 }, // Colisao (Meta 0) -> RUIM
+  { sectorId: 4, criterionId: 8, metricDate: '2025-04-30', valor: 1.5 }, // Falta % (Meta 1.0) -> RUIM
+  { sectorId: 4, criterionId: 9, metricDate: '2025-04-30', valor: 1.78 }, // IPK (Meta 3.00) -> RUIM
+  { sectorId: 4, criterionId: 10, metricDate: '2025-04-30', valor: 2.3 }, // Media KM/L (Meta 2.5) -> RUIM
+  { sectorId: 4, criterionId: 11, metricDate: '2025-04-30', valor: 12.5 }, // KM Ociosa (Meta 10.0) -> RUIM
+  { sectorId: 4, criterionId: 12, metricDate: '2025-04-30', valor: 25000 }, // Peças (Meta 20k) -> RUIM
+  { sectorId: 4, criterionId: 13, metricDate: '2025-04-30', valor: 15000 }, // Pneus (Meta 10k) -> RUIM
+  { sectorId: 4, criterionId: 14, metricDate: '2025-04-30', valor: 99000 }, // Combustivel (Meta 90k) -> RUIM
+  { sectorId: 4, criterionId: 15, metricDate: '2025-04-30', valor: 7 }, // Furo Atraso (Meta 5) -> RUIM
 ];
 
 // Tipagem explícita aqui também

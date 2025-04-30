@@ -173,7 +173,7 @@ export function PerformanceTable({
                       );
                       return (
                         <TableCell
-                          key={`<span class="math-inline">\{sectorId\}\-</span>{criterion.id}`}
+                          key={criterion.id}
                           className='text-center p-1 align-middle'
                         >
                           {result ? (

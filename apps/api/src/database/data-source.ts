@@ -1,5 +1,6 @@
 // src/database/data-source.ts
 import * as dotenv from 'dotenv';
+import path from 'path'; // Importar path
 import 'reflect-metadata';
 import { DataSource } from 'typeorm';
 import { AuditLogEntity } from '../entity/audit-log.entity'; // Criar este arquivo
@@ -11,21 +12,42 @@ import { RoleEntity } from '../entity/role.entity'; // Criar este arquivo
 import { SectorEntity } from '../entity/sector.entity';
 import { UserEntity } from '../entity/user.entity'; // Criar este arquivo
 
-dotenv.config();
+// --- DEBUG dotenv DENTRO DE data-source.ts ---
+console.log('[data-source.ts] Script iniciado.');
+console.log('[data-source.ts] Diretório atual (cwd):', process.cwd());
+console.log('[data-source.ts] Diretório do arquivo (__dirname):', __dirname);
 
-// --- DEBUG POSTGRES CREDS ---
-console.log('--- DEBUG POSTGRES CREDS ---');
-console.log('POSTGRES_HOST:', process.env.POSTGRES_HOST);
-console.log('POSTGRES_PORT:', process.env.POSTGRES_PORT);
-console.log('POSTGRES_USER:', process.env.POSTGRES_USER);
-// Verifica especificamente se a senha está definida
+// Tenta carregar .env da pasta apps/api (um nível acima de src/database)
+
+dotenv.config();
+// --- DEBUG dotenv DENTRO DE data-source.ts ---
+console.log('[data-source.ts] Script iniciado.');
+console.log('[data-source.ts] Diretório atual (cwd):', process.cwd());
+console.log('[data-source.ts] Diretório do arquivo (__dirname):', __dirname);
+
+// Tenta carregar .env da pasta apps/api (um nível acima de src/database)
+const envPath = path.resolve(__dirname, '../../.env');
 console.log(
-  'POSTGRES_PASSWORD:',
-  process.env.POSTGRES_PASSWORD ? '****** (definida)' : '!!! NÃO DEFINIDA !!!'
+  `[data-source.ts] Tentando carregar .env explicitamente de: ${envPath}`
 );
-console.log('POSTGRES_DB:', process.env.POSTGRES_DB);
-console.log('--- FIM DEBUG ---');
-// -----------------------------
+const configResult = dotenv.config({ path: envPath });
+
+if (configResult.error) {
+  console.error(
+    `[data-source.ts] ERRO ao carregar ${envPath}:`,
+    configResult.error
+  );
+} else {
+  console.log(
+    '[data-source.ts] .env carregado (ou não deu erro). Chaves:',
+    Object.keys(configResult.parsed || {})
+  );
+}
+// LOG CRÍTICO: Verifica o valor ANTES da definição do DataSource
+console.log(
+  `[data-source.ts] Valor de process.env.MYSQL_HOST ANTES de new DataSource: ${process.env.MYSQL_HOST}`
+);
+// ------------------------------------------
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -49,6 +71,21 @@ export const AppDataSource = new DataSource({
   migrations: [],
   subscribers: [],
 });
+
+// --- Configuração MySQL ---
+export const MySqlDataSource = new DataSource({
+  name: 'mysql_legacy', // Nome diferente
+  type: 'mysql',
+  host: process.env.MYSQL_HOST,
+  port: Number(process.env.MYSQL_PORT) || 3306,
+  username: process.env.MYSQL_USER,
+  password: process.env.MYSQL_PASSWORD,
+  database: process.env.MYSQL_DB,
+  synchronize: false, // NUNCA sincronizar schema legado!
+  logging: ['query', 'error'],
+  entities: [], // Sem entidades por enquanto
+});
+// --------------------------
 
 // Inicializa a conexão ao carregar este arquivo (opcional, pode inicializar no server.ts)
 // AppDataSource.initialize()
