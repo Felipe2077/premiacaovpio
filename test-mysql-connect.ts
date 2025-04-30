@@ -34,7 +34,21 @@ async function testMysql() {
       connectionInitialized = true;
     }
     console.log('Conexão MySQL estabelecida!');
+    console.log('Listando tabelas em negocioperfeito:');
+    const tables = await MySqlDataSource.query('SHOW TABLES;');
+    console.log(tables);
 
+    console.log('\nDescrevendo a tabela quebrasedefeitos:');
+    const describeTable = await MySqlDataSource.query(
+      'DESCRIBE quebrasedefeitos;'
+    );
+    console.log(describeTable);
+    // Tentar buscar outros CODOCORRENCIA na quebrasedefeitos?
+    // console.log('\nBuscando outros CODOCORRENCIA:');
+    // const otherCodes = await MySqlDataSource.query("SELECT DISTINCT CODOCORRENCIA, OCORRENCIA FROM negocioperfeito.quebrasedefeitos WHERE CODOCORRENCIA NOT IN (1, 2) LIMIT 20;");
+    // console.log(otherCodes);
+
+    // Não precisa mais da query original de Quebra/Defeito aqui
     // Tenta rodar a query de Quebra/Defeito (simplificada)
     const query = `
             SELECT S.SETOR, A.OCORRENCIA, COUNT(A.OCORRENCIA) AS TOTAL, DATE(A.DATA) as DIA
