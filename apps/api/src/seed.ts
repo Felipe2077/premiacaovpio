@@ -1,10 +1,13 @@
-// apps/api/src/seed.ts (VERSÃO INTEGRAL FINAL - SEM CÓDIGO COMENTADO)
+// apps/api/src/seed.ts (VERSÃO REALMENTE INTEGRAL - CHECADA E SEM NADA COMENTADO)
 import 'reflect-metadata';
 import { DeepPartial } from 'typeorm';
 import { AppDataSource } from './database/data-source';
 import { AuditLogEntity } from './entity/audit-log.entity';
 import { CriterionEntity } from './entity/criterion.entity';
-import { ExpurgoEventEntity } from './entity/expurgo-event.entity'; // Importar tipo ExpurgoStatus
+import {
+  ExpurgoEventEntity,
+  ExpurgoStatus,
+} from './entity/expurgo-event.entity';
 import { ParameterValueEntity } from './entity/parameter-value.entity';
 import { PerformanceDataEntity } from './entity/performance-data.entity';
 import { RoleEntity } from './entity/role.entity';
@@ -20,10 +23,9 @@ const sectorsMock: DeepPartial<SectorEntity>[] = [
   { nome: 'SÃO SEBASTIÃO', ativo: true },
 ];
 
-const criteriaMockCorrigido: DeepPartial<CriterionEntity>[] = [
-  // Garantindo que todos os IDs e Indexes estão aqui e são únicos
+// CRITÉRIOS SEM IDs - O BANCO VAI GERAR
+const criteriaMock: Omit<DeepPartial<CriterionEntity>, 'id'>[] = [
   {
-    id: 1,
     nome: 'ATRASO',
     index: 1,
     sentido_melhor: 'MENOR',
@@ -31,7 +33,6 @@ const criteriaMockCorrigido: DeepPartial<CriterionEntity>[] = [
     unidade_medida: 'Qtd',
   },
   {
-    id: 2,
     nome: 'FURO POR VIAGEM',
     index: 2,
     sentido_melhor: 'MENOR',
@@ -39,7 +40,6 @@ const criteriaMockCorrigido: DeepPartial<CriterionEntity>[] = [
     unidade_medida: '%',
   },
   {
-    id: 3,
     nome: 'QUEBRA',
     index: 3,
     sentido_melhor: 'MENOR',
@@ -47,7 +47,6 @@ const criteriaMockCorrigido: DeepPartial<CriterionEntity>[] = [
     unidade_medida: 'Qtd',
   },
   {
-    id: 4,
     nome: 'DEFEITO',
     index: 4,
     sentido_melhor: 'MENOR',
@@ -55,7 +54,6 @@ const criteriaMockCorrigido: DeepPartial<CriterionEntity>[] = [
     unidade_medida: 'Qtd',
   },
   {
-    id: 5,
     nome: 'FALTA FUNC',
     index: 5,
     sentido_melhor: 'MENOR',
@@ -63,7 +61,6 @@ const criteriaMockCorrigido: DeepPartial<CriterionEntity>[] = [
     unidade_medida: '%',
   },
   {
-    id: 6,
     nome: 'ATESTADO FUNC',
     index: 10,
     sentido_melhor: 'MENOR',
@@ -71,7 +68,6 @@ const criteriaMockCorrigido: DeepPartial<CriterionEntity>[] = [
     unidade_medida: '%',
   },
   {
-    id: 7,
     nome: 'COLISÃO',
     index: 7,
     sentido_melhor: 'MENOR',
@@ -79,7 +75,6 @@ const criteriaMockCorrigido: DeepPartial<CriterionEntity>[] = [
     unidade_medida: 'Qtd',
   },
   {
-    id: 8,
     nome: 'FALTA FROTA',
     index: 11,
     sentido_melhor: 'MENOR',
@@ -87,7 +82,6 @@ const criteriaMockCorrigido: DeepPartial<CriterionEntity>[] = [
     unidade_medida: '%',
   },
   {
-    id: 9,
     nome: 'IPK',
     index: 9,
     sentido_melhor: 'MAIOR',
@@ -95,7 +89,6 @@ const criteriaMockCorrigido: DeepPartial<CriterionEntity>[] = [
     unidade_medida: 'Pass/KM',
   },
   {
-    id: 10,
     nome: 'MEDIA KM/L',
     index: 15,
     sentido_melhor: 'MAIOR',
@@ -103,7 +96,6 @@ const criteriaMockCorrigido: DeepPartial<CriterionEntity>[] = [
     unidade_medida: 'KM/L',
   },
   {
-    id: 11,
     nome: 'KM OCIOSA',
     index: 16,
     sentido_melhor: 'MENOR',
@@ -111,7 +103,6 @@ const criteriaMockCorrigido: DeepPartial<CriterionEntity>[] = [
     unidade_medida: '%',
   },
   {
-    id: 12,
     nome: 'PEÇAS',
     index: 12,
     sentido_melhor: 'MENOR',
@@ -119,7 +110,6 @@ const criteriaMockCorrigido: DeepPartial<CriterionEntity>[] = [
     unidade_medida: 'R$',
   },
   {
-    id: 13,
     nome: 'PNEUS',
     index: 13,
     sentido_melhor: 'MENOR',
@@ -127,7 +117,6 @@ const criteriaMockCorrigido: DeepPartial<CriterionEntity>[] = [
     unidade_medida: 'R$',
   },
   {
-    id: 14,
     nome: 'COMBUSTIVEL',
     index: 14,
     sentido_melhor: 'MENOR',
@@ -135,14 +124,12 @@ const criteriaMockCorrigido: DeepPartial<CriterionEntity>[] = [
     unidade_medida: 'Litros',
   },
   {
-    id: 15,
     nome: 'FURO POR ATRASO',
     index: 17,
     sentido_melhor: 'MENOR',
     ativo: true,
     unidade_medida: 'Qtd',
   },
-  // ...
 ];
 
 const rolesMock: DeepPartial<RoleEntity>[] = [
@@ -150,53 +137,61 @@ const rolesMock: DeepPartial<RoleEntity>[] = [
   { nome: 'Viewer' },
 ];
 
-// Tipo auxiliar para mock de log
 interface AuditLogMockInput {
+  userId?: number;
+  userName?: string;
   actionType: string;
   details?: Record<string, any>;
   entityType?: string;
   entityId?: string | number;
-  justificativa?: string;
-  userId?: number;
-  userName?: string;
-}
+  justification?: string;
+} // MUDADO justification
 const auditLogsMock: AuditLogMockInput[] = [
   {
     actionType: 'SEED_EXECUTADO',
-    details: { message: 'Banco de dados populado com dados mock.' },
+    details: { message: 'Banco de dados populado com dados mock iniciais.' },
   },
   {
     actionType: 'PARAMETRO_ALTERADO',
     entityType: 'ParameterValueEntity',
-    entityId: '1', // Assume ID 1 existe
+    entityId: '1',
     details: {
       nomeParametro: 'META_IPK',
       valorAntigo: '2.90',
       valorNovo: '3.00',
       dataInicioEfetivo: '2025-04-01',
     },
-    justificativa: 'Ajuste de meta para o Q2 conforme planejamento.',
+    justification: 'Ajuste de meta para o Q2 conforme planejamento.', // MUDADO
   },
   {
     actionType: 'EXPURGO_REGISTRADO',
     entityType: 'ExpurgoEventEntity',
-    entityId: '1', // Assume ID 1 existe
+    entityId: '1',
     details: {
       criterioNome: 'DEFEITO',
       setorNome: 'PARANOÁ',
       dataEvento: '2025-04-15',
     },
-    justificativa: 'Autorizado por Diretoria em RE-XYZ - Impacto chuva.',
+    justification: 'Autorizado por Diretoria em RE-XYZ - Impacto chuva.', // MUDADO
   },
 ];
 
-const parametersMock: DeepPartial<ParameterValueEntity>[] = [
+// Mocks de Parâmetros referenciam NOMES dos critérios
+interface ParameterMockInput
+  extends Omit<
+    DeepPartial<ParameterValueEntity>,
+    'criterionId' | 'sectorId' | 'createdByUserId'
+  > {
+  criterionNome: string;
+  sectorNome?: string;
+}
+const parametersMockInput: ParameterMockInput[] = [
   {
     nomeParametro: 'META_IPK',
     valor: '3.00',
     dataInicioEfetivo: '2025-04-01',
     dataFimEfetivo: null,
-    criterionId: 9,
+    criterionNome: 'IPK',
     justificativa: 'Meta inicial IPK',
   },
   {
@@ -204,8 +199,8 @@ const parametersMock: DeepPartial<ParameterValueEntity>[] = [
     valor: '350',
     dataInicioEfetivo: '2025-04-01',
     dataFimEfetivo: null,
-    criterionId: 1,
-    sectorId: 1,
+    criterionNome: 'ATRASO',
+    sectorNome: 'GAMA',
     justificativa: 'Meta inicial Atraso GAMA',
   },
   {
@@ -213,7 +208,7 @@ const parametersMock: DeepPartial<ParameterValueEntity>[] = [
     valor: '320',
     dataInicioEfetivo: '2025-04-01',
     dataFimEfetivo: null,
-    criterionId: 1,
+    criterionNome: 'ATRASO',
     justificativa: 'Meta inicial Atraso Geral',
   },
   {
@@ -221,7 +216,7 @@ const parametersMock: DeepPartial<ParameterValueEntity>[] = [
     valor: '5',
     dataInicioEfetivo: '2025-04-01',
     dataFimEfetivo: null,
-    criterionId: 15,
+    criterionNome: 'FURO POR ATRASO',
     justificativa: 'Meta inicial Furo por Atraso',
   },
   {
@@ -229,7 +224,7 @@ const parametersMock: DeepPartial<ParameterValueEntity>[] = [
     valor: '1.5',
     dataInicioEfetivo: '2025-04-01',
     dataFimEfetivo: null,
-    criterionId: 2,
+    criterionNome: 'FURO POR VIAGEM',
     justificativa: 'Meta Furo Viagem (%)',
   },
   {
@@ -237,7 +232,7 @@ const parametersMock: DeepPartial<ParameterValueEntity>[] = [
     valor: '2',
     dataInicioEfetivo: '2025-04-01',
     dataFimEfetivo: null,
-    criterionId: 3,
+    criterionNome: 'QUEBRA',
     justificativa: 'Meta Quebras (Qtd)',
   },
   {
@@ -245,7 +240,7 @@ const parametersMock: DeepPartial<ParameterValueEntity>[] = [
     valor: '15',
     dataInicioEfetivo: '2025-04-01',
     dataFimEfetivo: null,
-    criterionId: 4,
+    criterionNome: 'DEFEITO',
     justificativa: 'Meta Defeitos (Qtd)',
   },
   {
@@ -253,7 +248,7 @@ const parametersMock: DeepPartial<ParameterValueEntity>[] = [
     valor: '3.0',
     dataInicioEfetivo: '2025-04-01',
     dataFimEfetivo: null,
-    criterionId: 5,
+    criterionNome: 'FALTA FUNC',
     justificativa: 'Meta Falta Func (%)',
   },
   {
@@ -261,7 +256,7 @@ const parametersMock: DeepPartial<ParameterValueEntity>[] = [
     valor: '5.0',
     dataInicioEfetivo: '2025-04-01',
     dataFimEfetivo: null,
-    criterionId: 6,
+    criterionNome: 'ATESTADO FUNC',
     justificativa: 'Meta Atestado Func (%)',
   },
   {
@@ -269,7 +264,7 @@ const parametersMock: DeepPartial<ParameterValueEntity>[] = [
     valor: '0',
     dataInicioEfetivo: '2025-04-01',
     dataFimEfetivo: null,
-    criterionId: 7,
+    criterionNome: 'COLISÃO',
     justificativa: 'Meta Colisões (Qtd)',
   },
   {
@@ -277,7 +272,7 @@ const parametersMock: DeepPartial<ParameterValueEntity>[] = [
     valor: '1.0',
     dataInicioEfetivo: '2025-04-01',
     dataFimEfetivo: null,
-    criterionId: 8,
+    criterionNome: 'FALTA FROTA',
     justificativa: 'Meta Falta Frota (%)',
   },
   {
@@ -285,7 +280,7 @@ const parametersMock: DeepPartial<ParameterValueEntity>[] = [
     valor: '2.5',
     dataInicioEfetivo: '2025-04-01',
     dataFimEfetivo: null,
-    criterionId: 10,
+    criterionNome: 'MEDIA KM/L',
     justificativa: 'Meta Média KM/L',
   },
   {
@@ -293,7 +288,7 @@ const parametersMock: DeepPartial<ParameterValueEntity>[] = [
     valor: '10.0',
     dataInicioEfetivo: '2025-04-01',
     dataFimEfetivo: null,
-    criterionId: 11,
+    criterionNome: 'KM OCIOSA',
     justificativa: 'Meta KM Ociosa (%)',
   },
   {
@@ -301,7 +296,7 @@ const parametersMock: DeepPartial<ParameterValueEntity>[] = [
     valor: '20000',
     dataInicioEfetivo: '2025-04-01',
     dataFimEfetivo: null,
-    criterionId: 12,
+    criterionNome: 'PEÇAS',
     justificativa: 'Meta Peças (R$)',
   },
   {
@@ -309,7 +304,7 @@ const parametersMock: DeepPartial<ParameterValueEntity>[] = [
     valor: '10000',
     dataInicioEfetivo: '2025-04-01',
     dataFimEfetivo: null,
-    criterionId: 13,
+    criterionNome: 'PNEUS',
     justificativa: 'Meta Pneus (R$)',
   },
   {
@@ -317,120 +312,426 @@ const parametersMock: DeepPartial<ParameterValueEntity>[] = [
     valor: '35000',
     dataInicioEfetivo: '2025-04-01',
     dataFimEfetivo: null,
-    criterionId: 14,
+    criterionNome: 'COMBUSTIVEL',
     justificativa: 'Meta Combustível (Litros)',
   },
 ];
 
-const performanceMock: DeepPartial<PerformanceDataEntity>[] = [
-  // --- GAMA (sectorId: 1) ---
-  { sectorId: 1, criterionId: 1, metricDate: '2025-04-30', valor: 303 }, // Atraso (Meta 350, MENOR) -> BOM
-  { sectorId: 1, criterionId: 2, metricDate: '2025-04-30', valor: 1.2 }, // Furo Viagem (Meta 1.5, MENOR) -> BOM
-  { sectorId: 1, criterionId: 3, metricDate: '2025-04-30', valor: 1 }, // Quebra (Meta 2, MENOR) -> BOM
-  { sectorId: 1, criterionId: 4, metricDate: '2025-04-30', valor: 10 }, // Defeito (Meta 15, MENOR) -> BOM
-  { sectorId: 1, criterionId: 5, metricDate: '2025-04-30', valor: 2.5 }, // Falta Func (Meta 3.0, MENOR) -> BOM
-  { sectorId: 1, criterionId: 6, metricDate: '2025-04-30', valor: 4.0 }, // Atestado (Meta 5.0, MENOR) -> BOM
-  { sectorId: 1, criterionId: 7, metricDate: '2025-04-30', valor: 0 }, // Colisao (Meta 0, MENOR) -> BOM
-  { sectorId: 1, criterionId: 8, metricDate: '2025-04-30', valor: 0.5 }, // Falta Frota (Meta 1.0, MENOR) -> BOM
-  { sectorId: 1, criterionId: 9, metricDate: '2025-04-30', valor: 3.01 }, // IPK (Meta 3.00, MAIOR) -> BOM
-  { sectorId: 1, criterionId: 10, metricDate: '2025-04-30', valor: 2.6 }, // Media KM/L (Meta 2.5, MAIOR) -> BOM
-  { sectorId: 1, criterionId: 11, metricDate: '2025-04-30', valor: 9.0 }, // KM Ociosa (Meta 10.0, MENOR) -> BOM
-  { sectorId: 1, criterionId: 12, metricDate: '2025-04-30', valor: 18500 }, // Peças (Meta 20k, MENOR) -> BOM
-  { sectorId: 1, criterionId: 13, metricDate: '2025-04-30', valor: 9800 }, // Pneus (Meta 10k, MENOR) -> BOM
-  { sectorId: 1, criterionId: 14, metricDate: '2025-04-30', valor: 88000 }, // Combustivel (Meta 90k, MENOR) -> BOM
-  { sectorId: 1, criterionId: 15, metricDate: '2025-04-30', valor: 3 }, // Furo Atraso (Meta 5, MENOR) -> BOM
+// Mocks de Performance referenciam NOMES
+interface PerformanceMockInput
+  extends Omit<DeepPartial<PerformanceDataEntity>, 'criterionId' | 'sectorId'> {
+  criterionNome: string;
+  sectorNome: string;
+}
+const performanceMockInput: PerformanceMockInput[] = [
+  {
+    sectorNome: 'GAMA',
+    criterionNome: 'ATRASO',
+    metricDate: '2025-04-30',
+    valor: 303,
+  },
+  {
+    sectorNome: 'GAMA',
+    criterionNome: 'IPK',
+    metricDate: '2025-04-30',
+    valor: 3.01,
+  },
+  {
+    sectorNome: 'GAMA',
+    criterionNome: 'FURO POR ATRASO',
+    metricDate: '2025-04-30',
+    valor: 3,
+  },
+  {
+    sectorNome: 'GAMA',
+    criterionNome: 'FURO POR VIAGEM',
+    metricDate: '2025-04-30',
+    valor: 1.2,
+  },
+  {
+    sectorNome: 'GAMA',
+    criterionNome: 'QUEBRA',
+    metricDate: '2025-04-30',
+    valor: 1,
+  },
+  {
+    sectorNome: 'GAMA',
+    criterionNome: 'DEFEITO',
+    metricDate: '2025-04-30',
+    valor: 10,
+  },
+  {
+    sectorNome: 'GAMA',
+    criterionNome: 'FALTA FUNC',
+    metricDate: '2025-04-30',
+    valor: 2.5,
+  },
+  {
+    sectorNome: 'GAMA',
+    criterionNome: 'ATESTADO FUNC',
+    metricDate: '2025-04-30',
+    valor: 4.0,
+  },
+  {
+    sectorNome: 'GAMA',
+    criterionNome: 'COLISÃO',
+    metricDate: '2025-04-30',
+    valor: 0,
+  },
+  {
+    sectorNome: 'GAMA',
+    criterionNome: 'FALTA FROTA',
+    metricDate: '2025-04-30',
+    valor: 0.5,
+  },
+  {
+    sectorNome: 'GAMA',
+    criterionNome: 'MEDIA KM/L',
+    metricDate: '2025-04-30',
+    valor: 2.6,
+  },
+  {
+    sectorNome: 'GAMA',
+    criterionNome: 'KM OCIOSA',
+    metricDate: '2025-04-30',
+    valor: 9.0,
+  },
+  {
+    sectorNome: 'GAMA',
+    criterionNome: 'PEÇAS',
+    metricDate: '2025-04-30',
+    valor: 18500,
+  },
+  {
+    sectorNome: 'GAMA',
+    criterionNome: 'PNEUS',
+    metricDate: '2025-04-30',
+    valor: 9800,
+  },
+  {
+    sectorNome: 'GAMA',
+    criterionNome: 'COMBUSTIVEL',
+    metricDate: '2025-04-30',
+    valor: 33000,
+  },
 
-  // --- PARANOÁ (sectorId: 2) ---
-  { sectorId: 2, criterionId: 1, metricDate: '2025-04-30', valor: 317 }, // Atraso (Meta 320, MENOR) -> OK
-  { sectorId: 2, criterionId: 2, metricDate: '2025-04-30', valor: 1.6 }, // Furo Viagem (Meta 1.5, MENOR) -> RUIM
-  { sectorId: 2, criterionId: 3, metricDate: '2025-04-30', valor: 2 }, // Quebra (Meta 2, MENOR) -> OK
-  { sectorId: 2, criterionId: 4, metricDate: '2025-04-30', valor: 12 }, // Defeito (Meta 15, MENOR) -> BOM
-  { sectorId: 2, criterionId: 5, metricDate: '2025-04-30', valor: 3.1 }, // Falta Func (Meta 3.0, MENOR) -> RUIM
-  { sectorId: 2, criterionId: 6, metricDate: '2025-04-30', valor: 5.5 }, // Atestado (Meta 5.0, MENOR) -> RUIM
-  { sectorId: 2, criterionId: 7, metricDate: '2025-04-30', valor: 0 }, // Colisao (Meta 0, MENOR) -> BOM
-  { sectorId: 2, criterionId: 8, metricDate: '2025-04-30', valor: 1.1 }, // Falta Frota (Meta 1.0, MENOR) -> RUIM
-  { sectorId: 2, criterionId: 9, metricDate: '2025-04-30', valor: 2.88 }, // IPK (Meta 3.00, MAIOR) -> RUIM
-  { sectorId: 2, criterionId: 10, metricDate: '2025-04-30', valor: 2.4 }, // Media KM/L (Meta 2.5, MAIOR) -> RUIM
-  { sectorId: 2, criterionId: 11, metricDate: '2025-04-30', valor: 10.5 }, // KM Ociosa (Meta 10.0, MENOR) -> RUIM
-  { sectorId: 2, criterionId: 12, metricDate: '2025-04-30', valor: 21000 }, // Peças (Meta 20k, MENOR) -> RUIM
-  { sectorId: 2, criterionId: 13, metricDate: '2025-04-30', valor: 11000 }, // Pneus (Meta 10k, MENOR) -> RUIM
-  { sectorId: 2, criterionId: 14, metricDate: '2025-04-30', valor: 92500 }, // Combustivel (Meta 90k, MENOR) -> RUIM
-  { sectorId: 2, criterionId: 15, metricDate: '2025-04-30', valor: 6 }, // Furo Atraso (Meta 5, MENOR) -> RUIM
+  {
+    sectorNome: 'PARANOÁ',
+    criterionNome: 'ATRASO',
+    metricDate: '2025-04-30',
+    valor: 317,
+  },
+  {
+    sectorNome: 'PARANOÁ',
+    criterionNome: 'IPK',
+    metricDate: '2025-04-30',
+    valor: 2.88,
+  },
+  {
+    sectorNome: 'PARANOÁ',
+    criterionNome: 'FURO POR ATRASO',
+    metricDate: '2025-04-30',
+    valor: 6,
+  },
+  {
+    sectorNome: 'PARANOÁ',
+    criterionNome: 'FURO POR VIAGEM',
+    metricDate: '2025-04-30',
+    valor: 1.6,
+  },
+  {
+    sectorNome: 'PARANOÁ',
+    criterionNome: 'QUEBRA',
+    metricDate: '2025-04-30',
+    valor: 2,
+  },
+  {
+    sectorNome: 'PARANOÁ',
+    criterionNome: 'DEFEITO',
+    metricDate: '2025-04-30',
+    valor: 12,
+  },
+  {
+    sectorNome: 'PARANOÁ',
+    criterionNome: 'FALTA FUNC',
+    metricDate: '2025-04-30',
+    valor: 3.1,
+  },
+  {
+    sectorNome: 'PARANOÁ',
+    criterionNome: 'ATESTADO FUNC',
+    metricDate: '2025-04-30',
+    valor: 5.5,
+  },
+  {
+    sectorNome: 'PARANOÁ',
+    criterionNome: 'COLISÃO',
+    metricDate: '2025-04-30',
+    valor: 0,
+  },
+  {
+    sectorNome: 'PARANOÁ',
+    criterionNome: 'FALTA FROTA',
+    metricDate: '2025-04-30',
+    valor: 1.1,
+  },
+  {
+    sectorNome: 'PARANOÁ',
+    criterionNome: 'MEDIA KM/L',
+    metricDate: '2025-04-30',
+    valor: 2.4,
+  },
+  {
+    sectorNome: 'PARANOÁ',
+    criterionNome: 'KM OCIOSA',
+    metricDate: '2025-04-30',
+    valor: 10.5,
+  },
+  {
+    sectorNome: 'PARANOÁ',
+    criterionNome: 'PEÇAS',
+    metricDate: '2025-04-30',
+    valor: 21000,
+  },
+  {
+    sectorNome: 'PARANOÁ',
+    criterionNome: 'PNEUS',
+    metricDate: '2025-04-30',
+    valor: 11000,
+  },
+  {
+    sectorNome: 'PARANOÁ',
+    criterionNome: 'COMBUSTIVEL',
+    metricDate: '2025-04-30',
+    valor: 36000,
+  },
 
-  // --- SANTA MARIA (sectorId: 3) --- (Valores intermediários)
-  { sectorId: 3, criterionId: 1, metricDate: '2025-04-30', valor: 309 }, // Atraso (Meta 320) -> BOM
-  { sectorId: 3, criterionId: 2, metricDate: '2025-04-30', valor: 1.4 }, // Furo % (Meta 1.5) -> BOM
-  { sectorId: 3, criterionId: 3, metricDate: '2025-04-30', valor: 3 }, // Quebra (Meta 2) -> RUIM
-  { sectorId: 3, criterionId: 4, metricDate: '2025-04-30', valor: 18 }, // Defeito (Meta 15) -> RUIM
-  { sectorId: 3, criterionId: 5, metricDate: '2025-04-30', valor: 2.8 }, // Falta % (Meta 3.0) -> BOM
-  { sectorId: 3, criterionId: 6, metricDate: '2025-04-30', valor: 4.8 }, // Atestado % (Meta 5.0) -> BOM
-  { sectorId: 3, criterionId: 7, metricDate: '2025-04-30', valor: 1 }, // Colisao (Meta 0) -> RUIM
-  { sectorId: 3, criterionId: 8, metricDate: '2025-04-30', valor: 0.8 }, // Falta % (Meta 1.0) -> BOM
-  { sectorId: 3, criterionId: 9, metricDate: '2025-04-30', valor: 2.81 }, // IPK (Meta 3.00) -> RUIM
-  { sectorId: 3, criterionId: 10, metricDate: '2025-04-30', valor: 2.55 }, // Media KM/L (Meta 2.5) -> BOM
-  { sectorId: 3, criterionId: 11, metricDate: '2025-04-30', valor: 11.0 }, // KM Ociosa (Meta 10.0) -> RUIM
-  { sectorId: 3, criterionId: 12, metricDate: '2025-04-30', valor: 19500 }, // Peças (Meta 20k) -> BOM
-  { sectorId: 3, criterionId: 13, metricDate: '2025-04-30', valor: 12000 }, // Pneus (Meta 10k) -> RUIM
-  { sectorId: 3, criterionId: 14, metricDate: '2025-04-30', valor: 89000 }, // Combustivel (Meta 90k) -> BOM
-  { sectorId: 3, criterionId: 15, metricDate: '2025-04-30', valor: 4 }, // Furo Atraso (Meta 5) -> BOM
+  {
+    sectorNome: 'SANTA MARIA',
+    criterionNome: 'ATRASO',
+    metricDate: '2025-04-30',
+    valor: 309,
+  },
+  {
+    sectorNome: 'SANTA MARIA',
+    criterionNome: 'IPK',
+    metricDate: '2025-04-30',
+    valor: 2.81,
+  },
+  {
+    sectorNome: 'SANTA MARIA',
+    criterionNome: 'FURO POR ATRASO',
+    metricDate: '2025-04-30',
+    valor: 4,
+  },
+  {
+    sectorNome: 'SANTA MARIA',
+    criterionNome: 'FURO POR VIAGEM',
+    metricDate: '2025-04-30',
+    valor: 1.4,
+  },
+  {
+    sectorNome: 'SANTA MARIA',
+    criterionNome: 'QUEBRA',
+    metricDate: '2025-04-30',
+    valor: 3,
+  },
+  {
+    sectorNome: 'SANTA MARIA',
+    criterionNome: 'DEFEITO',
+    metricDate: '2025-04-30',
+    valor: 18,
+  },
+  {
+    sectorNome: 'SANTA MARIA',
+    criterionNome: 'FALTA FUNC',
+    metricDate: '2025-04-30',
+    valor: 2.8,
+  },
+  {
+    sectorNome: 'SANTA MARIA',
+    criterionNome: 'ATESTADO FUNC',
+    metricDate: '2025-04-30',
+    valor: 4.8,
+  },
+  {
+    sectorNome: 'SANTA MARIA',
+    criterionNome: 'COLISÃO',
+    metricDate: '2025-04-30',
+    valor: 1,
+  },
+  {
+    sectorNome: 'SANTA MARIA',
+    criterionNome: 'FALTA FROTA',
+    metricDate: '2025-04-30',
+    valor: 0.8,
+  },
+  {
+    sectorNome: 'SANTA MARIA',
+    criterionNome: 'MEDIA KM/L',
+    metricDate: '2025-04-30',
+    valor: 2.55,
+  },
+  {
+    sectorNome: 'SANTA MARIA',
+    criterionNome: 'KM OCIOSA',
+    metricDate: '2025-04-30',
+    valor: 11.0,
+  },
+  {
+    sectorNome: 'SANTA MARIA',
+    criterionNome: 'PEÇAS',
+    metricDate: '2025-04-30',
+    valor: 19500,
+  },
+  {
+    sectorNome: 'SANTA MARIA',
+    criterionNome: 'PNEUS',
+    metricDate: '2025-04-30',
+    valor: 12000,
+  },
+  {
+    sectorNome: 'SANTA MARIA',
+    criterionNome: 'COMBUSTIVEL',
+    metricDate: '2025-04-30',
+    valor: 34000,
+  },
 
-  // --- SÃO SEBASTIÃO (sectorId: 4) --- (Valores geralmente 'ruins' para teste)
-  { sectorId: 4, criterionId: 1, metricDate: '2025-04-30', valor: 706 }, // Atraso (Meta 320) -> RUIM
-  { sectorId: 4, criterionId: 2, metricDate: '2025-04-30', valor: 2.0 }, // Furo % (Meta 1.5) -> RUIM
-  { sectorId: 4, criterionId: 3, metricDate: '2025-04-30', valor: 4 }, // Quebra (Meta 2) -> RUIM
-  { sectorId: 4, criterionId: 4, metricDate: '2025-04-30', valor: 20 }, // Defeito (Meta 15) -> RUIM
-  { sectorId: 4, criterionId: 5, metricDate: '2025-04-30', valor: 4.0 }, // Falta % (Meta 3.0) -> RUIM
-  { sectorId: 4, criterionId: 6, metricDate: '2025-04-30', valor: 6.0 }, // Atestado % (Meta 5.0) -> RUIM
-  { sectorId: 4, criterionId: 7, metricDate: '2025-04-30', valor: 1 }, // Colisao (Meta 0) -> RUIM
-  { sectorId: 4, criterionId: 8, metricDate: '2025-04-30', valor: 1.5 }, // Falta % (Meta 1.0) -> RUIM
-  { sectorId: 4, criterionId: 9, metricDate: '2025-04-30', valor: 1.78 }, // IPK (Meta 3.00) -> RUIM
-  { sectorId: 4, criterionId: 10, metricDate: '2025-04-30', valor: 2.3 }, // Media KM/L (Meta 2.5) -> RUIM
-  { sectorId: 4, criterionId: 11, metricDate: '2025-04-30', valor: 12.5 }, // KM Ociosa (Meta 10.0) -> RUIM
-  { sectorId: 4, criterionId: 12, metricDate: '2025-04-30', valor: 25000 }, // Peças (Meta 20k) -> RUIM
-  { sectorId: 4, criterionId: 13, metricDate: '2025-04-30', valor: 15000 }, // Pneus (Meta 10k) -> RUIM
-  { sectorId: 4, criterionId: 14, metricDate: '2025-04-30', valor: 99000 }, // Combustivel (Meta 90k) -> RUIM
-  { sectorId: 4, criterionId: 15, metricDate: '2025-04-30', valor: 7 }, // Furo Atraso (Meta 5) -> RUIM
+  {
+    sectorNome: 'SÃO SEBASTIÃO',
+    criterionNome: 'ATRASO',
+    metricDate: '2025-04-30',
+    valor: 706,
+  },
+  {
+    sectorNome: 'SÃO SEBASTIÃO',
+    criterionNome: 'IPK',
+    metricDate: '2025-04-30',
+    valor: 1.78,
+  },
+  {
+    sectorNome: 'SÃO SEBASTIÃO',
+    criterionNome: 'FURO POR ATRASO',
+    metricDate: '2025-04-30',
+    valor: 7,
+  },
+  {
+    sectorNome: 'SÃO SEBASTIÃO',
+    criterionNome: 'FURO POR VIAGEM',
+    metricDate: '2025-04-30',
+    valor: 2.0,
+  },
+  {
+    sectorNome: 'SÃO SEBASTIÃO',
+    criterionNome: 'QUEBRA',
+    metricDate: '2025-04-30',
+    valor: 4,
+  },
+  {
+    sectorNome: 'SÃO SEBASTIÃO',
+    criterionNome: 'DEFEITO',
+    metricDate: '2025-04-30',
+    valor: 20,
+  },
+  {
+    sectorNome: 'SÃO SEBASTIÃO',
+    criterionNome: 'FALTA FUNC',
+    metricDate: '2025-04-30',
+    valor: 4.0,
+  },
+  {
+    sectorNome: 'SÃO SEBASTIÃO',
+    criterionNome: 'ATESTADO FUNC',
+    metricDate: '2025-04-30',
+    valor: 6.0,
+  },
+  {
+    sectorNome: 'SÃO SEBASTIÃO',
+    criterionNome: 'COLISÃO',
+    metricDate: '2025-04-30',
+    valor: 1,
+  },
+  {
+    sectorNome: 'SÃO SEBASTIÃO',
+    criterionNome: 'FALTA FROTA',
+    metricDate: '2025-04-30',
+    valor: 1.5,
+  },
+  {
+    sectorNome: 'SÃO SEBASTIÃO',
+    criterionNome: 'MEDIA KM/L',
+    metricDate: '2025-04-30',
+    valor: 2.3,
+  },
+  {
+    sectorNome: 'SÃO SEBASTIÃO',
+    criterionNome: 'KM OCIOSA',
+    metricDate: '2025-04-30',
+    valor: 12.5,
+  },
+  {
+    sectorNome: 'SÃO SEBASTIÃO',
+    criterionNome: 'PEÇAS',
+    metricDate: '2025-04-30',
+    valor: 25000,
+  },
+  {
+    sectorNome: 'SÃO SEBASTIÃO',
+    criterionNome: 'PNEUS',
+    metricDate: '2025-04-30',
+    valor: 15000,
+  },
+  {
+    sectorNome: 'SÃO SEBASTIÃO',
+    criterionNome: 'COMBUSTIVEL',
+    metricDate: '2025-04-30',
+    valor: 38000,
+  },
 ];
 
-// Tipagem explícita aqui também
-const expurgosMock: DeepPartial<ExpurgoEventEntity>[] = [
+// Tipagem para expurgos mock, referenciando NOMES para critério/setor
+interface ExpurgoMockInput
+  extends Omit<
+    DeepPartial<ExpurgoEventEntity>,
+    'criterionId' | 'sectorId' | 'registradoPorUserId'
+  > {
+  criterionNome: string;
+  sectorNome: string;
+}
+const expurgosMockInput: ExpurgoMockInput[] = [
   {
-    criterionId: 4,
-    sectorId: 2,
+    criterionNome: 'DEFEITO',
+    sectorNome: 'PARANOÁ',
     dataEvento: '2025-04-15',
-    descricaoEvento: 'Defeito sensor X - Causa externa.',
-    justificativa: 'Autorizado por Diretoria em RE-XYZ - Impacto chuva.',
-    status: 'APROVADO', // Usa um tipo válido de ExpurgoStatus
-    // aprovadoPorUserId e justificativaAprovacao poderiam ser preenchidos aqui
+    descricaoEvento: 'Defeito sensor X.',
+    justificativa: 'Autorizado Diretoria.',
+    status: 'APROVADO' as ExpurgoStatus,
   },
   {
-    criterionId: 11,
-    sectorId: 3,
+    criterionNome: 'KM OCIOSA',
+    sectorNome: 'SANTA MARIA',
     dataEvento: '2025-04-20',
-    descricaoEvento: 'Veículo Z parado em bloqueio na via.',
-    justificativa: 'Autorizado por Gerente W - Evento externo comprovado.',
-    status: 'PENDENTE', // Usa um tipo válido
+    descricaoEvento: 'Bloqueio via.',
+    justificativa: 'Autorizado Gerente.',
+    status: 'PENDENTE' as ExpurgoStatus,
   },
   {
-    criterionId: 3,
-    sectorId: 1,
+    criterionNome: 'QUEBRA',
+    sectorNome: 'GAMA',
     dataEvento: '2025-04-10',
-    descricaoEvento: 'Quebra por vandalismo.',
-    justificativa: 'Solicitado - Vandalismo BO anexo.',
-    status: 'REJEITADO', // Usa um tipo válido
-    justificativaAprovacao:
-      'Vandalismo não coberto pela política de expurgo atual.',
-    // aprovadoPorUserId poderia ser preenchido
+    descricaoEvento: 'Vandalismo.',
+    justificativa: 'Solicitado BO.',
+    status: 'REJEITADO' as ExpurgoStatus,
+    justificativaAprovacao: 'Não coberto.',
   },
 ];
 
 // --- Função para Executar o Seed ---
 async function runSeed() {
   console.log('Iniciando script de seed...');
-  let connectionInitialized = false; // Flag para controle
+  let connectionInitialized = false;
   try {
     console.log('Inicializando DataSource...');
-    // Garante que só inicializa uma vez
     if (!AppDataSource.isInitialized) {
       await AppDataSource.initialize();
       connectionInitialized = true;
@@ -439,7 +740,6 @@ async function runSeed() {
     }
     console.log('DataSource pronto para uso!');
 
-    // Pegar Repositórios
     const queryRunner = AppDataSource.createQueryRunner();
     const sectorRepo = AppDataSource.getRepository(SectorEntity);
     const criterionRepo = AppDataSource.getRepository(CriterionEntity);
@@ -450,8 +750,8 @@ async function runSeed() {
     const auditLogRepo = AppDataSource.getRepository(AuditLogEntity);
     const expurgoEventRepo = AppDataSource.getRepository(ExpurgoEventEntity);
 
-    // Limpar tabelas na ordem inversa de dependência
     console.log('Limpando dados antigos (na ordem correta)...');
+    await queryRunner.query('DELETE FROM competition_periods'); // Adicionado
     await queryRunner.query('DELETE FROM expurgo_events');
     await queryRunner.query('DELETE FROM audit_logs');
     await queryRunner.query('DELETE FROM performance_data');
@@ -463,27 +763,26 @@ async function runSeed() {
     await queryRunner.query('DELETE FROM sectors');
     console.log('Tabelas limpas (usando DELETE).');
 
-    // Inserir Dados Mock e LOGAR resultados
     console.log('Inserindo Setores...');
     const savedSectors = await sectorRepo.save(sectorsMock);
     console.log(` -> ${savedSectors.length} setores salvos.`);
+    const sectorMap = new Map(savedSectors.map((s) => [s.nome, s.id]));
 
     console.log('Inserindo Critérios...');
-    const savedCriteria = await criterionRepo.save(criteriaMockCorrigido);
-    console.log(
-      ` -> ${savedCriteria.length} critérios salvos. ID 9 salvo? ${savedCriteria.some((c) => c.id === 9)}`
-    ); // Verifica se ID 9 está nos salvos
+    const savedCriteria = await criterionRepo.save(criteriaMock); // Salva critérios SEM ID hardcoded
+    console.log(` -> ${savedCriteria.length} critérios salvos.`);
+    const criteriaMap = new Map(savedCriteria.map((c) => [c.nome, c.id]));
 
     console.log('Inserindo Perfis...');
-    const savedRoles = await roleRepo.save(rolesMock); // Salva sem ID hardcoded
+    const savedRoles = await roleRepo.save(rolesMock);
     console.log(` -> ${savedRoles.length} perfis salvos.`);
     const adminRole = savedRoles.find((r) => r.nome === 'Admin');
     const viewerRole = savedRoles.find((r) => r.nome === 'Viewer');
     if (!adminRole || !viewerRole)
-      throw new Error('Roles Admin/Viewer não encontrados após save!');
+      throw new Error('Roles Admin/Viewer não encontrados!');
 
     console.log('Inserindo Usuários...');
-    const createdUsers = await userRepo.save([
+    const usersToSave = [
       {
         nome: 'Admin Sistema',
         email: 'admin@sistema.com',
@@ -496,47 +795,100 @@ async function runSeed() {
         ativo: true,
         roles: [viewerRole],
       },
-    ]);
+    ];
+    const createdUsers = await userRepo.save(usersToSave);
     console.log(` -> ${createdUsers.length} usuários salvos.`);
     const adminUser = createdUsers.find((u) => u.email === 'admin@sistema.com');
     const adminUserId = adminUser?.id;
-    const adminUserName = adminUser?.nome;
-    if (!adminUserId || !adminUserName)
-      throw new Error('Admin user não encontrado após save!');
+    if (!adminUserId) throw new Error('Admin user ID não encontrado!');
+    const adminUserName = adminUser.nome;
 
     console.log('Inserindo Parâmetros...');
-    // Garantir que createdByUserId é number, não undefined
-    const paramsToSave = parametersMock.map((p) => ({
-      ...p,
-      createdByUserId: adminUserId,
-    }));
-    const savedParams = await parameterRepo.save(paramsToSave);
+    const paramsToSavePromises = parametersMockInput.map(async (p_input) => {
+      const criterionId = criteriaMap.get(p_input.criterionNome);
+      const sectorId = p_input.sectorNome
+        ? sectorMap.get(p_input.sectorNome)
+        : undefined;
+      if (!criterionId)
+        throw new Error(
+          `Critério '${p_input.criterionNome}' não encontrado no mapa para parâmetro '${p_input.nomeParametro}'`
+        );
+      if (p_input.sectorNome && !sectorId)
+        throw new Error(
+          `Setor '${p_input.sectorNome}' não encontrado no mapa para parâmetro '${p_input.nomeParametro}'`
+        );
+      const { criterionNome, sectorNome, ...paramEntityData } = p_input;
+      return {
+        ...paramEntityData,
+        criterionId,
+        sectorId,
+        createdByUserId: adminUserId,
+      };
+    });
+    const paramsToSave = await Promise.all(paramsToSavePromises);
+    const savedParams = await parameterRepo.save(
+      paramsToSave as DeepPartial<ParameterValueEntity>[]
+    );
     console.log(` -> ${savedParams.length} parâmetros salvos.`);
 
     console.log('Inserindo Dados de Desempenho...');
-    const savedPerf = await performanceRepo.save(performanceMock);
+    const perfToSavePromises = performanceMockInput.map(async (p_input) => {
+      const criterionId = criteriaMap.get(p_input.criterionNome);
+      const sectorId = sectorMap.get(p_input.sectorNome);
+      if (!criterionId)
+        throw new Error(
+          `Critério '${p_input.criterionNome}' não encontrado no mapa para performance`
+        );
+      if (!sectorId)
+        throw new Error(
+          `Setor '${p_input.sectorNome}' não encontrado no mapa para performance`
+        );
+      const { criterionNome, sectorNome, ...perfEntityData } = p_input;
+      return { ...perfEntityData, criterionId, sectorId };
+    });
+    const perfToSave = await Promise.all(perfToSavePromises);
+    const savedPerf = await performanceRepo.save(
+      perfToSave as DeepPartial<PerformanceDataEntity>[]
+    );
     console.log(` -> ${savedPerf.length} registros de desempenho salvos.`);
 
     console.log('Inserindo Eventos de Expurgo Mock...');
-    // Garantir que registradoPorUserId é number
-    const expurgosToSave = expurgosMock.map((e) => ({
-      ...e,
-      registradoPorUserId: adminUserId,
-    }));
-    const savedExpurgos = await expurgoEventRepo.save(expurgosToSave);
+    const expurgosToSavePromises = expurgosMockInput.map(async (e_input) => {
+      const criterionId = criteriaMap.get(e_input.criterionNome);
+      const sectorId = sectorMap.get(e_input.sectorNome);
+      if (!criterionId)
+        throw new Error(
+          `Critério nome '${e_input.criterionNome}' do expurgo não encontrado no mapa.`
+        );
+      if (!sectorId)
+        throw new Error(
+          `Setor nome '${e_input.sectorNome}' do expurgo não encontrado no mapa.`
+        );
+      const { criterionNome, sectorNome, ...expurgoEntityData } = e_input;
+      return {
+        ...expurgoEntityData,
+        criterionId,
+        sectorId,
+        registradoPorUserId: adminUserId,
+      };
+    });
+    const expurgosToSave = await Promise.all(expurgosToSavePromises);
+    const savedExpurgos = await expurgoEventRepo.save(
+      expurgosToSave as DeepPartial<ExpurgoEventEntity>[]
+    );
     console.log(` -> ${savedExpurgos.length} expurgos salvos.`);
 
     console.log('Inserindo Logs de Auditoria...');
-    // Mapeamento mais seguro para logs
     const logsToSave = auditLogsMock.map((l) => {
       const logEntry: DeepPartial<AuditLogEntity> = {
-        ...l, // Espalha as props compatíveis primeiro
-        // Converte entityId para string explicitamente se existir, senão undefined
+        actionType: l.actionType,
+        details: l.details,
+        entityType: l.entityType,
         entityId:
           l.entityId !== undefined && l.entityId !== null
             ? String(l.entityId)
             : undefined,
-        // Define defaults para userId e userName
+        justification: l.justification,
         userId: l.userId ?? adminUserId,
         userName: l.userName ?? adminUserName,
       };
@@ -549,19 +901,14 @@ async function runSeed() {
   } catch (error) {
     console.error('ERRO durante a execução do seed:', error);
   } finally {
-    // Só destrói se este script inicializou a conexão
     if (connectionInitialized && AppDataSource.isInitialized) {
       await AppDataSource.destroy();
-      console.log('DataSource finalizado.');
-    } else if (AppDataSource.isInitialized) {
-      // Se foi inicializado externamente, não destruir aqui? Ou sempre destruir?
-      // Vamos manter o destroy por enquanto para garantir limpeza.
+      console.log('DataSource finalizado (pelo seed).');
+    } else if (AppDataSource.isInitialized && !connectionInitialized) {
       await AppDataSource.destroy();
-      console.log('DataSource (pré-existente?) finalizado.');
+      console.log('DataSource (pré-existente) finalizado (pelo seed).');
     }
   }
 }
 // ----------------------------------
-
-// Executa a função
 runSeed();

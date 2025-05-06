@@ -3,14 +3,15 @@ import * as dotenv from 'dotenv';
 import path from 'path'; // Importar path
 import 'reflect-metadata';
 import { DataSource } from 'typeorm';
-import { AuditLogEntity } from '../entity/audit-log.entity'; // Criar este arquivo
+import { AuditLogEntity } from '../entity/audit-log.entity';
+import { CompetitionPeriodEntity } from '../entity/competition-period.entity';
 import { CriterionEntity } from '../entity/criterion.entity';
-import { ExpurgoEventEntity } from '../entity/expurgo-event.entity'; // <-- Importar nova entidade
-import { ParameterValueEntity } from '../entity/parameter-value.entity'; // Criar este arquivo
-import { PerformanceDataEntity } from '../entity/performance-data.entity'; // Criar este arquivo
-import { RoleEntity } from '../entity/role.entity'; // Criar este arquivo
+import { ExpurgoEventEntity } from '../entity/expurgo-event.entity';
+import { ParameterValueEntity } from '../entity/parameter-value.entity';
+import { PerformanceDataEntity } from '../entity/performance-data.entity';
+import { RoleEntity } from '../entity/role.entity';
 import { SectorEntity } from '../entity/sector.entity';
-import { UserEntity } from '../entity/user.entity'; // Criar este arquivo
+import { UserEntity } from '../entity/user.entity';
 
 dotenv.config();
 // --- DEBUG dotenv DENTRO DE data-source.ts ---
@@ -49,7 +50,7 @@ export const AppDataSource = new DataSource({
   username: process.env.POSTGRES_USER,
   password: process.env.POSTGRES_PASSWORD,
   database: process.env.POSTGRES_DB,
-  synchronize: true, // !! APENAS PARA DEV/POC !! Cria/altera tabelas automaticamente. DESABILITAR em produção!
+  synchronize: true, // !! APENAS PARA DEV !! Cria/altera tabelas automaticamente. DESABILITAR em produção!
   logging: false,
   entities: [
     SectorEntity,
@@ -60,6 +61,7 @@ export const AppDataSource = new DataSource({
     UserEntity,
     RoleEntity,
     ExpurgoEventEntity,
+    CompetitionPeriodEntity,
   ],
   migrations: [],
   subscribers: [],
@@ -75,7 +77,7 @@ export const MySqlDataSource = new DataSource({
   password: process.env.MYSQL_PASSWORD,
   database: process.env.MYSQL_DB,
   synchronize: false, // NUNCA sincronizar schema legado!
-  logging: ['query', 'error'],
+  logging: ['query', 'schema', 'error'], // Ou apenas true para todos os logs
   entities: [], // Sem entidades por enquanto
 });
 export const OracleDataSource = new DataSource({
@@ -97,13 +99,3 @@ export const OracleDataSource = new DataSource({
   // Pode precisar passar o libDir aqui se initOracleClient não funcionar globalmente
   // driverOptions: { libDir: process.env.ORACLE_HOME }
 });
-// --------------------------
-
-// Inicializa a conexão ao carregar este arquivo (opcional, pode inicializar no server.ts)
-// AppDataSource.initialize()
-//     .then(() => {
-//         console.log("Data Source do Postgres inicializado!");
-//     })
-//     .catch((err) => {
-//         console.error("Erro durante inicialização do Data Source Postgres:", err);
-//     });
