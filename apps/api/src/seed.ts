@@ -3,6 +3,10 @@ import 'reflect-metadata';
 import { DeepPartial } from 'typeorm';
 import { AppDataSource } from './database/data-source';
 import { AuditLogEntity } from './entity/audit-log.entity';
+import {
+  CompetitionPeriodEntity,
+  CompetitionStatus,
+} from './entity/competition-period.entity'; // Ajuste o path se necessário
 import { CriterionEntity } from './entity/criterion.entity';
 import {
   ExpurgoEventEntity,
@@ -725,9 +729,37 @@ const expurgosMockInput: ExpurgoMockInput[] = [
     justificativaAprovacao: 'Não coberto.',
   },
 ];
+// --- Mock de Períodos de Competição ---
+const competitionPeriodsMock: DeepPartial<CompetitionPeriodEntity>[] = [
+  {
+    mesAno: '2025-03', // Março de 2025
+    dataInicio: '2025-03-01',
+    dataFim: '2025-03-31',
+    status: 'FECHADA' as CompetitionStatus, // Cast para o tipo
+    // fechadaPorUserId: 1, // Admin Sistema
+    // fechadaEm: new Date('2025-04-01T10:00:00Z') // Exemplo de data de fechamento
+  },
+  {
+    mesAno: '2025-04', // Abril de 2025 (Nosso mês de exemplo para performance e parâmetros)
+    dataInicio: '2025-04-01',
+    dataFim: '2025-04-30',
+    status: 'ATIVA' as CompetitionStatus,
+  },
+  {
+    mesAno: '2025-05', // Maio de 2025
+    dataInicio: '2025-05-01',
+    dataFim: '2025-05-31',
+    status: 'PLANEJAMENTO' as CompetitionStatus,
+  },
+];
+// ---------------
 
 // --- Função para Executar o Seed ---
 async function runSeed() {
+  const competitionPeriodRepo = AppDataSource.getRepository(
+    CompetitionPeriodEntity
+  );
+
   console.log('Iniciando script de seed...');
   let connectionInitialized = false;
   try {
@@ -752,6 +784,7 @@ async function runSeed() {
 
     console.log('Limpando dados antigos (na ordem correta)...');
     await queryRunner.query('DELETE FROM competition_periods'); // Adicionado
+
     await queryRunner.query('DELETE FROM expurgo_events');
     await queryRunner.query('DELETE FROM audit_logs');
     await queryRunner.query('DELETE FROM performance_data');
@@ -780,6 +813,14 @@ async function runSeed() {
     const viewerRole = savedRoles.find((r) => r.nome === 'Viewer');
     if (!adminRole || !viewerRole)
       throw new Error('Roles Admin/Viewer não encontrados!');
+    console.log('Inserindo Períodos de Competição Mock...');
+    // Não precisamos mapear nada extra para estes mocks por enquanto
+    const savedCompetitionPeriods = await competitionPeriodRepo.save(
+      competitionPeriodsMock
+    );
+    console.log(
+      ` -> ${savedCompetitionPeriods.length} períodos de competição salvos.`
+    );
 
     console.log('Inserindo Usuários...');
     const usersToSave = [
