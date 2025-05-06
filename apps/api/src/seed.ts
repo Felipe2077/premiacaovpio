@@ -132,7 +132,7 @@ const criteriaMockCorrigido: DeepPartial<CriterionEntity>[] = [
     index: 14,
     sentido_melhor: 'MENOR',
     ativo: true,
-    unidade_medida: 'R$',
+    unidade_medida: 'Litros',
   },
   {
     id: 15,
@@ -142,6 +142,7 @@ const criteriaMockCorrigido: DeepPartial<CriterionEntity>[] = [
     ativo: true,
     unidade_medida: 'Qtd',
   },
+  // ...
 ];
 
 const rolesMock: DeepPartial<RoleEntity>[] = [
@@ -313,11 +314,11 @@ const parametersMock: DeepPartial<ParameterValueEntity>[] = [
   },
   {
     nomeParametro: 'META_COMBUSTIVEL',
-    valor: '90000',
+    valor: '35000',
     dataInicioEfetivo: '2025-04-01',
     dataFimEfetivo: null,
     criterionId: 14,
-    justificativa: 'Meta Combustível (R$)',
+    justificativa: 'Meta Combustível (Litros)',
   },
 ];
 
