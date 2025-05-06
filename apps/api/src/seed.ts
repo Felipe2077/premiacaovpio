@@ -735,21 +735,21 @@ const competitionPeriodsMock: DeepPartial<CompetitionPeriodEntity>[] = [
     mesAno: '2025-03', // Março de 2025
     dataInicio: '2025-03-01',
     dataFim: '2025-03-31',
-    status: 'FECHADA' as CompetitionStatus, // Cast para o tipo
-    // fechadaPorUserId: 1, // Admin Sistema
-    // fechadaEm: new Date('2025-04-01T10:00:00Z') // Exemplo de data de fechamento
+    status: 'FECHADA' as CompetitionStatus,
+    // fechadaPorUserId: 1, // Admin mockado
+    // fechadaEm: new Date('2025-04-02T10:00:00Z') // Data exemplo de fechamento
   },
   {
-    mesAno: '2025-04', // Abril de 2025 (Nosso mês de exemplo para performance e parâmetros)
+    mesAno: '2025-04', // Abril de 2025 (nosso mês de dados de performance e params)
     dataInicio: '2025-04-01',
     dataFim: '2025-04-30',
-    status: 'ATIVA' as CompetitionStatus,
+    status: 'ATIVA' as CompetitionStatus, // Mês atual da premiação
   },
   {
     mesAno: '2025-05', // Maio de 2025
     dataInicio: '2025-05-01',
     dataFim: '2025-05-31',
-    status: 'PLANEJAMENTO' as CompetitionStatus,
+    status: 'PLANEJAMENTO' as CompetitionStatus, // Próximo mês para definir metas
   },
 ];
 // ---------------
