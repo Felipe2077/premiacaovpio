@@ -33,22 +33,35 @@ async function testMysql() {
       await MySqlDataSource.initialize();
       connectionInitialized = true;
     }
+    //-------------------------/
+
     console.log('Conexão MySQL estabelecida!');
-    console.log('Listando tabelas em negocioperfeito:');
-    const tables = await MySqlDataSource.query('SHOW TABLES;');
-    console.log(tables);
-
-    console.log('\nDescrevendo a tabela quebrasedefeitos:');
-    const describeTable = await MySqlDataSource.query(
-      'DESCRIBE quebrasedefeitos;'
+    console.log('\n--- Descrevendo Tabela: dadosviagenssetor ---');
+    const descViagensSetor = await MySqlDataSource.query(
+      'DESCRIBE dadosviagenssetor;'
     );
-    console.log(describeTable);
-    // Tentar buscar outros CODOCORRENCIA na quebrasedefeitos?
-    // console.log('\nBuscando outros CODOCORRENCIA:');
-    // const otherCodes = await MySqlDataSource.query("SELECT DISTINCT CODOCORRENCIA, OCORRENCIA FROM negocioperfeito.quebrasedefeitos WHERE CODOCORRENCIA NOT IN (1, 2) LIMIT 20;");
-    // console.log(otherCodes);
+    console.log(descViagensSetor);
 
-    // Não precisa mais da query original de Quebra/Defeito aqui
+    console.log('\n--- Descrevendo Tabela: importviagens ---');
+    const descImportViagens = await MySqlDataSource.query(
+      'DESCRIBE importviagens;'
+    );
+    console.log(descImportViagens);
+
+    console.log('\n--- Descrevendo Tabela: frota ---');
+    const descFrota = await MySqlDataSource.query('DESCRIBE frota;');
+    console.log(descFrota);
+
+    console.log('\n--- Primeiras 10 linhas de: metas_premiacao ---');
+    const metasData = await MySqlDataSource.query(
+      'SELECT * FROM metas_premiacao LIMIT 10;'
+    );
+    console.log(metasData);
+
+    console.log(
+      '\n>>> SUCESSO! Estruturas/Dados das tabelas candidatas buscadas. <<<'
+    );
+    //-------------------------/
     // Tenta rodar a query de Quebra/Defeito (simplificada)
     const query = `
             SELECT S.SETOR, A.OCORRENCIA, COUNT(A.OCORRENCIA) AS TOTAL, DATE(A.DATA) as DIA
