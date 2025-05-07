@@ -1,60 +1,93 @@
-// test-etl-mysql.ts (na raiz do projeto)
+// test-mysql-etl.ts (ou o nome que você escolheu, na raiz do projeto)
 import * as dotenv from 'dotenv';
 import path from 'path';
 import 'reflect-metadata';
-import {
-  AppDataSource,
-  MySqlDataSource,
-} from './apps/api/src/database/data-source'; // Importa para fechar conexão
-import { EtlService } from './apps/api/src/modules/etl/etl.service'; // Importa o serviço
+// Importa o serviço específico do MySQL ETL
+import { MySqlEtlService } from './apps/api/src/modules/etl/mysql-etl.service';
+// Importa o DataSource do MySQL apenas para poder fechar a conexão no final
+import { MySqlDataSource } from './apps/api/src/database/data-source';
 
-// Carrega .env da API
-dotenv.config({ path: path.resolve(__dirname, 'apps/api/.env') });
+// --- Carregar .env da API ---
+const envPath = path.resolve(__dirname, 'apps/api/.env');
+const configResult = dotenv.config({ path: envPath });
+if (configResult.error) {
+  console.warn(
+    `AVISO: dotenv não carregou ${envPath}. Usando vars do ambiente.`,
+    configResult.error
+  );
+} else {
+  console.log(`.env carregado de ${envPath}`);
+}
+console.log(
+  '[Test Script] MYSQL_USER:',
+  process.env.MYSQL_USER ? 'Definido' : 'NÃO DEFINIDO!'
+);
 
-async function runTest() {
-  console.log('--- Iniciando Teste do ETL Service (MySQL) ---');
+// --- Função de Teste ---
+async function runTestMySqlEtl() {
+  console.log('--- Iniciando Teste do MySqlEtlService (Quebra/Defeito) ---');
 
-  const etlService = new EtlService(); // Instancia o serviço
+  // Verifica credenciais MySQL básicas
+  if (
+    !process.env.MYSQL_USER ||
+    !process.env.MYSQL_PASSWORD ||
+    !process.env.MYSQL_DB
+  ) {
+    console.error('ERRO: Credenciais MySQL não encontradas no .env!');
+    return; // Não tenta fechar DataSource se nem tem credencial
+  }
 
-  // Define um período de teste (ex: Últimos 15 dias)
+  const etlService = new MySqlEtlService(); // Instancia o serviço MySQL ETL
+
+  // Define período de teste (ex: últimos 7 dias)
   const endDate = new Date();
   const startDate = new Date();
-  startDate.setDate(endDate.getDate() - 14); // Pega 15 dias atrás
-
-  const startDateString = startDate.toISOString().split('T')[0]; // Formato YYYY-MM-DD
-  const endDateString = endDate.toISOString().split('T')[0]; // Formato YYYY-MM-DD
+  startDate.setDate(endDate.getDate() - 6); // Pega 7 dias atrás (incluindo hoje)
+  // Formata as datas como YYYY-MM-DD
+  const startDateString = startDate.toISOString().split('T')[0];
+  const endDateString = endDate.toISOString().split('T')[0];
 
   try {
-    // --- VERIFICAÇÃO ADICIONADA ---
     if (!startDateString || !endDateString) {
-      throw new Error('Falha ao gerar as strings de data para a query.');
+      console.error('Falha ao gerar as strings de data para a query MySQL.');
+      throw new Error('Falha ao gerar as strings de data para a query MySQL.');
     }
-    // Chama o método de extração
+    // Chama o método de extração de Quebra/Defeito do serviço
     const mysqlData = await etlService.extractQuebraDefeitoFromMySQL(
       startDateString,
       endDateString
     );
 
-    if (mysqlData.length > 0) {
-      console.log('--- SUCESSO! Dados extraídos do MySQL: ---');
+    if (mysqlData && mysqlData.length > 0) {
+      // Verifica se retornou um array com dados
+      console.log(
+        '--- SUCESSO! Dados de Quebra/Defeito extraídos do MySQL via Service: ---'
+      );
       console.log(
         `(Mostrando os primeiros ${Math.min(10, mysqlData.length)} de ${mysqlData.length} registros)`
       );
       console.log(mysqlData.slice(0, 10)); // Mostra os 10 primeiros
-    } else {
+    } else if (mysqlData) {
+      // Verificação extra se retornou array vazio
       console.log(
-        '--- Conexão OK, mas nenhum dado de Quebra/Defeito encontrado para o período no MySQL ---'
+        '--- Conexão/Query OK, mas nenhum dado de Quebra/Defeito encontrado para o período no MySQL ---'
+      );
+    } else {
+      console.warn(
+        '--- A função de extração retornou um valor inesperado (não array). ---'
       );
     }
   } catch (error) {
-    console.error('--- ERRO GERAL NO TESTE DO ETL ---');
+    console.error('--- ERRO GERAL NO TESTE DO ETL MYSQL ---');
     console.error(error);
   } finally {
-    // Garante que as conexões abertas sejam fechadas ao final do teste
-    if (MySqlDataSource.isInitialized) await MySqlDataSource.destroy();
-    if (AppDataSource.isInitialized) await AppDataSource.destroy(); // Fecha Postgres também se foi aberto
-    console.log('Conexões finalizadas.');
+    // Garante que a conexão MySQL (MySqlDataSource), se foi inicializada pelo serviço, seja fechada
+    if (MySqlDataSource.isInitialized) {
+      await MySqlDataSource.destroy();
+      console.log('Conexão MySQL (MySqlDataSource) finalizada.');
+    }
   }
 }
 
-runTest();
+// Executa o teste
+runTestMySqlEtl();

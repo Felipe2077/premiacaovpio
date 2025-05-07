@@ -8,6 +8,7 @@ import { CriterionEntity } from '@/entity/criterion.entity';
 import { AuditLogService } from '@/modules/audit/audit.service';
 import { ExpurgoService } from '@/modules/expurgos/expurgo.service';
 import { ParameterService } from '@/modules/parameters/parameter.service';
+import { CompetitionPeriodService } from '@/modules/periods/period.service';
 import { RankingService } from '@/modules/ranking/ranking.service';
 import { SectorEntity } from './entity/sector.entity';
 
@@ -19,7 +20,8 @@ const fastify = Fastify({ logger: true });
 const rankingService = new RankingService();
 const parameterService = new ParameterService();
 const auditLogService = new AuditLogService();
-const expurgoService = new ExpurgoService(); // Instanciado
+const expurgoService = new ExpurgoService();
+const competitionPeriodService = new CompetitionPeriodService();
 
 // Função start async
 const start = async () => {
@@ -235,6 +237,67 @@ const start = async () => {
         });
       }
     });
+
+    // --- ROTAS PARA PERIODOS DE COMPETIÇÃO ---
+    fastify.get('/api/periods/active', async (request, reply) => {
+      fastify.log.info('GET /api/periods/active');
+      try {
+        const data = await competitionPeriodService.findCurrentActivePeriod();
+        if (!data)
+          return reply
+            .status(404)
+            .send({ message: 'Nenhum período ativo encontrado.' });
+        reply.send(data);
+      } catch (error: any) {
+        fastify.log.error(`Erro em /api/periods/active: ${error.message}`);
+        reply.status(500).send({ error: error.message || 'Erro interno.' });
+      }
+    });
+
+    fastify.get('/api/periods/latest-closed', async (request, reply) => {
+      fastify.log.info('GET /api/periods/latest-closed');
+      try {
+        const data = await competitionPeriodService.findLatestClosedPeriod();
+        if (!data)
+          return reply
+            .status(404)
+            .send({ message: 'Nenhum período fechado encontrado.' });
+        reply.send(data);
+      } catch (error: any) {
+        fastify.log.error(
+          `Erro em /api/periods/latest-closed: ${error.message}`
+        );
+        reply.status(500).send({ error: error.message || 'Erro interno.' });
+      }
+    });
+
+    fastify.get('/api/periods/planning', async (request, reply) => {
+      fastify.log.info('GET /api/periods/planning');
+      try {
+        const data =
+          await competitionPeriodService.findOrCreatePlanningPeriod();
+        // findOrCreatePlanningPeriod já deve lançar erro se não conseguir criar/achar
+        reply.send(data);
+      } catch (error: any) {
+        fastify.log.error(`Erro em /api/periods/planning: ${error.message}`);
+        reply.status(500).send({ error: error.message || 'Erro interno.' });
+      }
+    });
+
+    fastify.get('/api/periods', async (request, reply) => {
+      fastify.log.info('GET /api/periods');
+      try {
+        // Adicionar query param para limit, opcional
+        // const limit = (request.query as { limit?: string }).limit;
+        // const data = await competitionPeriodService.findAllPeriods(limit ? parseInt(limit) : 12);
+        const data = await competitionPeriodService.findAllPeriods(); // Pega padrão de 12
+        reply.send(data);
+      } catch (error: any) {
+        fastify.log.error(`Erro em /api/periods: ${error.message}`);
+        reply.status(500).send({ error: error.message || 'Erro interno.' });
+      }
+    });
+
     // --- Fim das Rotas ---
 
     // --- Listen ---

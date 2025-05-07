@@ -79,7 +79,7 @@ export class CompetitionPeriodService {
     try {
       let planningPeriod = await this.periodRepo.findOne({
         where: { status: 'PLANEJAMENTO' },
-        order: { dataInicio: 'ASC' }, // Pega o mais antigo em planejamento
+        order: { dataInicio: 'ASC' },
       });
 
       if (planningPeriod) {
@@ -88,48 +88,81 @@ export class CompetitionPeriodService {
         );
         return planningPeriod;
       } else {
-        // Nenhum em planejamento, vamos criar o próximo
         console.log(
-          '[PeriodService] Nenhum período em PLANEJAMENTO. Tentando criar o próximo...'
+          '[PeriodService] Nenhum período em PLANEJAMENTO. Criando o próximo...'
         );
         const lastPeriod = await this.periodRepo.findOne({
           order: { dataFim: 'DESC' }, // Pega o último período existente (qualquer status)
         });
 
         let nextYear: number;
-        let nextMonth: number; // 0 = Janeiro, 11 = Dezembro
+        let nextMonthIndex: number; // 0 para Janeiro, 11 para Dezembro
 
-        if (lastPeriod) {
-          const [year, month] = lastPeriod.mesAno.split('-').map(Number);
-          const lastPeriodDate = new Date(year, month - 1); // Mês é 0-indexado no Date
-          nextYear = lastPeriodDate.getFullYear();
-          nextMonth = lastPeriodDate.getMonth() + 1; // Próximo mês
-          if (nextMonth > 11) {
-            // Virada de ano
-            nextMonth = 0;
-            nextYear++;
+        if (lastPeriod && lastPeriod.mesAno) {
+          const parts = lastPeriod.mesAno.split('-');
+          const yearStr = parts[0];
+          const monthStr = parts[1];
+
+          // Validação extra para garantir que temos ano e mês e que são números
+          if (
+            parts.length === 2 &&
+            !isNaN(Number(yearStr)) &&
+            !isNaN(Number(monthStr))
+          ) {
+            const year = Number(yearStr);
+            const monthOneBased = Number(monthStr); // Mês 1-12 vindo do 'YYYY-MM'
+
+            const lastPeriodDate = new Date(year, monthOneBased - 1); // Mês 0-11 para o construtor Date
+            nextMonthIndex = lastPeriodDate.getMonth() + 1; // Próximo mês (0-11)
+            nextYear = lastPeriodDate.getFullYear();
+
+            if (nextMonthIndex > 11) {
+              // Virada de ano
+              nextMonthIndex = 0; // Janeiro
+              nextYear++;
+            }
+          } else {
+            // Formato mesAno inesperado no último período, fallback para mês atual
+            console.warn(
+              `[PeriodService] Formato mesAno ('${lastPeriod.mesAno}') inválido no último período. Usando mês atual como base.`
+            );
+            const today = new Date();
+            nextYear = today.getFullYear();
+            nextMonthIndex = today.getMonth(); // Mês atual (0-11)
+            // Vamos tentar criar para o PRÓXIMO mês do atual se o último período for inválido
+            nextMonthIndex++;
+            if (nextMonthIndex > 11) {
+              nextMonthIndex = 0;
+              nextYear++;
+            }
           }
         } else {
-          // Nenhum período existe, criar para o mês atual
+          // Nenhum período existe no banco, criar para o próximo mês a partir de hoje
+          console.log(
+            '[PeriodService] Nenhum período no banco. Criando para o próximo mês.'
+          );
           const today = new Date();
           nextYear = today.getFullYear();
-          nextMonth = today.getMonth();
+          nextMonthIndex = today.getMonth() + 1; // Próximo mês (0-11)
+          if (nextMonthIndex > 11) {
+            nextMonthIndex = 0;
+            nextYear++;
+          }
         }
 
-        const nextMesAno = `<span class="math-inline">\{nextYear\}\-</span>{String(nextMonth + 1).padStart(2, '0')}`;
-        const dataInicio = new Date(nextYear, nextMonth, 1);
-        const dataFim = new Date(nextYear, nextMonth + 1, 0); // Pega o último dia do mês
+        // Formata mesAno e datas de início/fim
+        const nextMesAno = `<span class="math-inline">\{nextYear\}\-</span>{String(nextMonthIndex + 1).padStart(2, '0')}`;
+        const dataInicio = new Date(nextYear, nextMonthIndex, 1);
+        const dataFim = new Date(nextYear, nextMonthIndex + 1, 0); // Pega o último dia do mês
 
-        // Verifica se já existe um para este mesAno (segurança extra)
+        // Segurança extra: Verifica se já existe um para este mesAno antes de criar
         const existingForNextMesAno = await this.periodRepo.findOneBy({
           mesAno: nextMesAno,
         });
         if (existingForNextMesAno) {
           console.warn(
-            `[PeriodService] Período ${nextMesAno} já existe, retornando ele.`
+            `[PeriodService] Tentativa de criar período ${nextMesAno} que já existe. Retornando existente.`
           );
-          // Poderia mudar o status dele para PLANEJAMENTO se estivesse FECHADO? Regra de negócio.
-          // Por ora, apenas retornamos o existente.
           return existingForNextMesAno;
         }
 
@@ -138,8 +171,8 @@ export class CompetitionPeriodService {
         );
         const newPeriod = this.periodRepo.create({
           mesAno: nextMesAno,
-          dataInicio: dataInicio.toISOString().split('T')[0], // Formato YYYY-MM-DD
-          dataFim: dataFim.toISOString().split('T')[0], // Formato YYYY-MM-DD
+          dataInicio: dataInicio.toISOString().split('T')[0],
+          dataFim: dataFim.toISOString().split('T')[0],
           status: 'PLANEJAMENTO',
         });
         await this.periodRepo.save(newPeriod);
