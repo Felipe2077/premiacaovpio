@@ -1,11 +1,14 @@
-// test-mysql-ocorrencias-etl.ts (ou nome similar, na raiz do projeto)
+// test-mysql-ocorrencias-etl.ts (CORRIGIDO COM NOMES CERTOS DOS MÉTODOS)
 import * as dotenv from 'dotenv';
 import path from 'path';
 import 'reflect-metadata';
-import { MySqlDataSource } from './apps/api/src/database/data-source';
+import {
+  AppDataSource,
+  MySqlDataSource,
+} from './apps/api/src/database/data-source'; // Importa ambos
 import { MySqlEtlService } from './apps/api/src/modules/etl/mysql-etl.service';
 
-// Carregar .env da API
+// Carregar .env
 const envPath = path.resolve(__dirname, 'apps/api/.env');
 dotenv.config({ path: envPath });
 console.log(`[Test Script] .env carregado de: ${envPath}`);
@@ -22,93 +25,88 @@ async function runTestMySqlOcorrenciasEtl() {
   if (
     !process.env.MYSQL_USER ||
     !process.env.MYSQL_PASSWORD ||
-    !process.env.MYSQL_DB
+    !process.env.MYSQL_DB ||
+    !process.env.POSTGRES_USER
   ) {
-    console.error('ERRO: Credenciais MySQL não encontradas no .env!');
+    console.error(
+      'ERRO: Credenciais MySQL ou Postgres não encontradas no .env!'
+    );
     return;
   }
 
   const etlService = new MySqlEtlService();
 
-  // Define período de teste (ex: últimos 7 dias para ter dados)
-  const endDate = new Date(); // Hoje
+  // Define período de teste
+  const endDate = new Date();
   const startDate = new Date();
-  startDate.setDate(endDate.getDate() - 6); // Últimos 7 dias
+  startDate.setDate(endDate.getDate() - 6);
   const startDateString = startDate.toISOString().split('T')[0];
   const endDateString = endDate.toISOString().split('T')[0];
 
-  console.log(`Período de teste: ${startDateString} a ${endDateString}`);
+  if (!startDateString || !endDateString) {
+    // Verificação de tipo
+    throw new Error('Falha ao gerar as strings de data para a query MySQL.');
+  }
+
+  console.log(
+    `Testando carga para período: ${startDateString} a ${endDateString}`
+  );
 
   try {
-    if (!startDateString || !endDateString) {
-      console.error('Falha ao gerar as strings de data para a query MySQL.');
-      throw new Error('Falha ao gerar as strings de data para a query MySQL.');
-    }
-    // Testar Extração de ATRASO (CODOCORRENCIA = 2)
-    const atrasoData = await etlService.extractAtrasoFromMySql(
+    // --- Testar ATRASO (usando nome CORRETO do método) ---
+    console.log('\n--- Testando extractAndLoadAtraso ---');
+    const countAtraso = await etlService.extractAndLoadAtraso(
       startDateString,
       endDateString
     );
-    if (atrasoData && atrasoData.length > 0) {
-      console.log(
-        '\n--- SUCESSO! Dados de ATRASO extraídos do MySQL via Service: ---'
-      );
-      console.log(
-        `(Mostrando os primeiros ${Math.min(5, atrasoData.length)} de ${atrasoData.length} registros)`
-      );
-      console.log(atrasoData.slice(0, 5));
-    } else if (atrasoData) {
-      console.log(
-        '\n--- Nenhum dado de ATRASO encontrado para o período no MySQL ---'
-      );
-    }
+    console.log(
+      `Resultado Atraso: ${countAtraso} registros processados/salvos.`
+    );
+    if (countAtraso === 0)
+      console.log('(Nenhum dado encontrado no MySQL para este período)');
 
-    // Testar Extração de FURO POR ATRASO (CODOCORRENCIA = 3)
-    const furoAtrasoData = await etlService.extractFuroPorAtrasoFromMySql(
+    // --- Testar FURO POR ATRASO (usando nome CORRETO do método) ---
+    console.log('\n--- Testando extractAndLoadFuroPorAtraso ---');
+    const countFuroAtraso = await etlService.extractAndLoadFuroPorAtraso(
       startDateString,
       endDateString
     );
-    if (furoAtrasoData && furoAtrasoData.length > 0) {
-      console.log(
-        '\n--- SUCESSO! Dados de FURO POR ATRASO extraídos do MySQL via Service: ---'
-      );
-      console.log(
-        `(Mostrando os primeiros ${Math.min(5, furoAtrasoData.length)} de ${furoAtrasoData.length} registros)`
-      );
-      console.log(furoAtrasoData.slice(0, 5));
-    } else if (furoAtrasoData) {
-      console.log(
-        '\n--- Nenhum dado de FURO POR ATRASO encontrado para o período no MySQL ---'
-      );
-    }
+    console.log(
+      `Resultado Furo por Atraso: ${countFuroAtraso} registros processados/salvos.`
+    );
+    if (countFuroAtraso === 0)
+      console.log('(Nenhum dado encontrado no MySQL para este período)');
 
-    // Testar Extração de FURO DE VIAGEM (CODOCORRENCIA = 4)
-    const furoViagemData = await etlService.extractFuroDeViagemFromMySql(
+    // --- Testar FURO DE VIAGEM (usando nome CORRETO do método) ---
+    console.log('\n--- Testando extractAndLoadFuroDeViagem ---');
+    const countFuroViagem = await etlService.extractAndLoadFuroDeViagem(
       startDateString,
       endDateString
     );
-    if (furoViagemData && furoViagemData.length > 0) {
-      console.log(
-        '\n--- SUCESSO! Dados de FURO DE VIAGEM extraídos do MySQL via Service: ---'
-      );
-      console.log(
-        `(Mostrando os primeiros ${Math.min(5, furoViagemData.length)} de ${furoViagemData.length} registros)`
-      );
-      console.log(furoViagemData.slice(0, 5));
-    } else if (furoViagemData) {
-      console.log(
-        '\n--- Nenhum dado de FURO DE VIAGEM encontrado para o período no MySQL ---'
-      );
-    }
+    console.log(
+      `Resultado Furo de Viagem: ${countFuroViagem} registros processados/salvos.`
+    );
+    if (countFuroViagem === 0)
+      console.log('(Nenhum dado encontrado no MySQL para este período)');
+
+    console.log(
+      '\n>>> Teste dos métodos de Ocorrências Horárias concluído (verificar logs e DB). <<<'
+    );
   } catch (error) {
     console.error('--- ERRO GERAL NO TESTE DO ETL MYSQL OCORRÊNCIAS ---');
     console.error(error);
   } finally {
+    // Garante que AMBAS as conexões sejam fechadas
     if (MySqlDataSource.isInitialized) {
       await MySqlDataSource.destroy();
-      console.log('\nConexão MySQL (MySqlDataSource) finalizada.');
+      console.log('Conexão MySQL finalizada.');
+    }
+    if (AppDataSource.isInitialized) {
+      await AppDataSource.destroy();
+      console.log('Conexão Postgres finalizada.');
     }
   }
 }
 
+// Executa o teste
 runTestMySqlOcorrenciasEtl();

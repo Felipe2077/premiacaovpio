@@ -1,4 +1,5 @@
 // src/database/data-source.ts
+import { RawMySqlOcorrenciaHorariaEntity } from '@/entity/raw-data/raw-mysql-ocorrencia-horaria.entity';
 import * as dotenv from 'dotenv';
 import path from 'path'; // Importar path
 import 'reflect-metadata';
@@ -64,6 +65,7 @@ export const AppDataSource = new DataSource({
     ExpurgoEventEntity,
     CompetitionPeriodEntity,
     RawMySqlQuebraDefeitoEntity,
+    RawMySqlOcorrenciaHorariaEntity,
   ],
   migrations: [],
   subscribers: [],

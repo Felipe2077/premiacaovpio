@@ -1,48 +1,79 @@
-// apps/api/src/modules/etl/mysql-etl.service.ts (VERSÃO COMPLETA PARA COLAR)
-import { AppDataSource, MySqlDataSource } from '@/database/data-source'; // Precisa de ambos
-import { RawMySqlQuebraDefeitoEntity } from '@/entity/raw-data/raw-mysql-quebra-defeito.entity'; // Entidade Raw Data
+// apps/api/src/modules/etl/mysql-etl.service.ts (VERSÃO INTEGRAL E CORRIGIDA V2)
+import { AppDataSource, MySqlDataSource } from '@/database/data-source';
+import { RawMySqlOcorrenciaHorariaEntity } from '@/entity/raw-data/raw-mysql-ocorrencia-horaria.entity'; // Importar entidade raw
+import { RawMySqlQuebraDefeitoEntity } from '@/entity/raw-data/raw-mysql-quebra-defeito.entity';
 import 'reflect-metadata';
 import { DataSource, Repository } from 'typeorm';
 
-// Interface para o resultado da Query MySQL
+// Interface para o resultado da query de Quebra/Defeito
 interface QuebraDefeitoRawFromQuery {
   SETOR: string;
-  OCORRENCIA: string; // 'QUEBRA' ou 'DEFEITO'
-  TOTAL: number; // COUNT - já convertido para número
-  DIA: Date; // DATE(A.DATA)
+  OCORRENCIA: string;
+  TOTAL: number | string; // Pode vir como string
+  DIA: Date;
+}
+
+// Interface para o resultado da query de Ocorrências Horárias
+interface OcorrenciaHorariaRawFromQuery {
+  SETOR: string;
+  OCORRENCIA_ORIGINAL: string;
+  DATA: Date;
+  TOTAL: number | string; // Pode vir como string
+}
+
+// Interface unificada para retorno dos métodos públicos (opcional)
+interface MySqlEtlResult {
+  SETOR: string;
+  CRITERIO:
+    | 'QUEBRA'
+    | 'DEFEITO'
+    | 'ATRASO'
+    | 'FURO POR ATRASO'
+    | 'FURO DE VIAGEM';
+  DATA: Date;
+  TOTAL: number;
 }
 
 export class MySqlEtlService {
-  // Repositório da tabela RAW no POSTGRES
+  // Repositórios das tabelas RAW no POSTGRES
   private rawQuebraDefeitoRepo: Repository<RawMySqlQuebraDefeitoEntity>;
+  private rawOcorrenciaHorariaRepo: Repository<RawMySqlOcorrenciaHorariaEntity>;
 
   constructor() {
-    // Pega o repo do AppDataSource (Postgres) onde vamos salvar
     this.rawQuebraDefeitoRepo = AppDataSource.getRepository(
       RawMySqlQuebraDefeitoEntity
     );
+    this.rawOcorrenciaHorariaRepo = AppDataSource.getRepository(
+      RawMySqlOcorrenciaHorariaEntity
+    );
     console.log(
-      '[MySqlEtlService] Instanciado e repositório RawQuebraDefeito configurado.'
+      '[MySqlEtlService] Instanciado e repositórios Raw configurados.'
     );
   }
 
-  // Método para garantir que a conexão MySQL está ativa
   private async ensureMySqlConnection(): Promise<DataSource> {
-    const dataSource = MySqlDataSource; // Usa a instância exportada
+    const dataSource = MySqlDataSource;
     if (!dataSource.isInitialized) {
       console.log('[MySQL ETL] Inicializando MySqlDataSource...');
       await dataSource.initialize();
       console.log('[MySQL ETL] MySqlDataSource inicializado.');
-    } else {
-      // console.log('[MySQL ETL] MySqlDataSource já estava inicializado.'); // Log opcional
+    }
+    return dataSource;
+  }
+  private async ensurePostgresConnection(): Promise<DataSource> {
+    const dataSource = AppDataSource;
+    if (!dataSource.isInitialized) {
+      console.log('[MySQL ETL] Inicializando AppDataSource (Postgres)...');
+      await dataSource.initialize();
+      console.log('[MySQL ETL] AppDataSource (Postgres) inicializado.');
     }
     return dataSource;
   }
 
   /**
-   * Extrai dados de Quebra e Defeito do MySQL e SALVA na tabela raw correspondente no Postgres.
-   * @param startDate Data de início (formato YYYY-MM-DD)
-   * @param endDate Data de fim (formato YYYY-MM-DD)
+   * Extrai dados de Quebra e Defeito do MySQL e SALVA na tabela raw no Postgres.
+   * @param startDate YYYY-MM-DD
+   * @param endDate YYYY-MM-DD
    * @returns Promise<number> Número de registros processados/salvos.
    */
   async extractAndLoadQuebraDefeito(
@@ -52,94 +83,180 @@ export class MySqlEtlService {
     console.log(
       `[MySQL ETL] Iniciando extração/carga de Quebra/Defeito para ${startDate} a ${endDate}`
     );
-    const mysqlDataSource = await this.ensureMySqlConnection(); // Garante conexão MySQL
-
-    // Garante conexão Postgres também, pois vamos salvar lá
-    if (!AppDataSource.isInitialized) {
-      try {
-        console.log(
-          '[MySQL ETL] Inicializando AppDataSource (Postgres) para salvar dados raw...'
-        );
-        await AppDataSource.initialize();
-        console.log('[MySQL ETL] AppDataSource (Postgres) inicializado.');
-      } catch (error) {
-        console.error(
-          '[MySQL ETL] ERRO ao inicializar AppDataSource (Postgres):',
-          error
-        );
-        return 0; // Não podemos salvar se o Postgres falhar
-      }
-    }
+    const mysqlDataSource = await this.ensureMySqlConnection();
+    await this.ensurePostgresConnection();
 
     try {
-      // Query baseada na Consulta 2 do PBI, adaptada e parametrizada
       const query = `
-                SELECT
-                    S.SETOR,
-                    A.OCORRENCIA,
-                    COUNT(A.OCORRENCIA) AS TOTAL,
-                    DATE(A.DATA) as DIA
+                SELECT S.SETOR, A.OCORRENCIA, COUNT(A.OCORRENCIA) AS TOTAL, DATE(A.DATA) as DIA
                 FROM negocioperfeito.quebrasedefeitos A
                 INNER JOIN negocioperfeito.setores AS S ON S.CODSETOR = A.SETORLINHA
-                WHERE
-                    A.CODOCORRENCIA IN (1, 2) /* 1=Quebra, 2=Defeito (confirmar) */
-                    AND A.DATA BETWEEN ? AND ? /* Parâmetros de Data */
+                WHERE A.EXCLUIR = 'NÃO'
+                  AND A.CODOCORRENCIA IN (1, 2) /* 1=Quebra, 2=Defeito */
+                  AND A.DATA BETWEEN ? AND ?
                 GROUP BY S.SETOR, A.OCORRENCIA, DATE(A.DATA)
                 ORDER BY S.SETOR, DIA, A.OCORRENCIA;
             `;
       const parameters = [startDate, endDate];
-
-      console.log('[MySQL ETL] Executando query de Quebra/Defeito no MySQL...');
-      const results: any[] = await mysqlDataSource.query(query, parameters); // Vem como any[]
-      console.log(
-        `[MySQL ETL] Query MySQL retornou ${results.length} registros.`
+      const results: QuebraDefeitoRawFromQuery[] = await mysqlDataSource.query(
+        query,
+        parameters
       );
+      console.log(
+        `[MySQL ETL] Query Quebra/Defeito retornou ${results.length} registros.`
+      );
+      if (results.length === 0) return 0;
 
-      if (results.length === 0) {
-        console.log(
-          '[MySQL ETL] Nenhum registro de Quebra/Defeito encontrado no MySQL para o período.'
-        );
-        return 0;
-      }
-
-      // Mapeia os resultados para o formato da nossa entidade RawMySqlQuebraDefeitoEntity
       const entitiesToSave = results.map((r) =>
         this.rawQuebraDefeitoRepo.create({
           metricDate:
             r.DIA instanceof Date
               ? r.DIA.toISOString().split('T')[0]
-              : String(r.DIA), // Formata data YYYY-MM-DD
+              : String(r.DIA),
           sectorName: r.SETOR,
-          occurrenceType: r.OCORRENCIA, // Vem 'QUEBRA' ou 'DEFEITO'
-          totalCount: Number(r.TOTAL) || 0, // Garante número
-          // etlTimestamp é gerado automaticamente pelo @CreateDateColumn
+          occurrenceType: r.OCORRENCIA,
+          totalCount: Number(r.TOTAL) || 0,
         })
       );
 
-      // Antes de salvar, talvez seja bom limpar dados antigos para este período/tipo?
-      // Por enquanto, apenas adiciona. Em um ETL real, faríamos upsert ou delete/insert.
-      // Ex: await this.rawQuebraDefeitoRepo.delete({ metricDate: Between(startDate, endDate) });
-
-      // Salva os dados mapeados na tabela raw do Postgres
+      // TODO: Adicionar lógica de Delete/Insert ou Upsert
       console.log(
-        `[MySQL ETL] Salvando ${entitiesToSave.length} registros na tabela raw_mysql_quebras_defeitos...`
+        `[MySQL ETL] Salvando ${entitiesToSave.length} registros em raw_mysql_quebras_defeitos...`
       );
-      await this.rawQuebraDefeitoRepo.save(entitiesToSave, { chunk: 100 }); // Salva em lotes de 100
+      await this.rawQuebraDefeitoRepo.save(entitiesToSave, { chunk: 100 });
       console.log(
         `[MySQL ETL] Registros de Quebra/Defeito salvos no Postgres.`
       );
-
-      return entitiesToSave.length; // Retorna quantos registros foram processados
+      return entitiesToSave.length;
     } catch (error) {
       console.error(
         '[MySQL ETL] ERRO durante extração/carga de Quebra/Defeito:',
         error
       );
-      return 0; // Retorna 0 em caso de erro
+      return 0;
     }
-    // Deixamos as conexões abertas, o script de teste ou o orquestrador ETL vai fechá-las.
   }
 
-  // --- Futuros Métodos para Atraso, Furo por Atraso, Furo de Viagem, Falta Frota ---
-  // (Serão adicionados aqui)
+  /**
+   * Método auxiliar para buscar dados da tabela ocorrenciashorarias e salvar na tabela raw Postgres.
+   */
+  private async extractAndLoadFromOcorrenciasHorarias(
+    startDate: string,
+    endDate: string,
+    codOcorrencia: number,
+    criterionName: 'ATRASO' | 'FURO POR ATRASO' | 'FURO DE VIAGEM'
+  ): Promise<number> {
+    console.log(
+      `[MySQL ETL] Iniciando extração/carga de ${criterionName} (cod ${codOcorrencia}) para ${startDate} a ${endDate}`
+    );
+    const mysqlDataSource = await this.ensureMySqlConnection();
+    await this.ensurePostgresConnection();
+
+    try {
+      const query = `
+                SELECT
+                    S.SETOR,
+                    A.OCORRENCIA AS OCORRENCIA_ORIGINAL,
+                    DATE(A.DATA) as DATA,
+                    COUNT(A.CODOCORRENCIA) AS TOTAL
+                FROM negocioperfeito.ocorrenciashorarias AS A
+                INNER JOIN negocioperfeito.setores S ON S.CODSETOR = A.SETORLINHA
+                WHERE
+                    A.CODOCORRENCIA = ?
+                    AND A.CODMOTIVO NOT IN (1, 5, 6, 33, 37, 42, 43, 73, 79, 35, 81)
+                    AND A.DATA BETWEEN ? AND ?
+                    AND (
+                            (A.TEMPO > '00:03:00') OR
+                            (A.CODOCORRENCIA = 4 AND A.CODMOTIVO NOT IN (40))
+                        )
+                GROUP BY S.SETOR, A.OCORRENCIA, DATE(A.DATA)
+                ORDER BY S.SETOR, DATA, A.OCORRENCIA;
+            `;
+      const parameters = [codOcorrencia, startDate, endDate];
+
+      console.log(
+        `[MySQL ETL] Executando query para ${criterionName} (cod ${codOcorrencia}) no MySQL...`
+      );
+      const results: OcorrenciaHorariaRawFromQuery[] =
+        await mysqlDataSource.query(query, parameters);
+      console.log(
+        `[MySQL ETL] Query ${criterionName} (cod ${codOcorrencia}) retornou ${results.length} registros.`
+      );
+
+      if (results.length === 0) {
+        console.log(
+          `[MySQL ETL] Nenhum registro de ${criterionName} encontrado no MySQL para o período.`
+        );
+        return 0;
+      }
+
+      const entitiesToSave = results.map((r) =>
+        this.rawOcorrenciaHorariaRepo.create({
+          metricDate:
+            r.DATA instanceof Date
+              ? r.DATA.toISOString().split('T')[0]
+              : String(r.DATA),
+          sectorName: r.SETOR,
+          criterionName: criterionName,
+          originalOccurrenceName: r.OCORRENCIA_ORIGINAL,
+          totalCount: Number(r.TOTAL) || 0,
+        })
+      );
+
+      // TODO: Adicionar lógica de Delete/Insert ou Upsert
+      console.log(
+        `[MySQL ETL] Salvando ${entitiesToSave.length} registros em raw_mysql_ocorrencias_horarias...`
+      );
+      await this.rawOcorrenciaHorariaRepo.save(entitiesToSave, { chunk: 100 });
+      console.log(
+        `[MySQL ETL] Registros de ${criterionName} salvos no Postgres.`
+      );
+      return entitiesToSave.length;
+    } catch (error) {
+      console.error(
+        `[MySQL ETL] ERRO durante extração/carga de ${criterionName} (cod ${codOcorrencia}):`,
+        error
+      );
+      return 0;
+    }
+  }
+
+  // Métodos Públicos usando o auxiliar
+  async extractAndLoadAtraso(
+    startDate: string,
+    endDate: string
+  ): Promise<number> {
+    return this.extractAndLoadFromOcorrenciasHorarias(
+      startDate,
+      endDate,
+      2,
+      'ATRASO'
+    );
+  }
+
+  async extractAndLoadFuroPorAtraso(
+    startDate: string,
+    endDate: string
+  ): Promise<number> {
+    return this.extractAndLoadFromOcorrenciasHorarias(
+      startDate,
+      endDate,
+      3,
+      'FURO POR ATRASO'
+    );
+  }
+
+  async extractAndLoadFuroDeViagem(
+    startDate: string,
+    endDate: string
+  ): Promise<number> {
+    return this.extractAndLoadFromOcorrenciasHorarias(
+      startDate,
+      endDate,
+      4,
+      'FURO DE VIAGEM'
+    );
+  }
+
+  // Futuro: async extractAndLoadFaltaFrota(...) {}
 } // Fim da Classe
