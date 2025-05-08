@@ -11,6 +11,9 @@ import { ExpurgoEventEntity } from '../entity/expurgo-event.entity';
 import { ParameterValueEntity } from '../entity/parameter-value.entity';
 import { PerformanceDataEntity } from '../entity/performance-data.entity';
 import { RawMySqlQuebraDefeitoEntity } from '../entity/raw-data/raw-mysql-quebra-defeito.entity';
+import { RawOracleAusenciaEntity } from '../entity/raw-data/raw-oracle-ausencia.entity';
+import { RawOracleColisaoEntity } from '../entity/raw-data/raw-oracle-colisao.entity';
+import { RawOracleEstoqueCustoEntity } from '../entity/raw-data/raw-oracle-estoque-custo.entity';
 import { RoleEntity } from '../entity/role.entity';
 import { SectorEntity } from '../entity/sector.entity';
 import { UserEntity } from '../entity/user.entity';
@@ -66,6 +69,9 @@ export const AppDataSource = new DataSource({
     CompetitionPeriodEntity,
     RawMySqlQuebraDefeitoEntity,
     RawMySqlOcorrenciaHorariaEntity,
+    RawOracleAusenciaEntity,
+    RawOracleColisaoEntity,
+    RawOracleEstoqueCustoEntity,
   ],
   migrations: [],
   subscribers: [],
