@@ -70,24 +70,6 @@ async function runTestOracleFleetKm() {
   );
 
   try {
-    // Testar Extração de Desempenho de Frota (KM/L e Litros)
-    console.log('\n--- Testando extractAndLoadFleetPerformance ---');
-    const countFleetPerf = await etlService.extractAndLoadFleetPerformance(
-      startDateString,
-      endDateString
-    );
-    console.log(
-      `Resultado Desempenho Frota: ${countFleetPerf} registros processados/salvos.`
-    );
-    if (countFleetPerf === 0)
-      console.log(
-        '(Nenhum dado de KM/Combustível encontrado ou salvo para o período)'
-      );
-    else
-      console.log(
-        '>>> SUCESSO! Extração e carga de Desempenho de Frota funcionou! <<<'
-      );
-
     // Testar Extração de KM Ociosa
     console.log('\n--- Testando extractAndLoadKmOciosa ---');
     const countKmOciosa = await etlService.extractAndLoadKmOciosa(

@@ -14,6 +14,8 @@ import { RawMySqlQuebraDefeitoEntity } from '../entity/raw-data/raw-mysql-quebra
 import { RawOracleAusenciaEntity } from '../entity/raw-data/raw-oracle-ausencia.entity';
 import { RawOracleColisaoEntity } from '../entity/raw-data/raw-oracle-colisao.entity';
 import { RawOracleEstoqueCustoEntity } from '../entity/raw-data/raw-oracle-estoque-custo.entity';
+import { RawOracleFleetPerformanceEntity } from '../entity/raw-data/raw-oracle-fleet-performance.entity';
+import { RawOracleKmOciosaComponentsEntity } from '../entity/raw-data/raw-oracle-km-ociosa.entity';
 import { RoleEntity } from '../entity/role.entity';
 import { SectorEntity } from '../entity/sector.entity';
 import { UserEntity } from '../entity/user.entity';
@@ -72,6 +74,8 @@ export const AppDataSource = new DataSource({
     RawOracleAusenciaEntity,
     RawOracleColisaoEntity,
     RawOracleEstoqueCustoEntity,
+    RawOracleFleetPerformanceEntity,
+    RawOracleKmOciosaComponentsEntity,
   ],
   migrations: [],
   subscribers: [],
