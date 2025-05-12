@@ -70,7 +70,7 @@ async function runEtlOrchestratorTest() {
     console.log(
       `[Test Orchestrator] Processando dados para o período: ${targetPeriodMesAno}`
     );
-    await etlService.processRawDataToPerformanceData(targetPeriodMesAno);
+    await etlService.processAndLoadPerformanceDataForPeriod(targetPeriodMesAno);
 
     console.log(
       `\n--- Teste do Orquestrador para ${targetPeriodMesAno} concluído. ---`

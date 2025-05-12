@@ -1,8 +1,7 @@
-// apps/api/src/modules/etl/etl.service.ts (VERSÃO COMPLETA E CORRIGIDA)
+// apps/api/src/modules/etl/etl.service.ts (EXPANDIDO)
 import { AppDataSource } from '@/database/data-source';
-import { CompetitionPeriodEntity } from '@/entity/competition-period.entity';
 import 'reflect-metadata';
-import { Between, LessThanOrEqual, Repository } from 'typeorm';
+import { Between, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm'; // Adicionado MoreThanOrEqual
 import { MySqlEtlService } from './mysql-etl.service';
 import { OracleEtlService } from './oracle-etl.service';
 
@@ -16,6 +15,7 @@ import { RawOracleFleetPerformanceEntity } from '@/entity/raw-data/raw-oracle-fl
 import { RawOracleIpkCalculadoEntity } from '@/entity/raw-data/raw-oracle-ipk-calculado.entity';
 
 // Entidades de Metadados e Resultado
+import { CompetitionPeriodEntity } from '@/entity/competition-period.entity';
 import { CriterionEntity } from '@/entity/criterion.entity';
 import { ExpurgoEventEntity } from '@/entity/expurgo-event.entity';
 import { ParameterValueEntity } from '@/entity/parameter-value.entity';
@@ -25,11 +25,10 @@ import { SectorEntity } from '@/entity/sector.entity';
 import { DeepPartial } from 'typeorm';
 
 export class EtlService {
-  // Serviços extratores
   private mySqlEtlService: MySqlEtlService;
   private oracleEtlService: OracleEtlService;
 
-  // Repositórios para ler dados RAW
+  // Repositórios RAW
   private rawQuebraDefeitoRepo: Repository<RawMySqlQuebraDefeitoEntity>;
   private rawOcorrenciasHorariasRepo: Repository<RawMySqlOcorrenciaHorariaEntity>;
   private rawAusenciaRepo: Repository<RawOracleAusenciaEntity>;
@@ -39,14 +38,14 @@ export class EtlService {
   private rawKmOciosaComponentsRepo: Repository<RawOracleKmOciosaComponentsEntity>;
   private rawIpkCalculadoRepo: Repository<RawOracleIpkCalculadoEntity>;
 
-  // Repositórios para Metadados
+  // Metadados
   private parameterRepo: Repository<ParameterValueEntity>;
   private expurgoRepo: Repository<ExpurgoEventEntity>;
   private criterionRepo: Repository<CriterionEntity>;
   private sectorRepo: Repository<SectorEntity>;
   private periodRepo: Repository<CompetitionPeriodEntity>;
 
-  // Repositório para SALVAR dados transformados
+  // Resultado
   private performanceDataRepo: Repository<PerformanceDataEntity>;
 
   constructor() {
@@ -89,11 +88,6 @@ export class EtlService {
     );
   }
 
-  /**
-   * Orquestra a extração de TODAS as tabelas raw para um determinado período.
-   * @param startDate YYYY-MM-DD
-   * @param endDate YYYY-MM-DD
-   */
   async runRawExtractionsForPeriod(
     startDate: string,
     endDate: string
@@ -101,17 +95,13 @@ export class EtlService {
     console.log(
       `[EtlService] Iniciando extração de todos os dados RAW para o período: ${startDate} a ${endDate}`
     );
-
-    // MySQL Extractions
+    // MySQL
     await this.mySqlEtlService.extractAndLoadQuebraDefeito(startDate, endDate);
     await this.mySqlEtlService.extractAndLoadAtraso(startDate, endDate);
     await this.mySqlEtlService.extractAndLoadFuroPorAtraso(startDate, endDate);
     await this.mySqlEtlService.extractAndLoadFuroDeViagem(startDate, endDate);
-    // Aguardando query para Falta Frota
-    // await this.mySqlEtlService.extractAndLoadFaltaFrota(startDate, endDate);
     console.log('[EtlService] Extrações MySQL para RAW concluídas.');
-
-    // Oracle Extractions
+    // Oracle
     await this.oracleEtlService.extractAndLoadAusencia(startDate, endDate);
     await this.oracleEtlService.extractAndLoadColisao(startDate, endDate);
     await this.oracleEtlService.extractAndLoadPecas(startDate, endDate);
@@ -120,60 +110,56 @@ export class EtlService {
       startDate,
       endDate
     );
-    await this.oracleEtlService.extractAndLoadKmOciosa(startDate, endDate); // Componentes
-    await this.oracleEtlService.extractAndLoadIpkCalculado(startDate, endDate); // IPK já calculado
+    await this.oracleEtlService.extractAndLoadKmOciosa(startDate, endDate);
+    await this.oracleEtlService.extractAndLoadIpkCalculado(startDate, endDate);
     console.log('[EtlService] Extrações Oracle para RAW concluídas.');
     console.log(
       `[EtlService] Todas as extrações RAW para o período ${startDate}-${endDate} finalizadas.`
     );
   }
 
-  /**
-   * Processa dados das tabelas RAW, aplica metas e expurgos, e carrega na performance_data.
-   * @param periodMesAno Mês/Ano no formato 'YYYY-MM'
-   */
-  async processRawDataToPerformanceData(periodMesAno: string) {
+  async processAndLoadPerformanceDataForPeriod(periodMesAno: string) {
     console.log(
       `[EtlService] Iniciando processamento RAW para PERFORMANCE_DATA para o período: ${periodMesAno}`
     );
     let processedEntriesCount = 0;
+    const performanceEntriesToSave: DeepPartial<PerformanceDataEntity>[] = [];
 
     try {
       const competitionPeriod = await this.periodRepo.findOneBy({
-        mesAno:
-          periodMesAno /*, status: 'ATIVA' TODO: Usar status correto ou permitir processar outros status */,
+        mesAno: periodMesAno,
       });
       if (!competitionPeriod) {
-        console.error(
-          `[EtlService] Período ${periodMesAno} não encontrado ou não está em status válido para processamento.`
-        );
+        console.error(`[EtlService] Período ${periodMesAno} não encontrado.`);
         return;
       }
       console.log(
         `[EtlService] Processando para periodId: ${competitionPeriod.id} (${competitionPeriod.mesAno})`
       );
-      const { dataInicio, dataFim } = competitionPeriod; // Formato YYYY-MM-DD
+      const { dataInicio, dataFim } = competitionPeriod;
 
-      // Primeiro, garante que os dados raw para este período foram extraídos.
-      // Em um cenário real, isso poderia ser agendado ou ter um controle mais robusto.
-      // await this.runRawExtractionsForPeriod(dataInicio, dataFim); // Descomentar se quiser forçar a extração raw aqui
+      // PASSO 1:  Garantir que os dados RAW estão atualizados para este período
+      // Descomente se quiser que este método também dispare a extração RAW.
+      // Por agora, assumimos que o script run-full-raw-etl-april-2025.ts já rodou.
+      // console.log(`[EtlService] Atualizando dados RAW para o período ${dataInicio} a ${dataFim}...`);
+      // await this.runRawExtractionsForPeriod(dataInicio, dataFim);
+      // console.log(`[EtlService] Dados RAW atualizados.`);
 
       const activeCriteria = await this.criterionRepo.find({
         where: { ativo: true },
+        order: { id: 'ASC' },
       });
       const activeSectors = await this.sectorRepo.find({
         where: { ativo: true },
+        order: { id: 'ASC' },
       });
 
-      // Limpa performance_data para o período antes de inserir (evita duplicatas)
       console.log(
         `[EtlService] Limpando performance_data para o período ${periodMesAno} (ID: ${competitionPeriod.id})...`
       );
       await this.performanceDataRepo.delete({
         competitionPeriodId: competitionPeriod.id,
       });
-
-      const performanceEntriesToSave: DeepPartial<PerformanceDataEntity>[] = [];
 
       for (const sector of activeSectors) {
         for (const criterion of activeCriteria) {
@@ -184,16 +170,16 @@ export class EtlService {
           let totalRealizadoBruto: number | null = null;
           let valorMeta: number | null = null;
           let totalExpurgado = 0;
+          const criterionNameUpper = criterion.nome.toUpperCase();
 
-          // --- Lógica para buscar dados RAW e Metas para cada critério ---
-          // Este switch/case vai crescer muito. Idealmente, cada critério teria sua própria sub-função de processamento.
-          switch (criterion.nome.toUpperCase()) {
+          // Lógica para buscar dados RAW e calcular o total bruto mensal
+          switch (criterionNameUpper) {
             case 'QUEBRA':
             case 'DEFEITO':
               const rawQDData = await this.rawQuebraDefeitoRepo.find({
                 where: {
                   sectorName: sector.nome,
-                  occurrenceType: criterion.nome.toUpperCase(),
+                  occurrenceType: criterionNameUpper,
                   metricDate: Between(dataInicio, dataFim),
                 },
               });
@@ -208,7 +194,7 @@ export class EtlService {
               const rawOHData = await this.rawOcorrenciasHorariasRepo.find({
                 where: {
                   sectorName: sector.nome,
-                  criterionName: criterion.nome.toUpperCase() as any,
+                  criterionName: criterionNameUpper as any,
                   metricDate: Between(dataInicio, dataFim),
                 },
               });
@@ -217,14 +203,12 @@ export class EtlService {
                 0
               );
               break;
-            // Adicionar cases para TODOS os outros critérios, lendo das suas respectivas tabelas RAW
-            // Exemplo para Ausências (lembrar que tem 'FALTA FUNC' e 'ATESTADO FUNC')
-            case 'FALTA FUNCIONARIO': // ou 'FALTA FUNC' se o nome no mock for este
-            case 'ATESTADO': // ou 'ATESTADO FUNC'
+            case 'FALTA FUNCIONARIO': // Assumindo que o nome no mock/criteria é este
+            case 'ATESTADO': // Assumindo que o nome no mock/criteria é este
               const rawAusenciaData = await this.rawAusenciaRepo.find({
                 where: {
                   sectorName: sector.nome,
-                  occurrenceType: criterion.nome.toUpperCase() as any,
+                  occurrenceType: criterionNameUpper as any,
                   metricDate: Between(dataInicio, dataFim),
                 },
               });
@@ -233,6 +217,48 @@ export class EtlService {
                 0
               );
               break;
+            case 'COLISÃO':
+              const rawColisaoData = await this.rawColisaoRepo.find({
+                where: {
+                  sectorName: sector.nome,
+                  metricDate: Between(dataInicio, dataFim),
+                },
+              });
+              totalRealizadoBruto = rawColisaoData.reduce(
+                (sum, item) => sum + item.totalCount,
+                0
+              );
+              break;
+            case 'PEÇAS':
+            case 'PNEUS':
+              const rawEstoqueData = await this.rawEstoqueCustoRepo.find({
+                where: {
+                  sectorName: sector.nome,
+                  criterionName: criterionNameUpper as 'PEÇAS' | 'PNEUS',
+                  metricDate: Between(dataInicio, dataFim),
+                },
+              });
+              totalRealizadoBruto = rawEstoqueData.reduce(
+                (sum, item) => sum + item.totalValue,
+                0
+              );
+              break;
+            case 'COMBUSTIVEL':
+              const rawFleet_Comb =
+                await this.rawFleetPerformanceRepo.findOneBy({
+                  sectorName: sector.nome,
+                  metricMonth: periodMesAno,
+                });
+              totalRealizadoBruto = rawFleet_Comb
+                ? rawFleet_Comb.totalFuelLiters
+                : null;
+              break;
+            case 'MEDIA KM/L':
+              const rawFleet_KML = await this.rawFleetPerformanceRepo.findOneBy(
+                { sectorName: sector.nome, metricMonth: periodMesAno }
+              );
+              totalRealizadoBruto = rawFleet_KML ? rawFleet_KML.avgKmL : null;
+              break;
             case 'IPK':
               const rawIpkData = await this.rawIpkCalculadoRepo.findOneBy({
                 sectorName: sector.nome,
@@ -240,16 +266,35 @@ export class EtlService {
               });
               totalRealizadoBruto = rawIpkData ? rawIpkData.ipkValue : null;
               break;
-            // TODO: Adicionar cases para Colisão, Peças, Pneus, FleetPerformance(KM/L, Litros), KM Ociosa (Components)
-
+            case 'KM OCIOSA':
+              const rawKmOciosaComp =
+                await this.rawKmOciosaComponentsRepo.findOneBy({
+                  sectorName: sector.nome,
+                  metricMonth: periodMesAno,
+                });
+              if (rawKmOciosaComp && rawKmOciosaComp.kmOperacional > 0) {
+                // Aplicar expurgo no kmHodometroAjustado ANTES de calcular o %
+                let kmHodAjustadoComExpurgo =
+                  rawKmOciosaComp.kmHodometroAjustado;
+                // TODO: Buscar expurgos de KM Ociosa (que devem ter valor em KM) e subtrair de kmHodAjustadoComExpurgo
+                totalRealizadoBruto =
+                  ((kmHodAjustadoComExpurgo - rawKmOciosaComp.kmOperacional) /
+                    rawKmOciosaComp.kmOperacional) *
+                  100;
+                totalRealizadoBruto = Number(totalRealizadoBruto.toFixed(4)); // Arredonda
+              } else {
+                totalRealizadoBruto = null; // Ou 0, se kmOperacional for 0
+              }
+              break;
+            // TODO: Case para FALTA FROTA quando a extração raw estiver pronta
             default:
               console.warn(
-                `[EtlService] Lógica de busca de dados RAW para critério ${criterion.nome} não implementada.`
+                `[EtlService] Lógica de busca de dados RAW para critério ${criterion.nome} não implementada ou nome não reconhecido.`
               );
-              continue; // Pula para o próximo critério
+              continue;
           }
           console.log(
-            `  -> Total Realizado Bruto (Raw): ${totalRealizadoBruto}`
+            `  -> Total Realizado Bruto (Raw Agregado): ${totalRealizadoBruto}`
           );
 
           // Buscar Meta
@@ -258,9 +303,22 @@ export class EtlService {
               criterionId: criterion.id,
               sectorId: sector.id,
               dataInicioEfetivo: LessThanOrEqual(dataFim),
+              dataFimEfetivo: MoreThanOrEqual(dataInicio),
             },
             order: { dataInicioEfetivo: 'DESC' },
           });
+          if (
+            !meta &&
+            criterionNameUpper !== 'KM OCIOSA' &&
+            criterionNameUpper !== 'IPK' &&
+            criterionNameUpper !== 'MEDIA KM/L'
+          ) {
+            // Alguns critérios podem não ter metas diretas
+            console.warn(
+              `  -> Meta NÃO Encontrada para ${criterion.nome} / ${sector.nome}. Pulando.`
+            );
+            // continue; // Ou define meta como 0/null e continua?
+          }
           valorMeta =
             meta && meta.valor !== null && meta.valor !== undefined
               ? Number(meta.valor)
@@ -269,8 +327,8 @@ export class EtlService {
             `  -> Meta Encontrada: ${valorMeta !== null ? valorMeta : 'NENHUMA'}`
           );
 
-          // Buscar Expurgos Aprovados
-          // TODO: A lógica de expurgo para KM Ociosa é diferente (abate do componente antes do cálculo do %)
+          // Buscar e Aplicar Expurgos
+          // Aplicável apenas para Quebra, Defeito (KM Ociosa já foi tratada acima)
           if (
             criterion.nome.toUpperCase() === 'QUEBRA' ||
             criterion.nome.toUpperCase() === 'DEFEITO'
@@ -286,7 +344,9 @@ export class EtlService {
             totalExpurgado = expurgos.reduce(
               (sum, item) => sum + (Number(item.valorAjusteNumerico) || 1),
               0
-            ); // Assume valorAjuste ou default 1
+            ); // Default 1 se valorAjuste não definido
+          } else {
+            totalExpurgado = 0;
           }
           console.log(`  -> Total Expurgado: ${totalExpurgado}`);
 
@@ -298,17 +358,15 @@ export class EtlService {
           );
 
           if (totalRealizadoBruto !== null) {
-            // Só salva se tivermos um valor realizado
             const performanceEntry: DeepPartial<PerformanceDataEntity> = {
               competitionPeriodId: competitionPeriod.id,
               sectorId: sector.id,
               criterionId: criterion.id,
-              metricDate: competitionPeriod.dataInicio, // Data de referência do mês
+              metricDate: competitionPeriod.dataInicio,
               valor: valorRealizadoFinal,
               targetValue: valorMeta,
             };
             performanceEntriesToSave.push(performanceEntry);
-            processedEntriesCount++;
           }
         }
       }
@@ -317,10 +375,12 @@ export class EtlService {
         console.log(
           `[EtlService] Salvando ${performanceEntriesToSave.length} registros em performance_data...`
         );
+        // Descomentar para salvar de verdade!
         await this.performanceDataRepo.save(performanceEntriesToSave, {
           chunk: 200,
         });
         console.log(`[EtlService] Registros salvos em performance_data.`);
+        processedEntriesCount = performanceEntriesToSave.length;
       } else {
         console.log(
           `[EtlService] Nenhum registro de performance para salvar para o período ${periodMesAno}.`
@@ -331,9 +391,9 @@ export class EtlService {
         `\n[EtlService] Processamento para ${periodMesAno} concluído. ${processedEntriesCount} entradas de performance geradas.`
       );
     } catch (error: unknown) {
-      let errorMessage = `[EtlService] ERRO INESPERADO durante o processamento para ${periodMesAno}:`;
+      let errorMessage = `[EtlService] ERRO INESPERADO durante processamento para ${periodMesAno}:`;
       if (error instanceof Error) {
-        errorMessage = `[EtlService] ERRO durante o processamento para ${periodMesAno} (${error.name}): ${error.message}`;
+        errorMessage = `[EtlService] ERRO para ${periodMesAno} (${error.name}): ${error.message}`;
       }
       console.error(errorMessage, error);
     }
