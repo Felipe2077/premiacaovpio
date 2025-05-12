@@ -3,16 +3,25 @@ import {
   Column,
   CreateDateColumn,
   Entity,
-  Index,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { CompetitionPeriodEntity } from './competition-period.entity'; // << IMPORTAR
+import { CriterionEntity } from './criterion.entity'; // Se for usar
+import { SectorEntity } from './sector.entity'; // Se for usar
 
 @Entity({ name: 'performance_data' })
-// Índices para otimizar buscas por setor/critério/data
-@Index(['sectorId', 'criterionId', 'metricDate'])
 export class PerformanceDataEntity {
-  @PrimaryGeneratedColumn({ type: 'bigint' }) // Usar bigint se esperar muitos dados
-  id!: string; // TypeORM recomenda string para bigint
+  @PrimaryGeneratedColumn({ type: 'bigint' })
+  id!: string;
+
+  @Column({ type: 'int', comment: 'ID do período de competição' }) // Coluna para a FK
+  competitionPeriodId!: number;
+
+  @ManyToOne(() => CompetitionPeriodEntity, { onDelete: 'CASCADE' }) // Define a relação
+  @JoinColumn({ name: 'competitionPeriodId' }) // Mapeia a coluna da FK
+  competitionPeriod!: CompetitionPeriodEntity; // Propriedade para acessar o objeto
 
   @Column({ type: 'int' })
   sectorId!: number;
@@ -20,25 +29,24 @@ export class PerformanceDataEntity {
   @Column({ type: 'int' })
   criterionId!: number;
 
-  // Data a que se refere a métrica
   @Column({ type: 'date' })
-  metricDate!: string; // Ou Date
+  metricDate!: string;
 
-  // Valor numérico do desempenho (ajustar precisão/escala)
   @Column({ type: 'numeric', precision: 18, scale: 4, nullable: true })
   valor!: number | null;
 
-  // Quando este registro foi carregado pelo ETL
+  @Column({ type: 'numeric', precision: 18, scale: 4, nullable: true })
+  targetValue?: number | null;
+
   @CreateDateColumn({ type: 'timestamp with time zone' })
   loadTimestamp!: Date;
 
-  // --- Relações (Podemos adicionar depois) ---
-  // @ManyToOne(() => SectorEntity)
-  // @JoinColumn({ name: 'sectorId' })
-  // setor: SectorEntity;
+  // Relações opcionais para setor e critério (para facilitar queries)
+  @ManyToOne(() => SectorEntity, { eager: false, onDelete: 'CASCADE' }) // eager: false é o padrão
+  @JoinColumn({ name: 'sectorId' })
+  setor?: SectorEntity;
 
-  // @ManyToOne(() => CriterionEntity)
-  // @JoinColumn({ name: 'criterionId' })
-  // criterio: CriterionEntity;
-  // ---------------------------------------------
+  @ManyToOne(() => CriterionEntity, { eager: false, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'criterionId' })
+  criterio?: CriterionEntity;
 }

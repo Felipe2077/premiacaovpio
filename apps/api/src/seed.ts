@@ -701,6 +701,7 @@ interface ExpurgoMockInput
   > {
   criterionNome: string;
   sectorNome: string;
+  valorAjusteNumerico: number;
 }
 const expurgosMockInput: ExpurgoMockInput[] = [
   {
@@ -710,6 +711,7 @@ const expurgosMockInput: ExpurgoMockInput[] = [
     descricaoEvento: 'Defeito sensor X.',
     justificativa: 'Autorizado Diretoria.',
     status: 'APROVADO' as ExpurgoStatus,
+    valorAjusteNumerico: 1,
   },
   {
     criterionNome: 'KM OCIOSA',
@@ -718,6 +720,7 @@ const expurgosMockInput: ExpurgoMockInput[] = [
     descricaoEvento: 'Bloqueio via.',
     justificativa: 'Autorizado Gerente.',
     status: 'PENDENTE' as ExpurgoStatus,
+    valorAjusteNumerico: 0,
   },
   {
     criterionNome: 'QUEBRA',
@@ -727,6 +730,7 @@ const expurgosMockInput: ExpurgoMockInput[] = [
     justificativa: 'Solicitado BO.',
     status: 'REJEITADO' as ExpurgoStatus,
     justificativaAprovacao: 'Não coberto.',
+    valorAjusteNumerico: 1,
   },
 ];
 // --- Mock de Períodos de Competição ---
@@ -872,6 +876,27 @@ async function runSeed() {
     );
     console.log(` -> ${savedParams.length} parâmetros salvos.`);
 
+    // --- BUSCAR O PERÍODO DE COMPETIÇÃO PARA O QUAL OS DADOS DE PERFORMANCE SE REFEREM ---
+    // Vamos assumir que todos os dados de performance do mock são para '2025-04'
+    const targetMesAnoForPerformance = '2025-04';
+    const activeCompetitionPeriod = await AppDataSource.getRepository(
+      CompetitionPeriodEntity
+    ).findOneBy({
+      mesAno: targetMesAnoForPerformance,
+      // status: 'ATIVA' // O status pode ser ATIVA ou o que fizer sentido para o mock
+    });
+
+    if (!activeCompetitionPeriod) {
+      throw new Error(
+        `Período de competição ${targetMesAnoForPerformance} não encontrado no seed para popular performance_data.`
+      );
+    }
+    const currentCompetitionPeriodId = activeCompetitionPeriod.id;
+    console.log(
+      `[Seed] Usando competitionPeriodId: ${currentCompetitionPeriodId} para performance_data.`
+    );
+    // ------------------------------------------------------------------------------------
+
     console.log('Inserindo Dados de Desempenho...');
     const perfToSavePromises = performanceMockInput.map(async (p_input) => {
       const criterionId = criteriaMap.get(p_input.criterionNome);
@@ -885,7 +910,12 @@ async function runSeed() {
           `Setor '${p_input.sectorNome}' não encontrado no mapa para performance`
         );
       const { criterionNome, sectorNome, ...perfEntityData } = p_input;
-      return { ...perfEntityData, criterionId, sectorId };
+      return {
+        ...perfEntityData,
+        criterionId,
+        sectorId,
+        competitionPeriodId: currentCompetitionPeriodId,
+      };
     });
     const perfToSave = await Promise.all(perfToSavePromises);
     const savedPerf = await performanceRepo.save(

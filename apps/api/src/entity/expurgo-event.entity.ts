@@ -56,9 +56,19 @@ export class ExpurgoEventEntity {
   @Column({ type: 'timestamp with time zone', nullable: true }) // Quando aprovou/rejeitou
   aprovadoEm?: Date | null;
 
-  // --- NOVA PROPRIEDADE ADICIONADA ---
   @Column({ type: 'text', nullable: true }) // Justificativa de quem aprovou/rejeitou
   justificativaAprovacao?: string | null;
+
+  @Column({
+    type: 'decimal',
+    precision: 18,
+    scale: 4,
+    nullable: true,
+    comment:
+      'Valor numérico do ajuste (ex: 1 para contagem, ou valor em KM para KM Ociosa)',
+  })
+  valorAjusteNumerico?: number | null;
+
   // ----------------------------------
 
   // --- Relações ---
