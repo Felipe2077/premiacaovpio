@@ -188,6 +188,7 @@ export class EtlService {
                 0
               );
               break;
+            // Lógica para buscar dados RAW de OCORRENCIAS HORÁRIAS
             case 'ATRASO':
             case 'FURO POR ATRASO':
             case 'FURO DE VIAGEM':
@@ -203,6 +204,7 @@ export class EtlService {
                 0
               );
               break;
+            // Lógica para buscar dados RAW de FALTA FUNCIONÁRIO
             case 'FALTA FUNCIONARIO': // Assumindo que o nome no mock/criteria é este
             case 'ATESTADO': // Assumindo que o nome no mock/criteria é este
               const rawAusenciaData = await this.rawAusenciaRepo.find({
@@ -217,6 +219,7 @@ export class EtlService {
                 0
               );
               break;
+            // Lógica para buscar dados RAW de COLISÃO
             case 'COLISÃO':
               const rawColisaoData = await this.rawColisaoRepo.find({
                 where: {
