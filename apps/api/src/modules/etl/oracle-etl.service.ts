@@ -4,6 +4,7 @@ import { RawOracleAusenciaEntity } from '@/entity/raw-data/raw-oracle-ausencia.e
 import { RawOracleColisaoEntity } from '@/entity/raw-data/raw-oracle-colisao.entity';
 import { RawOracleEstoqueCustoEntity } from '@/entity/raw-data/raw-oracle-estoque-custo.entity';
 import { RawOracleFleetPerformanceEntity } from '@/entity/raw-data/raw-oracle-fleet-performance.entity';
+import { RawOracleIpkCalculadoEntity } from '@/entity/raw-data/raw-oracle-ipk-calculado.entity';
 import { RawOracleKmOciosaComponentsEntity } from '@/entity/raw-data/raw-oracle-km-ociosa.entity';
 
 import 'reflect-metadata';
@@ -56,16 +57,15 @@ interface CombinedKmOciosaComponent {
   KM_HOD2?: number;
   KM_OPER?: number;
 }
-interface IpkRawFromQuery {
-  SETOR: string;
-  OCORRENCIA: 'IPK';
-  DATA: Date;
-  TOTAL: number | string;
+interface IpkCalculadoRawFromQuery {
+  SETOR: string; // Nome do Setor já mapeado
+  DATA: Date; // Data Mensal (TRUNC('mm'))
+  TOTAL: number | string; // Valor do IPK calculado
 }
 interface KmComponentRaw {
   // Interface genérica para o resultado das queries
   CODIGOGA: string;
-  DATA_MES_ANO: Date; // ESSENCIAL que as queries adaptadas retornem isso
+  DATA_MES_ANO: Date;
   VALOR: number; // KM_HOD, KM_ESP, KMTOTALINT, KM_OPER
 }
 
@@ -85,6 +85,7 @@ export class OracleEtlService {
   private rawEstoqueCustoRepo: Repository<RawOracleEstoqueCustoEntity>;
   private rawFleetPerfRepo: Repository<RawOracleFleetPerformanceEntity>;
   private rawKmOciosaComponentsRepo: Repository<RawOracleKmOciosaComponentsEntity>;
+  private rawIpkCalculadoRepo: Repository<RawOracleIpkCalculadoEntity>;
 
   constructor() {
     this.rawAusenciaRepo = AppDataSource.getRepository(RawOracleAusenciaEntity);
@@ -97,6 +98,9 @@ export class OracleEtlService {
     );
     this.rawKmOciosaComponentsRepo = AppDataSource.getRepository(
       RawOracleKmOciosaComponentsEntity
+    );
+    this.rawIpkCalculadoRepo = AppDataSource.getRepository(
+      RawOracleIpkCalculadoEntity
     );
 
     console.log(
@@ -781,6 +785,104 @@ export class OracleEtlService {
         `[Oracle ETL] Salvando ${entitiesToSave.length} registros em raw_oracle_km_ociosa_components...`
       );
       await this.rawKmOciosaComponentsRepo.save(entitiesToSave, { chunk: 100 });
+      console.log(
+        `[Oracle ETL] Registros de ${functionName} salvos no Postgres.`
+      );
+      return entitiesToSave.length;
+    } catch (error) {
+      console.error(
+        `[Oracle ETL] ERRO ao extrair/carregar ${functionName}:`,
+        error
+      );
+      if (error instanceof Error && 'errorNum' in error) {
+        console.error(`  [Oracle Error Num]: ${(error as any).errorNum}`);
+      }
+      return 0;
+    }
+  }
+  // MÉTODO  PARA IPK, SALVANDO VALOR CALCULADO
+  async extractAndLoadIpkCalculado(
+    startDate: string,
+    endDate: string
+  ): Promise<number> {
+    const functionName = 'IPK (Valor Calculado)';
+    console.log(
+      `[Oracle ETL] Iniciando extração/carga de ${functionName} para ${startDate} a ${endDate}`
+    );
+    const oracleDataSource = await this.ensureOracleConnection();
+    await this.ensurePostgresConnection();
+
+    try {
+      // Query do IPK que já tínhamos validado e que retorna o IPK calculado
+      const query = `
+            SELECT CASE WHEN B.CODIGOGA= 31 THEN 'PARANOÁ' WHEN B.CODIGOGA= 124 THEN 'SANTA MARIA' WHEN B.CODIGOGA= 239 THEN 'SÃO SEBASTIÃO' WHEN B.CODIGOGA= 240 THEN 'GAMA' ELSE 'OUTRAS' END AS SETOR,
+                   B.DATA_MES_ANO AS DATA,
+                   CASE WHEN NVL(B.KM, 0) = 0 THEN 0 ELSE ROUND((B.PASSAGEIROS / B.KM), 4) END AS TOTAL
+            FROM (
+                SELECT A.CODIGOGA, TRUNC(A.DATA_BASE_CALC, 'mm') AS DATA_MES_ANO, SUM(A.PASSAGEIROS_AJUSTADOS) AS PASSAGEIROS, SUM(A.KM_OPER_IPK) AS KM
+                FROM (
+                    SELECT P.CODIGOGA, P.DATA_VIAGEM_DIA AS DATA_BASE_CALC,
+                           CASE WHEN P.CODIGOGA = 124 AND P.DATA_VIAGEM_DIA = PV.DATA_VIAGEM_DIA THEN (NVL(P.PASS_DIA,0) - NVL(PV.PASS_ESPECIFICO_DIA,0))
+                                WHEN P.CODIGOGA = 240 AND P.DATA_VIAGEM_DIA = PV.DATA_VIAGEM_DIA THEN (NVL(P.PASS_DIA,0) + NVL(PV.PASS_ESPECIFICO_DIA,0))
+                           ELSE NVL(P.PASS_DIA,0) END AS PASSAGEIROS_AJUSTADOS,
+                           NVL(K.KM_OPER_DIA, 0) AS KM_OPER_IPK
+                    FROM
+                        (SELECT L.CODIGOGA, TRUNC(G.DAT_VIAGEM_GUIA) AS DATA_VIAGEM_DIA, SUM(NVL(D.QTD_PASSAG_TRANS,0)) AS PASS_DIA FROM T_ARR_GUIA G JOIN T_ARR_DETALHE_GUIA D ON G.COD_SEQ_GUIA = D.COD_SEQ_GUIA JOIN T_ARR_VIAGENS_GUIA V ON D.COD_SEQ_GUIA = V.COD_SEQ_GUIA AND D.COD_SEQ_VIAGEM = V.COD_SEQ_VIAGEM JOIN BGM_CADLINHAS L ON V.COD_INTLINHA = L.CODINTLINHA WHERE G.DAT_VIAGEM_GUIA BETWEEN TO_DATE(:1, 'YYYY-MM-DD') AND TO_DATE(:2, 'YYYY-MM-DD') + 0.99999 AND L.CODIGOGA IN (31, 124, 239, 240) AND L.CODIGOEMPRESA = 4 AND D.COD_TIPOPAGTARIFA NOT IN (3) GROUP BY L.CODIGOGA, TRUNC(G.DAT_VIAGEM_GUIA)) P
+                        LEFT JOIN (SELECT L.CODIGOGA, TRUNC(BC.DATABCO) AS DATA_BC_DIA, SUM(NVL(GLOBUS.FC_ARR_KMBCO_VIAGENS(BC.IDBCO, 0 ,BV.IDBCOVIAGENS), 0)) AS KM_OPER_DIA FROM T_ARR_BCO BC JOIN T_ARR_BCO_VIAGENS BV ON BC.IDBCO = BV.IDBCO JOIN BGM_CADLINHAS L ON BV.CODINTLINHA = L.CODINTLINHA WHERE BC.DATABCO BETWEEN TO_DATE(:1, 'YYYY-MM-DD') AND TO_DATE(:2, 'YYYY-MM-DD') + 0.99999 AND BC.CODIGOEMPRESA = 4 AND L.CODIGOGA IN (31, 124, 239, 240) GROUP BY L.CODIGOGA, TRUNC(BC.DATABCO)) K ON P.CODIGOGA = K.CODIGOGA AND P.DATA_VIAGEM_DIA = K.DATA_BC_DIA
+                        LEFT JOIN (SELECT L.CODIGOGA, TRUNC(G.DAT_VIAGEM_GUIA) AS DATA_VIAGEM_DIA, SUM(NVL(D.QTD_PASSAG_TRANS,0)) AS PASS_ESPECIFICO_DIA FROM T_ARR_GUIA G JOIN T_ARR_DETALHE_GUIA D ON G.COD_SEQ_GUIA = D.COD_SEQ_GUIA JOIN T_ARR_VIAGENS_GUIA V ON D.COD_SEQ_GUIA = V.COD_SEQ_GUIA AND D.COD_SEQ_VIAGEM = V.COD_SEQ_VIAGEM JOIN BGM_CADLINHAS L ON V.COD_INTLINHA = L.CODINTLINHA JOIN FRT_CADVEICULOS VE ON V.COD_VEICULO = VE.CODIGOVEIC WHERE G.DAT_VIAGEM_GUIA BETWEEN TO_DATE(:1, 'YYYY-MM-DD') AND TO_DATE(:2, 'YYYY-MM-DD') + 0.99999 AND L.CODIGOGA IN (124, 240) AND L.CODIGOEMPRESA = 4 AND D.COD_TIPOPAGTARIFA NOT IN (3) AND VE.PREFIXOVEIC IN ('0002241','0002243','0002246','0002248') GROUP BY L.CODIGOGA, TRUNC(G.DAT_VIAGEM_GUIA)) PV ON P.CODIGOGA = PV.CODIGOGA AND P.DATA_VIAGEM_DIA = PV.DATA_VIAGEM_DIA
+                ) A
+                WHERE A.DATA_BASE_CALC IS NOT NULL AND A.KM_OPER_IPK > 0
+                GROUP BY A.CODIGOGA, TRUNC(A.DATA_BASE_CALC, 'mm')
+            ) B
+            WHERE B.SETOR <> 'OUTRAS'
+            ORDER BY SETOR, DATA_MES_ANO
+            `;
+      const parameters = [startDate, endDate];
+      const results: IpkCalculadoRawFromQuery[] = await oracleDataSource.query(
+        query,
+        parameters
+      );
+      console.log(
+        `[Oracle ETL] Query Oracle ${functionName} retornou ${results.length} registros.`
+      );
+
+      if (results.length === 0) return 0;
+
+      const entitiesToSave = results
+        .map((r) => {
+          const ipkValue = Number(r.TOTAL) || 0;
+          const sectorName = r.SETOR;
+          const metricMonth =
+            r.DATA instanceof Date
+              ? r.DATA.toISOString().substring(0, 7)
+              : null;
+
+          if (!metricMonth || sectorName === 'OUTRAS') {
+            console.warn(
+              `[Oracle ETL] Registro inválido (data ou setor) recebido para IPK:`,
+              r
+            );
+            return null;
+          }
+          return this.rawIpkCalculadoRepo.create({
+            metricMonth,
+            sectorName,
+            ipkValue,
+          });
+        })
+        .filter(Boolean) as RawOracleIpkCalculadoEntity[];
+
+      if (entitiesToSave.length === 0) {
+        console.log(
+          `[Oracle ETL] Nenhum registro válido de ${functionName} para salvar.`
+        );
+        return 0;
+      }
+
+      console.log(
+        `[Oracle ETL] Salvando ${entitiesToSave.length} registros em raw_oracle_ipk_calculado...`
+      );
+      await this.rawIpkCalculadoRepo.save(entitiesToSave, { chunk: 100 });
       console.log(
         `[Oracle ETL] Registros de ${functionName} salvos no Postgres.`
       );

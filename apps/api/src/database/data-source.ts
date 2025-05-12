@@ -1,5 +1,6 @@
 // src/database/data-source.ts
 import { RawMySqlOcorrenciaHorariaEntity } from '@/entity/raw-data/raw-mysql-ocorrencia-horaria.entity';
+import { RawOracleIpkCalculadoEntity } from '@/entity/raw-data/raw-oracle-ipk-calculado.entity';
 import * as dotenv from 'dotenv';
 import path from 'path'; // Importar path
 import 'reflect-metadata';
@@ -76,6 +77,7 @@ export const AppDataSource = new DataSource({
     RawOracleEstoqueCustoEntity,
     RawOracleFleetPerformanceEntity,
     RawOracleKmOciosaComponentsEntity,
+    RawOracleIpkCalculadoEntity,
   ],
   migrations: [],
   subscribers: [],
