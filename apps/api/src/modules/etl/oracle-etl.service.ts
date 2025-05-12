@@ -813,13 +813,21 @@ export class OracleEtlService {
     await this.ensurePostgresConnection();
 
     try {
-      // Query do IPK que já tínhamos validado e que retorna o IPK calculado
       const query = `
-            SELECT CASE WHEN B.CODIGOGA= 31 THEN 'PARANOÁ' WHEN B.CODIGOGA= 124 THEN 'SANTA MARIA' WHEN B.CODIGOGA= 239 THEN 'SÃO SEBASTIÃO' WHEN B.CODIGOGA= 240 THEN 'GAMA' ELSE 'OUTRAS' END AS SETOR,
-                   B.DATA_MES_ANO AS DATA,
-                   CASE WHEN NVL(B.KM, 0) = 0 THEN 0 ELSE ROUND((B.PASSAGEIROS / B.KM), 4) END AS TOTAL
+            SELECT
+                CASE WHEN B.CODIGOGA = 31 THEN 'PARANOÁ'
+                     WHEN B.CODIGOGA = 124 THEN 'SANTA MARIA'
+                     WHEN B.CODIGOGA = 239 THEN 'SÃO SEBASTIÃO'
+                     WHEN B.CODIGOGA = 240 THEN 'GAMA'
+                ELSE 'OUTRAS' END AS SETOR_NOME, -- Renomeado para evitar conflito
+                B.DATA_MES_ANO AS DATA,
+                CASE WHEN NVL(B.KM, 0) = 0 THEN 0 ELSE ROUND((B.PASSAGEIROS / B.KM), 4) END AS TOTAL_IPK
             FROM (
-                SELECT A.CODIGOGA, TRUNC(A.DATA_BASE_CALC, 'mm') AS DATA_MES_ANO, SUM(A.PASSAGEIROS_AJUSTADOS) AS PASSAGEIROS, SUM(A.KM_OPER_IPK) AS KM
+                SELECT
+                    A.CODIGOGA,
+                    TRUNC(A.DATA_BASE_CALC, 'mm') AS DATA_MES_ANO,
+                    SUM(A.PASSAGEIROS_AJUSTADOS) AS PASSAGEIROS,
+                    SUM(A.KM_OPER_IPK) AS KM
                 FROM (
                     SELECT P.CODIGOGA, P.DATA_VIAGEM_DIA AS DATA_BASE_CALC,
                            CASE WHEN P.CODIGOGA = 124 AND P.DATA_VIAGEM_DIA = PV.DATA_VIAGEM_DIA THEN (NVL(P.PASS_DIA,0) - NVL(PV.PASS_ESPECIFICO_DIA,0))
@@ -834,14 +842,14 @@ export class OracleEtlService {
                 WHERE A.DATA_BASE_CALC IS NOT NULL AND A.KM_OPER_IPK > 0
                 GROUP BY A.CODIGOGA, TRUNC(A.DATA_BASE_CALC, 'mm')
             ) B
-            WHERE B.SETOR <> 'OUTRAS'
-            ORDER BY SETOR, DATA_MES_ANO
+            -- Filtra usando o CASE diretamente ou o CODIGOGA se for mais simples
+            WHERE (CASE WHEN B.CODIGOGA = 31 THEN 'PARANOÁ' WHEN B.CODIGOGA = 124 THEN 'SANTA MARIA' WHEN B.CODIGOGA = 239 THEN 'SÃO SEBASTIÃO' WHEN B.CODIGOGA = 240 THEN 'GAMA' ELSE 'OUTRAS' END) <> 'OUTRAS'
+            ORDER BY SETOR_NOME, DATA_MES_ANO -- Ordena pelos aliases definidos no SELECT
             `;
       const parameters = [startDate, endDate];
-      const results: IpkCalculadoRawFromQuery[] = await oracleDataSource.query(
-        query,
-        parameters
-      );
+      // Ajustar a interface se necessário para bater com os aliases SETOR_NOME, TOTAL_IPK
+      const results: { SETOR_NOME: string; DATA: Date; TOTAL_IPK: number }[] =
+        await oracleDataSource.query(query, parameters);
       console.log(
         `[Oracle ETL] Query Oracle ${functionName} retornou ${results.length} registros.`
       );
@@ -850,8 +858,8 @@ export class OracleEtlService {
 
       const entitiesToSave = results
         .map((r) => {
-          const ipkValue = Number(r.TOTAL) || 0;
-          const sectorName = r.SETOR;
+          const ipkValue = Number(r.TOTAL_IPK) || 0;
+          const sectorName = r.SETOR_NOME;
           const metricMonth =
             r.DATA instanceof Date
               ? r.DATA.toISOString().substring(0, 7)
