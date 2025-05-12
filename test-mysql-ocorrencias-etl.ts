@@ -39,7 +39,7 @@ async function runTestMySqlOcorrenciasEtl() {
   // Define período de teste
   const endDate = new Date();
   const startDate = new Date();
-  startDate.setDate(endDate.getDate() - 6);
+  startDate.setDate(endDate.getDate() - 30);
   const startDateString = startDate.toISOString().split('T')[0];
   const endDateString = endDate.toISOString().split('T')[0];
 

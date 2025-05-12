@@ -172,7 +172,12 @@ export class MySqlEtlService {
                 GROUP BY S.SETOR, A.OCORRENCIA, DATE(A.DATA)
                 ORDER BY S.SETOR, DATA, A.OCORRENCIA;
             `;
-      const parameters = [codOcorrencia, startDate, endDate];
+
+      // --- CORREÇÃO NO FORMATO DA DATA PARA OS PARÂMETROS ---
+      const startDateMySql = startDate.replace(/-/g, '/'); // YYYY-MM-DD -> YYYY/MM/DD
+      const endDateMySql = endDate.replace(/-/g, '/'); // YYYY-MM-DD -> YYYY/MM/DD
+
+      const parameters = [codOcorrencia, startDateMySql, endDateMySql];
 
       console.log(
         `[MySQL ETL] Executando query para ${criterionName} (cod ${codOcorrencia}) no MySQL...`
@@ -189,6 +194,10 @@ export class MySqlEtlService {
         );
         return 0;
       }
+      console.log(
+        `[MySQL ETL] DETALHADO: Primeiros resultados brutos para ${criterionName}:`,
+        JSON.stringify(results.slice(0, 2), null, 2)
+      );
 
       const entitiesToSave = results.map((r) =>
         this.rawOcorrenciaHorariaRepo.create({
@@ -202,6 +211,12 @@ export class MySqlEtlService {
           totalCount: Number(r.TOTAL) || 0,
         })
       );
+      if (entitiesToSave.length === 0) {
+        console.log(
+          `[MySQL ETL] DETALHADO: Nenhum registro válido de ${criterionName} para salvar após mapeamento.`
+        );
+        return 0;
+      }
 
       // TODO: Adicionar lógica de Delete/Insert ou Upsert
       console.log(
