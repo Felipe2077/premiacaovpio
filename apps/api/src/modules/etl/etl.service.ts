@@ -238,10 +238,13 @@ export class EtlService {
                   metricDate: Between(dataInicio, dataFim),
                 },
               });
-              totalRealizadoBruto = rawEstoqueData.reduce(
-                (sum, item) => sum + item.totalValue,
-                0
-              );
+              totalRealizadoBruto = rawEstoqueData.reduce((sum, item) => {
+                const value = Number(item.totalValue); // Converte para número
+                console.log(
+                  `[ETL DEBUG] Peças/Pneus - Setor: ${sector.nome}, Data: ${item.metricDate}, totalValue (original): ${item.totalValue}, totalValue (Number): ${value}`
+                );
+                return sum + (isNaN(value) ? 0 : value); // Soma, tratando NaN como 0
+              }, 0);
               break;
             case 'COMBUSTIVEL':
               const rawFleet_Comb =
