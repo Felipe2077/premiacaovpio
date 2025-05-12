@@ -232,6 +232,7 @@ export class EtlService {
                 0
               );
               break;
+            // Lógica para buscar dados RAW PEÇAS E PNEUS
             case 'PEÇAS':
             case 'PNEUS':
               const rawEstoqueData = await this.rawEstoqueCustoRepo.find({
@@ -278,18 +279,65 @@ export class EtlService {
                   sectorName: sector.nome,
                   metricMonth: periodMesAno,
                 });
-              if (rawKmOciosaComp && rawKmOciosaComp.kmOperacional > 0) {
-                // Aplicar expurgo no kmHodometroAjustado ANTES de calcular o %
-                let kmHodAjustadoComExpurgo =
-                  rawKmOciosaComp.kmHodometroAjustado;
-                // TODO: Buscar expurgos de KM Ociosa (que devem ter valor em KM) e subtrair de kmHodAjustadoComExpurgo
-                totalRealizadoBruto =
-                  ((kmHodAjustadoComExpurgo - rawKmOciosaComp.kmOperacional) /
-                    rawKmOciosaComp.kmOperacional) *
-                  100;
-                totalRealizadoBruto = Number(totalRealizadoBruto.toFixed(4)); // Arredonda
+
+              if (rawKmOciosaComp) {
+                let kmHodometroAjustadoOriginal =
+                  Number(rawKmOciosaComp.kmHodometroAjustado) || 0;
+                const kmOperacionalOriginal =
+                  Number(rawKmOciosaComp.kmOperacional) || 0;
+
+                console.log(
+                  `  -> Componentes KM Ociosa (Raw) - HOD2: ${kmHodometroAjustadoOriginal}, OPER: ${kmOperacionalOriginal}`
+                );
+
+                // Buscar Expurgos para KM OCIOSA
+                const expurgosKmOciosa = await this.expurgoRepo.find({
+                  where: {
+                    criterionId: criterion.id, // ID do critério "KM OCIOSA"
+                    sectorId: sector.id,
+                    status: 'APROVADO',
+                    dataEvento: Between(dataInicio, dataFim), // Expurgos do período
+                  },
+                });
+
+                // Assume que valorAjusteNumerico no expurgo de KM Ociosa é o KM a ser subtraído
+                const kmTotalExpurgado = expurgosKmOciosa.reduce(
+                  (sum, exp) => sum + (Number(exp.valorAjusteNumerico) || 0),
+                  0
+                );
+                console.log(
+                  `  -> KM Total Expurgado para KM Ociosa: ${kmTotalExpurgado}`
+                );
+
+                // Aplica o expurgo ao componente (hodômetro ajustado, por exemplo)
+                const kmHodometroAjustadoFinal =
+                  kmHodometroAjustadoOriginal - kmTotalExpurgado;
+                console.log(
+                  `  -> KM Hodômetro Ajustado (Pós-Expurgo): ${kmHodometroAjustadoFinal}`
+                );
+
+                if (kmOperacionalOriginal > 0) {
+                  totalRealizadoBruto =
+                    ((kmHodometroAjustadoFinal - kmOperacionalOriginal) /
+                      kmOperacionalOriginal) *
+                    100;
+                  totalRealizadoBruto = Number(totalRealizadoBruto.toFixed(4)); // Arredonda para 4 casas decimais
+                } else {
+                  // Se KM Operacional é 0, o que fazer?
+                  // Se KM_HOD2 também for 0 (ou negativo após expurgo), % ociosa é 0.
+                  // Se KM_HOD2 for positivo, % ociosa é "infinito" (ruim). Definir como um valor alto ou null?
+                  // Por ora, se KM Operacional é 0, vamos definir % como 0 para evitar divisão por zero,
+                  // mas isso pode precisar de revisão pela regra de negócio.
+                  totalRealizadoBruto = kmHodometroAjustadoFinal > 0 ? null : 0; // Ou um valor alto como 9999 se for positivo
+                  console.warn(
+                    `  -> KM Operacional é 0 para ${sector.nome}, KM Ociosa % tratado como ${totalRealizadoBruto}.`
+                  );
+                }
               } else {
-                totalRealizadoBruto = null; // Ou 0, se kmOperacional for 0
+                console.log(
+                  `  -> Componentes RAW para KM Ociosa não encontrados para ${sector.nome} no período ${periodMesAno}.`
+                );
+                totalRealizadoBruto = null;
               }
               break;
             // TODO: Case para FALTA FROTA quando a extração raw estiver pronta

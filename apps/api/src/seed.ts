@@ -711,7 +711,17 @@ const expurgosMockInput: ExpurgoMockInput[] = [
     descricaoEvento: 'Defeito sensor X.',
     justificativa: 'Autorizado Diretoria.',
     status: 'APROVADO' as ExpurgoStatus,
-    valorAjusteNumerico: 1,
+    valorAjusteNumerico: 10,
+  },
+  {
+    criterionNome: 'KM OCIOSA', // Ou o nome exato do critério no seu mock
+    sectorNome: 'GAMA', // Ou outro setor
+    dataEvento: '2025-04-15',
+    descricaoEvento:
+      'KM parado por evento X não contabilizado automaticamente.',
+    justificativa: 'Ajuste manual aprovado.',
+    status: 'APROVADO' as ExpurgoStatus,
+    valorAjusteNumerico: 1000, // Exemplo: 100 KM a serem subtraídos do Hodômetro
   },
   {
     criterionNome: 'KM OCIOSA',
