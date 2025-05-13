@@ -139,13 +139,56 @@ const start = async () => {
     });
 
     // Handler agora usa o serviço atualizado (retorna dados com nomes)
-    fastify.get('/api/parameters/current', async (request, reply) => {
+    fastify.get('/api/parameters', async (request, reply) => {
+      fastify.log.info('GET /api/parameters - Query Params:', request.query);
+      // Define uma interface para os query parameters esperados
+      interface GetParametersQuery {
+        period?: string; // YYYY-MM
+        sectorId?: string;
+        criterionId?: string;
+      }
+      const queryParams = request.query as GetParametersQuery;
+
+      // O periodMesAno é obrigatório para o serviço
+      if (!queryParams.period) {
+        return reply.status(400).send({
+          message: "Query parameter 'period' (formato YYYY-MM) é obrigatório.",
+        });
+      }
+      const sectorIdNum = queryParams.sectorId
+        ? parseInt(queryParams.sectorId, 10)
+        : undefined;
+      const criterionIdNum = queryParams.criterionId
+        ? parseInt(queryParams.criterionId, 10)
+        : undefined;
+
+      if (queryParams.sectorId && isNaN(sectorIdNum!)) {
+        // O ! é para o TS saber que se queryParams.sectorId existe, sectorIdNum foi tentado
+        return reply
+          .status(400)
+          .send({ message: "Query parameter 'sectorId' deve ser um número." });
+      }
+      if (queryParams.criterionId && isNaN(criterionIdNum!)) {
+        return reply.status(400).send({
+          message: "Query parameter 'criterionId' deve ser um número.",
+        });
+      }
+
       try {
-        const data = await parameterService.getCurrentParameters();
+        // Garante inicialização do AppDataSource
+        if (!AppDataSource.isInitialized) await AppDataSource.initialize();
+
+        const data = await parameterService.findParametersForPeriod(
+          queryParams.period, // Passa o periodMesAno
+          sectorIdNum, // Passa o sectorId (ou undefined)
+          criterionIdNum // Passa o criterionId (ou undefined)
+        );
         reply.send(data);
       } catch (error: any) {
-        fastify.log.error(`Erro em /api/parameters/current: ${error.message}`);
-        reply.status(500).send({ error: error.message || 'Erro.' });
+        fastify.log.error(`Erro em GET /api/parameters: ${error.message}`);
+        reply.status(500).send({
+          error: error.message || 'Erro interno ao buscar parâmetros.',
+        });
       }
     });
 
@@ -338,11 +381,9 @@ const start = async () => {
         } else if (error.message.includes('não está em status')) {
           reply.status(409).send({ error: error.message }); // Conflict
         } else {
-          reply
-            .status(500)
-            .send({
-              error: error.message || 'Erro interno ao iniciar período.',
-            });
+          reply.status(500).send({
+            error: error.message || 'Erro interno ao iniciar período.',
+          });
         }
       }
     });
@@ -385,11 +426,9 @@ const start = async () => {
         ) {
           reply.status(409).send({ error: error.message }); // Conflict
         } else {
-          reply
-            .status(500)
-            .send({
-              error: error.message || 'Erro interno ao fechar período.',
-            });
+          reply.status(500).send({
+            error: error.message || 'Erro interno ao fechar período.',
+          });
         }
       }
     });

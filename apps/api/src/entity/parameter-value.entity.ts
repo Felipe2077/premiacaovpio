@@ -2,11 +2,12 @@
 import {
   Column,
   CreateDateColumn,
-  Entity,
+  Entity, // << IMPORTANTE
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { CompetitionPeriodEntity } from './competition-period.entity';
 import { CriterionEntity } from './criterion.entity';
 import { SectorEntity } from './sector.entity';
 import { UserEntity } from './user.entity';
@@ -28,14 +29,32 @@ export class ParameterValueEntity {
   @Column({ type: 'date', nullable: true })
   dataFimEfetivo!: string | null;
 
-  @Column({ type: 'int', nullable: true })
-  criterionId?: number;
+  // --- RELAÇÃO COM CRITERION ---
+  @Column({ type: 'int', nullable: true }) // Tornando nullable: true para consistência, já que a relação é opcional
+  criterionId?: number | null; // Permitir null aqui se a relação for opcional
 
-  @Column({ type: 'int', nullable: true })
-  sectorId?: number;
+  @ManyToOne(() => CriterionEntity, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'criterionId' })
+  criterio?: CriterionEntity;
+  // -----------------------------
 
+  // --- RELAÇÃO COM SECTOR ---
   @Column({ type: 'int', nullable: true })
-  createdByUserId?: number;
+  sectorId?: number | null; // Já estava nullable e permitindo null, PERFEITO
+
+  @ManyToOne(() => SectorEntity, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'sectorId' })
+  setor?: SectorEntity;
+  // --------------------------
+
+  // --- RELAÇÃO COM USER (createdBy) ---
+  @Column({ type: 'int', nullable: true }) // Tornando nullable: true por consistência
+  createdByUserId?: number | null; // Permitir null se o usuário for deletado ou não obrigatório
+
+  @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'createdByUserId' })
+  criadoPor?: UserEntity;
+  // ------------------------------------
 
   @Column({ type: 'text', nullable: true })
   justificativa?: string;
@@ -43,17 +62,13 @@ export class ParameterValueEntity {
   @CreateDateColumn({ type: 'timestamp with time zone' })
   createdAt!: Date;
 
-  // --- Relações HABILITADAS ---
-  @ManyToOne(() => CriterionEntity, { nullable: true, onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'criterionId' })
-  criterio?: CriterionEntity;
+  // --- PROPRIEDADE E RELAÇÃO FALTANDO PARA COMPETITION PERIOD ---
+  // Adicione estas linhas:
+  @Column({ type: 'int' }) // Não pode ser nulo, uma meta sempre pertence a um período
+  competitionPeriodId!: number;
 
-  @ManyToOne(() => SectorEntity, { nullable: true, onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'sectorId' })
-  setor?: SectorEntity;
-
-  @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'createdByUserId' }) // FK nesta tabela
-  criadoPor?: UserEntity; // Propriedade para acessar usuário
-  // ---------------------------
+  @ManyToOne(() => CompetitionPeriodEntity, { onDelete: 'CASCADE' }) // Ou 'RESTRICT'/'SET NULL' dependendo da regra
+  @JoinColumn({ name: 'competitionPeriodId' })
+  competitionPeriod!: CompetitionPeriodEntity;
+  // -------------------------------------------------------------
 }

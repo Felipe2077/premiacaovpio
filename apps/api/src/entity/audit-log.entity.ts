@@ -9,6 +9,7 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { UserEntity } from './user.entity';
+import { CompetitionPeriodEntity } from './competition-period.entity';
 
 @Entity({ name: 'audit_logs' })
 @Index(['userId', 'actionType', 'timestamp'])
@@ -43,6 +44,19 @@ export class AuditLogEntity {
 
   @Column({ type: 'varchar', length: 50, nullable: true })
   ipAddress?: string;
+  @Column({
+    type: 'int',
+    nullable: true,
+    comment: 'ID do período de competição relacionado ao log, se aplicável',
+  })
+  competitionPeriodId?: number | null; // Tornar opcional
+
+  @ManyToOne(() => CompetitionPeriodEntity, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  }) // SET NULL se o período for deletado
+  @JoinColumn({ name: 'competitionPeriodId' })
+  competitionPeriod?: CompetitionPeriodEntity | null;
 
   // --- Relação HABILITADA ---
   @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' }) // Permite user nulo (ação do sistema)

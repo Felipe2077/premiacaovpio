@@ -1054,34 +1054,28 @@ const expurgosMockInput: ExpurgoMockInput[] = [
 // --- Mock de Períodos de Competição ---
 const competitionPeriodsMock: DeepPartial<CompetitionPeriodEntity>[] = [
   {
-    mesAno: '2025-03', // Março de 2025
+    mesAno: '2025-03',
     dataInicio: '2025-03-01',
     dataFim: '2025-03-31',
     status: 'FECHADA' as CompetitionStatus,
-    // fechadaPorUserId: 1, // Admin mockado
-    // fechadaEm: new Date('2025-04-02T10:00:00Z') // Data exemplo de fechamento
   },
   {
-    mesAno: '2025-04', // Abril de 2025 (nosso mês de dados de performance e params)
+    mesAno: '2025-04',
     dataInicio: '2025-04-01',
     dataFim: '2025-04-30',
-    status: 'ATIVA' as CompetitionStatus, // Mês atual da premiação
+    status: 'ATIVA' as CompetitionStatus,
   },
   {
-    mesAno: '2025-05', // Maio de 2025
+    mesAno: '2025-05',
     dataInicio: '2025-05-01',
     dataFim: '2025-05-31',
-    status: 'PLANEJAMENTO' as CompetitionStatus, // Próximo mês para definir metas
+    status: 'PLANEJAMENTO' as CompetitionStatus,
   },
 ];
 // ---------------
 
 // --- Função para Executar o Seed ---
 async function runSeed() {
-  const competitionPeriodRepo = AppDataSource.getRepository(
-    CompetitionPeriodEntity
-  );
-
   console.log('Iniciando script de seed...');
   let connectionInitialized = false;
   try {
@@ -1100,33 +1094,51 @@ async function runSeed() {
     const roleRepo = AppDataSource.getRepository(RoleEntity);
     const userRepo = AppDataSource.getRepository(UserEntity);
     const parameterRepo = AppDataSource.getRepository(ParameterValueEntity);
-    const performanceRepo = AppDataSource.getRepository(PerformanceDataEntity);
+    const performanceDataRepo = AppDataSource.getRepository(
+      PerformanceDataEntity
+    ); // Repositório para PerformanceData
     const auditLogRepo = AppDataSource.getRepository(AuditLogEntity);
     const expurgoEventRepo = AppDataSource.getRepository(ExpurgoEventEntity);
+    const competitionPeriodRepo = AppDataSource.getRepository(
+      CompetitionPeriodEntity
+    ); // Repositório para Períodos
 
     console.log('Limpando dados antigos (na ordem correta)...');
-    await queryRunner.query('DELETE FROM competition_periods'); // Adicionado
-
+    // Limpar tabelas que dependem de outras primeiro ou usar CASCADE
+    await queryRunner.query('DELETE FROM performance_data'); // Limpa performance_data
+    await queryRunner.query('DELETE FROM parameter_values');
     await queryRunner.query('DELETE FROM expurgo_events');
     await queryRunner.query('DELETE FROM audit_logs');
-    await queryRunner.query('DELETE FROM performance_data');
-    await queryRunner.query('DELETE FROM parameter_values');
-    await queryRunner.query('DELETE FROM user_roles');
+    await queryRunner.query('DELETE FROM competition_periods');
+    // Tabelas de junção e as que são referenciadas por FKs
+    // Se houver user_roles_role, limpar antes de users e roles se não tiver CASCADE
+    // Assumindo que as FKs têm onDelete: 'CASCADE' ou limpando em ordem segura:
+    const userRolesTableExists = await queryRunner.hasTable('user_roles_role');
+    if (userRolesTableExists) {
+      await queryRunner.query('DELETE FROM "user_roles_role"'); // Aspas se o nome for case-sensitive ou palavra reservada
+    } else {
+      const userRolesEntityTableExists =
+        await queryRunner.hasTable('user_roles'); // Se for uma entidade explícita
+      if (userRolesEntityTableExists) {
+        await queryRunner.query('DELETE FROM "user_roles"');
+      }
+    }
     await queryRunner.query('DELETE FROM users');
     await queryRunner.query('DELETE FROM roles');
     await queryRunner.query('DELETE FROM criteria');
     await queryRunner.query('DELETE FROM sectors');
     console.log('Tabelas limpas (usando DELETE).');
 
+    // --- Inserções ---
     console.log('Inserindo Setores...');
     const savedSectors = await sectorRepo.save(sectorsMock);
     console.log(` -> ${savedSectors.length} setores salvos.`);
     const sectorMap = new Map(savedSectors.map((s) => [s.nome, s.id]));
 
-    console.log('Inserindo Critérios...');
-    const savedCriteria = await criterionRepo.save(criteriaMock); // Salva critérios SEM ID hardcoded
-    console.log(` -> ${savedCriteria.length} critérios salvos.`);
-    const criteriaMap = new Map(savedCriteria.map((c) => [c.nome, c.id]));
+    console.log('Inserindo Critérios (sem IDs hardcoded)...');
+    const createdCriteria = await criterionRepo.save(criteriaMock); // Salva critérios SEM ID
+    console.log(` -> ${createdCriteria.length} critérios salvos.`);
+    const criteriaMap = new Map(createdCriteria.map((c) => [c.nome, c.id]));
 
     console.log('Inserindo Perfis...');
     const savedRoles = await roleRepo.save(rolesMock);
@@ -1135,17 +1147,9 @@ async function runSeed() {
     const viewerRole = savedRoles.find((r) => r.nome === 'Viewer');
     if (!adminRole || !viewerRole)
       throw new Error('Roles Admin/Viewer não encontrados!');
-    console.log('Inserindo Períodos de Competição Mock...');
-    // Não precisamos mapear nada extra para estes mocks por enquanto
-    const savedCompetitionPeriods = await competitionPeriodRepo.save(
-      competitionPeriodsMock
-    );
-    console.log(
-      ` -> ${savedCompetitionPeriods.length} períodos de competição salvos.`
-    );
 
     console.log('Inserindo Usuários...');
-    const usersToSave = [
+    const usersToSave: DeepPartial<UserEntity>[] = [
       {
         nome: 'Admin Sistema',
         email: 'admin@sistema.com',
@@ -1162,85 +1166,109 @@ async function runSeed() {
     const createdUsers = await userRepo.save(usersToSave);
     console.log(` -> ${createdUsers.length} usuários salvos.`);
     const adminUser = createdUsers.find((u) => u.email === 'admin@sistema.com');
-    const adminUserId = adminUser?.id;
-    if (!adminUserId) throw new Error('Admin user ID não encontrado!');
+    if (!adminUser) throw new Error('Admin user não encontrado!');
+    const adminUserId = adminUser.id;
     const adminUserName = adminUser.nome;
 
-    console.log('Inserindo Parâmetros...');
-    const paramsToSavePromises = parametersMockInput.map(async (p_input) => {
+    // --- INSERIR PERÍODOS DE COMPETIÇÃO ---
+    console.log('Inserindo Períodos de Competição Mock...');
+    const savedCompetitionPeriods = await competitionPeriodRepo.save(
+      competitionPeriodsMock
+    );
+    console.log(
+      ` -> ${savedCompetitionPeriods.length} períodos de competição salvos.`
+    );
+
+    // --- BUSCAR O ID DO PERÍODO DE ABRIL/2025 PARA USAR NAS METAS ---
+    const april2025Period = savedCompetitionPeriods.find(
+      (p) => p.mesAno === '2025-04'
+    );
+    if (!april2025Period) {
+      throw new Error(
+        "Seed error: Período '2025-04' não encontrado após salvar os mocks de período."
+      );
+    }
+    const april2025PeriodId = april2025Period.id;
+    console.log(
+      `[Seed] ID do período '2025-04' para metas: ${april2025PeriodId}`
+    );
+    // ----------------------------------------------------------
+
+    // --- INSERIR PARÂMETROS (METAS) COM O ID DO PERÍODO CORRETO ---
+    console.log('Inserindo Parâmetros (Metas)...');
+    const paramsToSave = parametersMockInput.map((p_input) => {
       const criterionId = criteriaMap.get(p_input.criterionNome);
       const sectorId = p_input.sectorNome
         ? sectorMap.get(p_input.sectorNome)
         : undefined;
+
       if (!criterionId)
         throw new Error(
-          `Critério '${p_input.criterionNome}' não encontrado no mapa para parâmetro '${p_input.nomeParametro}'`
+          `Critério '${p_input.criterionNome}' não encontrado no mapa para parâmetro '${p_input.nomeParametro || 'N/A'}'`
         );
-      if (p_input.sectorNome && !sectorId)
+      if (p_input.sectorNome && sectorId === undefined)
         throw new Error(
-          `Setor '${p_input.sectorNome}' não encontrado no mapa para parâmetro '${p_input.nomeParametro}'`
+          `Setor '${p_input.sectorNome}' não encontrado no mapa para parâmetro '${p_input.nomeParametro || 'N/A'}'`
         );
-      const { criterionNome, sectorNome, ...paramEntityData } = p_input;
+
+      const { criterionNome, sectorNome, ...paramEntityData } = p_input; // Remove nomes antes de criar
       return {
         ...paramEntityData,
         criterionId,
-        sectorId,
+        sectorId: sectorId === undefined ? null : sectorId,
         createdByUserId: adminUserId,
+        competitionPeriodId: april2025PeriodId, // << USA O ID DO PERÍODO DE ABRIL
       };
     });
-    const paramsToSave = await Promise.all(paramsToSavePromises);
     const savedParams = await parameterRepo.save(
       paramsToSave as DeepPartial<ParameterValueEntity>[]
     );
-    console.log(` -> ${savedParams.length} parâmetros salvos.`);
+    console.log(` -> ${savedParams.length} parâmetros (metas) salvos.`);
+    // ----------------------------------------------------------------
 
-    // --- BUSCAR O PERÍODO DE COMPETIÇÃO PARA O QUAL OS DADOS DE PERFORMANCE SE REFEREM ---
-    // Vamos assumir que todos os dados de performance do mock são para '2025-04'
-    const targetMesAnoForPerformance = '2025-04';
-    const activeCompetitionPeriod = await AppDataSource.getRepository(
-      CompetitionPeriodEntity
-    ).findOneBy({
-      mesAno: targetMesAnoForPerformance,
-      // status: 'ATIVA' // O status pode ser ATIVA ou o que fizer sentido para o mock
-    });
-
-    if (!activeCompetitionPeriod) {
-      throw new Error(
-        `Período de competição ${targetMesAnoForPerformance} não encontrado no seed para popular performance_data.`
-      );
-    }
-    const currentCompetitionPeriodId = activeCompetitionPeriod.id;
+    // --- INSERIR PERFORMANCE DATA MOCK (COM competitionPeriodId) ---
+    // Esta seção pode ser removida se o EtlService for o único responsável por popular performance_data
     console.log(
-      `[Seed] Usando competitionPeriodId: ${currentCompetitionPeriodId} para performance_data.`
+      'Inserindo Dados de Desempenho Mock (com competitionPeriodId)...'
     );
-    // ------------------------------------------------------------------------------------
-
-    console.log('Inserindo Dados de Desempenho...');
     const perfToSavePromises = performanceMockInput.map(async (p_input) => {
       const criterionId = criteriaMap.get(p_input.criterionNome);
       const sectorId = sectorMap.get(p_input.sectorNome);
       if (!criterionId)
         throw new Error(
-          `Critério '${p_input.criterionNome}' não encontrado no mapa para performance`
+          `Critério '${p_input.criterionNome}' não encontrado no mapa para performance mock`
         );
       if (!sectorId)
         throw new Error(
-          `Setor '${p_input.sectorNome}' não encontrado no mapa para performance`
+          `Setor '${p_input.sectorNome}' não encontrado no mapa para performance mock`
         );
+
       const { criterionNome, sectorNome, ...perfEntityData } = p_input;
+
+      // Busca a meta correspondente para targetValue
+      const relatedParam = paramsToSave.find(
+        (param) =>
+          param.criterionId === criterionId &&
+          param.sectorId === sectorId &&
+          param.competitionPeriodId === april2025PeriodId
+      );
+
       return {
         ...perfEntityData,
         criterionId,
         sectorId,
-        competitionPeriodId: currentCompetitionPeriodId,
+        competitionPeriodId: april2025PeriodId,
+        targetValue: relatedParam ? Number(relatedParam.valor) : null, // Pega a meta do mock de parâmetros
       };
     });
     const perfToSave = await Promise.all(perfToSavePromises);
-    const savedPerf = await performanceRepo.save(
+    const savedPerf = await performanceDataRepo.save(
       perfToSave as DeepPartial<PerformanceDataEntity>[]
     );
-    console.log(` -> ${savedPerf.length} registros de desempenho salvos.`);
+    console.log(` -> ${savedPerf.length} registros de desempenho mock salvos.`);
+    // --------------------------------------------------------------
 
+    // --- INSERIR EXPURGOS MOCK (COM competitionPeriodId e IDs de critério/setor corretos) ---
     console.log('Inserindo Eventos de Expurgo Mock...');
     const expurgosToSavePromises = expurgosMockInput.map(async (e_input) => {
       const criterionId = criteriaMap.get(e_input.criterionNome);
@@ -1253,12 +1281,15 @@ async function runSeed() {
         throw new Error(
           `Setor nome '${e_input.sectorNome}' do expurgo não encontrado no mapa.`
         );
+
       const { criterionNome, sectorNome, ...expurgoEntityData } = e_input;
       return {
         ...expurgoEntityData,
         criterionId,
         sectorId,
         registradoPorUserId: adminUserId,
+        competitionPeriodId: april2025PeriodId, // Adiciona o ID do período de Abril
+        // valorAjusteNumerico já deve estar no expurgosMockInput
       };
     });
     const expurgosToSave = await Promise.all(expurgosToSavePromises);
@@ -1266,25 +1297,29 @@ async function runSeed() {
       expurgosToSave as DeepPartial<ExpurgoEventEntity>[]
     );
     console.log(` -> ${savedExpurgos.length} expurgos salvos.`);
+    // ----------------------------------------------------------------------------------
 
+    // --- INSERIR LOGS DE AUDITORIA ---
     console.log('Inserindo Logs de Auditoria...');
-    const logsToSave = auditLogsMock.map((l) => {
+    const logsToSave = auditLogsMock.map((l_input) => {
       const logEntry: DeepPartial<AuditLogEntity> = {
-        actionType: l.actionType,
-        details: l.details,
-        entityType: l.entityType,
+        actionType: l_input.actionType,
+        details: l_input.details,
+        entityType: l_input.entityType,
         entityId:
-          l.entityId !== undefined && l.entityId !== null
-            ? String(l.entityId)
+          l_input.entityId !== undefined && l_input.entityId !== null
+            ? String(l_input.entityId)
             : undefined,
-        justification: l.justification,
-        userId: l.userId ?? adminUserId,
-        userName: l.userName ?? adminUserName,
+        justification: l_input.justification,
+        userId: l_input.userId ?? adminUserId,
+        userName: l_input.userName ?? adminUserName,
+        competitionPeriodId: april2025PeriodId, // Adiciona ID do período aos logs
       };
       return logEntry;
     });
     const savedLogs = await auditLogRepo.save(logsToSave);
     console.log(` -> ${savedLogs.length} logs salvos.`);
+    // ----------------------------------
 
     console.log('Seed executado com sucesso!');
   } catch (error) {
@@ -1299,5 +1334,5 @@ async function runSeed() {
     }
   }
 }
-// ----------------------------------
+
 runSeed();
