@@ -123,35 +123,43 @@ export class CalculationService {
           `\n[CalculationService] Processando critério: ${criterion.nome}`
         );
         const performancesForCriterion: SectorPerformance[] = [];
+        const criterionNameUpper = criterion.nome.toUpperCase();
 
         for (const sector of activeSectors) {
           const perfEntry = performanceEntries.find(
             (p) => p.sectorId === sector.id && p.criterionId === criterion.id
           );
 
-          const realizedValue = perfEntry ? perfEntry.valor : null; // Valor já é pós-expurgo
-          const targetValue = perfEntry ? perfEntry.targetValue! : null; // Meta aplicada pelo ETL
+          const realizedValue = perfEntry?.valor ?? null;
+          const targetValueFromPerf = perfEntry?.targetValue ?? null;
+          let percentVsTarget: number | null | undefined = undefined;
 
-          let percentVsTarget: number | null = null;
-
-          // --- Lógica de Cálculo do Percentual vs Meta ---
-          if (targetValue !== null && realizedValue !== null) {
-            if (targetValue === 0) {
-              // Regra definida: Se Meta=0 e Realizado=0, % = 0%. Se Meta=0 e Realizado > 0, % = Realizado * 100%.
-              percentVsTarget = realizedValue === 0 ? 0 : realizedValue * 100;
-              // (Se Menor é melhor, e Realizado > 0 com Meta 0, isso dará um % alto, que é ruim = OK)
-            } else {
-              percentVsTarget = (realizedValue / targetValue!) * 100;
-            }
-            percentVsTarget = Number(percentVsTarget.toFixed(4)); // Arredonda
-          } else if (realizedValue !== null && targetValue === null) {
-            // Sem meta, como tratar? Por ora, não calculamos percentual.
-            // Poderia ser 100% se menor é melhor e realizado é 0? Ou um valor fixo?
-            console.warn(
-              `  -> Setor ${sector.nome}, Critério ${criterion.nome}: Realizado=${realizedValue}, Meta=NULA. Percentual não calculado.`
+          // --- LÓGICA ESPECIAL PARA FALTA FUNC (ANTES DE CALCULAR % PADRÃO) ---
+          if (
+            criterionNameUpper === 'FALTA FUNC' &&
+            realizedValue !== null &&
+            realizedValue <= 10
+          ) {
+            percentVsTarget = 0; // Força o melhor percentual possível (MENOR É MELHOR)
+            console.log(
+              `  -> Setor ${sector.nome} (FALTA FUNC): Realizado ${realizedValue} <= 10. % para ranking definido como 0.`
             );
           }
-          // TODO: Tratar Realizado Nulo (já é 0 vindo do ETL)
+          // --- FIM LÓGICA ESPECIAL FALTA FUNC ---
+          else if (targetValueFromPerf !== null && realizedValue !== null) {
+            // Cálculo padrão do %
+            if (targetValueFromPerf === 0) {
+              // Regra Meta Zero
+              percentVsTarget = realizedValue === 0 ? 0 : realizedValue * 100;
+            } else {
+              percentVsTarget = (realizedValue / targetValueFromPerf) * 100;
+            }
+            percentVsTarget = Number(percentVsTarget.toFixed(4));
+          } else if (realizedValue !== null && targetValueFromPerf === null) {
+            console.warn(
+              `  -> Setor ${sector.nome}, Critério <span class="math-inline">\{criterion\.nome\}\: Realizado\=</span>{realizedValue}, Meta=NULA. % não calculado.`
+            );
+          }
 
           performancesForCriterion.push({
             sectorId: sector.id,
@@ -163,8 +171,9 @@ export class CalculationService {
               | 'MENOR'
               | null,
             realizedValue: realizedValue,
-            targetValue: targetValue,
+            targetValue: targetValueFromPerf,
             percentVsTarget: percentVsTarget,
+            // Rank e Score serão preenchidos depois
           });
         }
 
