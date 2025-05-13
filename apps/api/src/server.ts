@@ -11,6 +11,7 @@ import { ParameterService } from '@/modules/parameters/parameter.service';
 import { CompetitionPeriodService } from '@/modules/periods/period.service';
 import { RankingService } from '@/modules/ranking/ranking.service';
 import { SectorEntity } from './entity/sector.entity';
+import { UserEntity } from './entity/user.entity';
 
 dotenv.config();
 
@@ -298,6 +299,100 @@ const start = async () => {
       }
     });
 
+    // Endpoint para INICIAR um período de competição
+    fastify.post('/api/periods/:id/start', async (request, reply) => {
+      const params = request.params as { id: string };
+      const periodId = parseInt(params.id, 10);
+      // TODO: Obter o ID do usuário logado (actingUser) quando tivermos autenticação
+      // Por enquanto, vamos simular um usuário admin
+      const mockActingUser = {
+        id: 1,
+        nome: 'Admin Sistema (Mock)',
+      } as UserEntity; // Cuidado com o tipo UserEntity aqui
+
+      fastify.log.info(`POST /api/periods/${periodId}/start solicitado`);
+      if (isNaN(periodId)) {
+        return reply.status(400).send({ message: 'ID do período inválido.' });
+      }
+
+      try {
+        // Garante que o AppDataSource está inicializado ANTES de chamar o serviço
+        // (O serviço também faz isso, mas é uma segurança extra no handler da rota)
+        if (!AppDataSource.isInitialized) await AppDataSource.initialize();
+
+        const updatedPeriod = await competitionPeriodService.startPeriod(
+          periodId,
+          mockActingUser
+        );
+        reply.send(updatedPeriod);
+      } catch (error: any) {
+        fastify.log.error(
+          `Erro em POST /api/periods/${periodId}/start: ${error.message}`
+        );
+        // Enviar um status code mais apropriado dependendo do erro do serviço
+        if (
+          error.message.includes('não encontrado') ||
+          error.message.includes('inválido')
+        ) {
+          reply.status(404).send({ error: error.message });
+        } else if (error.message.includes('não está em status')) {
+          reply.status(409).send({ error: error.message }); // Conflict
+        } else {
+          reply
+            .status(500)
+            .send({
+              error: error.message || 'Erro interno ao iniciar período.',
+            });
+        }
+      }
+    });
+
+    // Endpoint para FECHAR um período de competição
+    fastify.post('/api/periods/:id/close', async (request, reply) => {
+      const params = request.params as { id: string };
+      const periodId = parseInt(params.id, 10);
+      const mockActingUser = {
+        id: 1,
+        nome: 'Admin Sistema (Mock)',
+      } as UserEntity; // Simulação
+
+      fastify.log.info(`POST /api/periods/${periodId}/close solicitado`);
+      if (isNaN(periodId)) {
+        return reply.status(400).send({ message: 'ID do período inválido.' });
+      }
+
+      try {
+        if (!AppDataSource.isInitialized) await AppDataSource.initialize();
+
+        const updatedPeriod = await competitionPeriodService.closePeriod(
+          periodId,
+          mockActingUser
+        );
+        // O método closePeriod já chama o calculationService
+        reply.send(updatedPeriod);
+      } catch (error: any) {
+        fastify.log.error(
+          `Erro em POST /api/periods/${periodId}/close: ${error.message}`
+        );
+        if (
+          error.message.includes('não encontrado') ||
+          error.message.includes('inválido')
+        ) {
+          reply.status(404).send({ error: error.message });
+        } else if (
+          error.message.includes('não está em status') ||
+          error.message.includes('só pode ser fechado após')
+        ) {
+          reply.status(409).send({ error: error.message }); // Conflict
+        } else {
+          reply
+            .status(500)
+            .send({
+              error: error.message || 'Erro interno ao fechar período.',
+            });
+        }
+      }
+    });
     // --- Fim das Rotas ---
 
     // --- Listen ---

@@ -1,14 +1,21 @@
 // apps/api/src/modules/periods/period.service.ts (VERSÃO INICIAL COMPLETA)
 import { AppDataSource } from '@/database/data-source';
 import { CompetitionPeriodEntity } from '@/entity/competition-period.entity';
+import { UserEntity } from '@/entity/user.entity';
 import 'reflect-metadata';
 import { Repository } from 'typeorm'; // Importar operadores
+import { AuditLogService } from '../audit/audit.service';
+import { CalculationService } from '../calculation/calculation.service';
 
 export class CompetitionPeriodService {
   private periodRepo: Repository<CompetitionPeriodEntity>;
+  private calculationService: CalculationService; // Já estava declarado
+  private auditLogService: AuditLogService; // Já estava declarado
 
   constructor() {
     this.periodRepo = AppDataSource.getRepository(CompetitionPeriodEntity);
+    this.calculationService = new CalculationService();
+    this.auditLogService = new AuditLogService();
     console.log(
       '[CompetitionPeriodService] Instanciado e repositório configurado.'
     );
@@ -209,5 +216,137 @@ export class CompetitionPeriodService {
       console.error('[PeriodService] Erro ao buscar todos os períodos:', error);
       throw new Error('Falha ao buscar períodos de competição.');
     }
+  }
+
+  /**
+   * Inicia um período de competição, mudando seu status de 'PLANEJAMENTO' para 'ATIVA'.
+   * @param periodId ID do período a ser iniciado.
+   * @param actingUser Usuário que está realizando a ação.
+   * @returns Promise<CompetitionPeriodEntity> O período atualizado.
+   * @throws Error se o período não for encontrado, não estiver em 'PLANEJAMENTO', ou se as metas não estiverem completas.
+   */
+  async startPeriod(
+    periodId: number,
+    actingUser: UserEntity
+  ): Promise<CompetitionPeriodEntity> {
+    console.log(
+      `[PeriodService] Tentando iniciar período ID: ${periodId} por User ID: ${actingUser.id}`
+    );
+    const period = await this.periodRepo.findOneBy({ id: periodId });
+
+    if (!period) {
+      throw new Error(`Período com ID ${periodId} não encontrado.`);
+    }
+    if (period.status !== 'PLANEJAMENTO') {
+      throw new Error(
+        `Período ${period.mesAno} (ID: ${periodId}) não está em status 'PLANEJAMENTO'. Status atual: ${period.status}.`
+      );
+    }
+
+    // TODO: Validação Avançada - Verificar se TODAS as metas para este período foram cadastradas
+    // Isso envolveria contar os critérios ativos e os setores ativos, e verificar se
+    // existem (critérios.length * setores.length) registros em parameter_values para este periodId.
+    // Por simplicidade para V1 inicial, podemos pular essa validação ou fazer uma mais simples.
+    // Exemplo:
+    // const activeCriteriaCount = await AppDataSource.getRepository(CriterionEntity).count({ where: { ativo: true } });
+    // const activeSectorsCount = await AppDataSource.getRepository(SectorEntity).count({ where: { ativo: true } });
+    // const expectedTargets = activeCriteriaCount * activeSectorsCount;
+    // const currentTargets = await this.parameterRepo.count({ where: { competitionPeriodId: period.id } }); // Supondo que ParameterValueEntity tem competitionPeriodId
+    // if (currentTargets < expectedTargets) {
+    //   throw new Error(`Não é possível iniciar o período ${period.mesAno}. Metas incompletas: <span class="math-inline">\{currentTargets\}/</span>{expectedTargets} definidas.`);
+    // }
+    // console.log(`[PeriodService] Validação de metas para período ${period.mesAno} OK.`);
+
+    period.status = 'ATIVA';
+    const updatedPeriod = await this.periodRepo.save(period);
+    console.log(
+      `[PeriodService] Período ${updatedPeriod.mesAno} (ID: ${updatedPeriod.id}) iniciado com sucesso.`
+    );
+
+    // TODO: Registrar no AuditLog
+    // await this.auditLogService.registerLog({
+    //   actionType: 'PERIODO_INICIADO',
+    //   entityType: 'CompetitionPeriodEntity',
+    //   entityId: updatedPeriod.id,
+    //   details: { mesAno: updatedPeriod.mesAno, novoStatus: 'ATIVA' },
+    //   userId: actingUser.id,
+    //   userName: actingUser.nome,
+    // });
+
+    return updatedPeriod;
+  }
+
+  /**
+   * Fecha um período de competição, mudando seu status de 'ATIVA' para 'FECHADA'.
+   * Dispara o cálculo final da premiação para este período.
+   * @param periodId ID do período a ser fechado.
+   * @param actingUser Usuário que está realizando a ação.
+   * @returns Promise<CompetitionPeriodEntity> O período atualizado.
+   * @throws Error se o período não for encontrado, não estiver em 'ATIVA', ou se a data atual for anterior à data de fim do período.
+   */
+  async closePeriod(
+    periodId: number,
+    actingUser: UserEntity
+  ): Promise<CompetitionPeriodEntity> {
+    console.log(
+      `[PeriodService] Tentando fechar período ID: ${periodId} por User ID: ${actingUser.id}`
+    );
+    const period = await this.periodRepo.findOneBy({ id: periodId });
+
+    if (!period) {
+      throw new Error(`Período com ID ${periodId} não encontrado.`);
+    }
+    if (period.status !== 'ATIVA') {
+      throw new Error(
+        `Período ${period.mesAno} (ID: ${periodId}) não está em status 'ATIVA'. Status atual: ${period.status}.`
+      );
+    }
+
+    // Validação da Data: Só pode fechar se a data de fim do período já passou ou é hoje.
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Zera a hora para comparar apenas a data
+    const periodEndDate = new Date(period.dataFim); // Assume que dataFim é 'YYYY-MM-DD'
+    periodEndDate.setDate(periodEndDate.getDate() + 1); // Para incluir o dia todo
+
+    // Ajuste para comparar corretamente as datas, considerando apenas a parte da data
+    const periodEndDateDay = new Date(period.dataFim + 'T00:00:00'); // Adiciona hora para evitar problemas de fuso na comparação <
+
+    if (today < periodEndDateDay) {
+      // Se hoje ainda é ANTES do dia seguinte ao fim do período
+      throw new Error(
+        `Período ${period.mesAno} só pode ser fechado após ${period.dataFim}. Data atual: ${today.toISOString().split('T')[0]}`
+      );
+    }
+
+    period.status = 'FECHADA';
+    period.fechadaPorUserId = actingUser.id;
+    period.fechadaEm = new Date(); // Timestamp do fechamento
+    const updatedPeriod = await this.periodRepo.save(period);
+    console.log(
+      `[PeriodService] Período ${updatedPeriod.mesAno} (ID: ${updatedPeriod.id}) fechado com sucesso.`
+    );
+
+    // DISPARAR O CÁLCULO DA PREMIAÇÃO
+    console.log(
+      `[PeriodService] Disparando cálculo final para o período ${updatedPeriod.mesAno}...`
+    );
+    await this.calculationService.calculateAndSavePeriodRanking(
+      updatedPeriod.mesAno
+    );
+    console.log(
+      `[PeriodService] Cálculo para ${updatedPeriod.mesAno} concluído após fechamento.`
+    );
+
+    // TODO: Registrar no AuditLog
+    // await this.auditLogService.registerLog({
+    //   actionType: 'PERIODO_FECHADO',
+    //   entityType: 'CompetitionPeriodEntity',
+    //   entityId: updatedPeriod.id,
+    //   details: { mesAno: updatedPeriod.mesAno, novoStatus: 'FECHADA' },
+    //   userId: actingUser.id,
+    //   userName: actingUser.nome,
+    // });
+
+    return updatedPeriod;
   }
 }
