@@ -204,20 +204,27 @@ export class EtlService {
                 0
               );
               break;
-            // Lógica para buscar dados RAW de FALTA FUNCIONÁRIO
-            case 'FALTA FUNCIONARIO': // Assumindo que o nome no mock/criteria é este
-            case 'ATESTADO': // Assumindo que o nome no mock/criteria é este
+            // Lógica para buscar dados RAW de FALTA FUNCIONÁRIO / ATESTADO
+            // Estes dois vêm da mesma tabela raw e são diferenciados pelo occurrenceType
+            case 'FALTA FUNC': // Use o nome EXATO do seu critério
+            case 'ATESTADO FUNC': // Use o nome EXATO do seu critério (ex: ATESTADO ou ATESTADO FUNC)
               const rawAusenciaData = await this.rawAusenciaRepo.find({
                 where: {
                   sectorName: sector.nome,
-                  occurrenceType: criterionNameUpper as any,
+                  // O occurrenceType na raw_oracle_ausencias já deve ser 'FALTA FUNC' ou 'ATESTADO FUNC'
+                  // Portanto, o criterionNameUpper deve bater EXATAMENTE com um desses.
+                  occurrenceType: criterionNameUpper as
+                    | 'FALTA FUNC'
+                    | 'ATESTADO FUNC',
                   metricDate: Between(dataInicio, dataFim),
                 },
               });
               totalRealizadoBruto = rawAusenciaData.reduce(
-                (sum, item) => sum + item.employeeCount,
+                (sum, item) => sum + (Number(item.employeeCount) || 0),
                 0
               );
+              // TODO: Definir se há expurgos para Falta Funcionario / Atestado
+              // Por enquanto, totalExpurgado permanece 0 para eles.
               break;
             // Lógica para buscar dados RAW de COLISÃO
             case 'COLISÃO':

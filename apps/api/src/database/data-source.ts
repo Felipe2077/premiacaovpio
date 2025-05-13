@@ -6,6 +6,8 @@ import path from 'path'; // Importar path
 import 'reflect-metadata';
 import { DataSource } from 'typeorm';
 import { AuditLogEntity } from '../entity/audit-log.entity';
+import { CriterionScoreEntity } from '../entity/calculation/criterion-score.entity';
+import { FinalRankingEntity } from '../entity/calculation/final-ranking.entity';
 import { CompetitionPeriodEntity } from '../entity/competition-period.entity';
 import { CriterionEntity } from '../entity/criterion.entity';
 import { ExpurgoEventEntity } from '../entity/expurgo-event.entity';
@@ -78,6 +80,8 @@ export const AppDataSource = new DataSource({
     RawOracleFleetPerformanceEntity,
     RawOracleKmOciosaComponentsEntity,
     RawOracleIpkCalculadoEntity,
+    CriterionScoreEntity,
+    FinalRankingEntity,
   ],
   migrations: [],
   subscribers: [],
