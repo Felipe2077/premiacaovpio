@@ -1,7 +1,7 @@
 // apps/api/src/modules/etl/etl.service.ts (EXPANDIDO)
 import { AppDataSource } from '@/database/data-source';
 import 'reflect-metadata';
-import { Between, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm'; // Adicionado MoreThanOrEqual
+import { Between, Repository } from 'typeorm'; // Adicionado MoreThanOrEqual
 import { MySqlEtlService } from './mysql-etl.service';
 import { OracleEtlService } from './oracle-etl.service';
 
@@ -359,34 +359,35 @@ export class EtlService {
           );
 
           // Buscar Meta
-          const meta = await this.parameterRepo.findOne({
-            where: {
+          const meta = await this.parameterRepo
+            .createQueryBuilder('param')
+            .where('param.criterionId = :criterionId', {
               criterionId: criterion.id,
-              sectorId: sector.id,
-              dataInicioEfetivo: LessThanOrEqual(dataFim),
-              dataFimEfetivo: MoreThanOrEqual(dataInicio),
-            },
-            order: { dataInicioEfetivo: 'DESC' },
-          });
-          if (
-            !meta &&
-            criterionNameUpper !== 'KM OCIOSA' &&
-            criterionNameUpper !== 'IPK' &&
-            criterionNameUpper !== 'MEDIA KM/L'
-          ) {
-            // Alguns critérios podem não ter metas diretas
-            console.warn(
-              `  -> Meta NÃO Encontrada para ${criterion.nome} / ${sector.nome}. Pulando.`
-            );
-            // continue; // Ou define meta como 0/null e continua?
-          }
+            })
+            .andWhere('param.sectorId = :sectorId', { sectorId: sector.id })
+            .andWhere('param.dataInicioEfetivo <= :periodEndDate', {
+              periodEndDate: dataFim,
+            })
+            .andWhere(
+              '(param.dataFimEfetivo IS NULL OR param.dataFimEfetivo >= :periodStartDate)',
+              { periodStartDate: dataInicio }
+            )
+            .orderBy('param.dataInicioEfetivo', 'DESC') // Pega a mais recente que satisfaz
+            .getOne();
+
           valorMeta =
             meta && meta.valor !== null && meta.valor !== undefined
               ? Number(meta.valor)
               : null;
-          console.log(
-            `  -> Meta Encontrada: ${valorMeta !== null ? valorMeta : 'NENHUMA'}`
-          );
+
+          if (valorMeta === null) {
+            // Se valorMeta AINDA é null após a busca
+            console.warn(
+              `  -> Meta NÃO Encontrada (ou valor da meta é nulo) para ${criterion.nome} / ${sector.nome}.`
+            );
+          } else {
+            console.log(`  -> Meta Encontrada: ${valorMeta}`);
+          }
 
           // Buscar e Aplicar Expurgos
           // Aplicável apenas para Quebra, Defeito (KM Ociosa já foi tratada acima)
