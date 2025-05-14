@@ -89,7 +89,7 @@ const start = async () => {
       }
       // -----------------------------------------
 
-      // --- NOVO: Tentar Sincronização Explícita ---
+      // --- Tentar Sincronização Explícita ---
       try {
         console.log(
           '==> Tentando sincronização explícita do schema (AppDataSource.synchronize())...'

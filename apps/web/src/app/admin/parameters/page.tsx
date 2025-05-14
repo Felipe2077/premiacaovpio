@@ -1,4 +1,4 @@
-// apps/web/src/app/admin/parameters/page.tsx (VERSÃO COMPLETA CORRIGIDA V3)
+// apps/web/src/app/admin/parameters/page.tsx (AJUSTADO PARA USAR useParameters)
 'use client';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -38,7 +38,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'; // Removido TableCaption não usado aqui
+} from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Tooltip,
@@ -46,109 +46,61 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import type { ParameterValueEntity } from '@/entity/parameter-value.entity';
-import { formatDate } from '@/lib/utils';
-import type { Criterio, Setor } from '@sistema-premiacao/shared-types';
+// A entidade ParameterValueEntity do backend não deve ser importada diretamente no frontend.
+// Usaremos ParameterValueAPI do nosso hook ou uma interface local.
+// import type { ParameterValueEntity } from '@/entity/parameter-value.entity';
+import { formatDate } from '@/lib/utils'; // Mantenha sua função formatDate
+import type { Criterio, Setor } from '@sistema-premiacao/shared-types'; // Bom!
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, History } from 'lucide-react';
-import React, { useState } from 'react';
+import { AlertCircle, Edit, History, PlusCircle, Trash2 } from 'lucide-react'; // Importar PlusCircle
+import React, { useState } from 'react'; // Adicionar useEffect se necessário
+import { CreateParameterDto } from 'shared-types'; // Importar DTO de shared-types
 import { Toaster, toast } from 'sonner';
 
-// --- Funções de Fetch COMPLETAS ---
-const fetchCurrentParameters = async (): Promise<ParameterValueEntity[]> => {
-  const url = 'http://localhost:3001/api/parameters/current';
-  console.log(`Workspace: Chamando ${url}`);
-  try {
-    const res = await fetch(url);
-    console.log(`Workspace: Status para ${url}: ${res.status}`);
-    if (!res.ok) {
-      throw new Error(`Erro ${res.status} ao buscar parâmetros`);
-    }
-    const data = await res.json();
-    console.log(`Workspace OK Parsed para ${url}: ${data?.length} items`);
-    return Array.isArray(data) ? data : [];
-  } catch (error) {
-    console.error(`Workspace EXCEPTION para ${url}:`, error);
-    if (error instanceof Error) throw error;
-    throw new Error('Erro desconhecido durante fetch ou parse de parâmetros.');
-  }
-};
+// --- Importar o hook e o tipo de retorno da API ---
+import { ParameterValueAPI, useParameters } from '@/hooks/useParameters'; // Ajuste o path se o hook estiver em outro lugar
+import { CompetitionPeriod } from '@/types'; // Supondo que você tem um tipo para Período no frontend
 
+// --- Funções de Fetch para Dropdowns (MANTENHA AS SUAS SE JÁ FUNCIONAM BEM) ---
+// Ou mova-as para um hook dedicado (ex: useDropdownData.ts)
 const fetchActiveCriteriaSimple = async (): Promise<
   Pick<Criterio, 'id' | 'nome'>[]
 > => {
   const url = 'http://localhost:3001/api/criteria/active';
-  console.log(`Workspace: Chamando ${url}`);
-  try {
-    const res = await fetch(url);
-    console.log(`Workspace: Status para ${url}: ${res.status}`);
-    if (!res.ok) {
-      throw new Error(`Erro ${res.status} ao buscar critérios ativos`);
-    }
-    const data = await res.json();
-    console.log(`Workspace OK Parsed para ${url}: ${data?.length} items`);
-    if (
-      !Array.isArray(data) ||
-      !data.every(
-        (item) => typeof item.id === 'number' && typeof item.nome === 'string'
-      )
-    ) {
-      throw new Error('Resposta inválida da API de critérios.');
-    }
-    return data;
-  } catch (error) {
-    console.error(`Workspace EXCEPTION para ${url}:`, error);
-    if (error instanceof Error) throw error;
-    throw new Error('Erro desconhecido durante fetch ou parse de critérios.');
-  }
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Erro ${res.status} ao buscar critérios`);
+  return res.json();
 };
 
 const fetchActiveSectorsSimple = async (): Promise<
   Pick<Setor, 'id' | 'nome'>[]
 > => {
   const url = 'http://localhost:3001/api/sectors/active';
-  console.log(`Workspace: Chamando ${url}`);
-  try {
-    const res = await fetch(url);
-    console.log(`Workspace: Status para ${url}: ${res.status}`);
-    if (!res.ok) {
-      throw new Error(`Erro ${res.status} ao buscar setores ativos`);
-    }
-    const data = await res.json();
-    console.log(`Workspace OK Parsed para ${url}: ${data?.length} items`);
-    if (
-      !Array.isArray(data) ||
-      !data.every(
-        (item) => typeof item.id === 'number' && typeof item.nome === 'string'
-      )
-    ) {
-      throw new Error('Resposta inválida da API de setores.');
-    }
-    return data;
-  } catch (error) {
-    console.error(`Workspace EXCEPTION para ${url}:`, error);
-    if (error instanceof Error) throw error;
-    throw new Error('Erro desconhecido durante fetch ou parse de setores.');
-  }
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Erro ${res.status} ao buscar setores`);
+  return res.json();
+};
+
+// Função para buscar períodos (para o formulário e seletor de período da página)
+const fetchCompetitionPeriods = async (): Promise<CompetitionPeriod[]> => {
+  const url = 'http://localhost:3001/api/periods'; // Endpoint que lista períodos
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Erro ${res.status} ao buscar períodos`);
+  return res.json();
 };
 
 // --- Componente da Página ---
 export default function ParametersPage() {
-  // Estados dos Modais
   const [isParamModalOpen, setIsParamModalOpen] = useState(false);
-  const [historyParam, setHistoryParam] = useState<ParameterValueEntity | null>(
+  const [historyParam, setHistoryParam] = useState<ParameterValueAPI | null>(
     null
-  );
+  ); // Usar ParameterValueAPI
 
-  // Queries para buscar dados
-  const {
-    data: parameters,
-    isLoading: isLoadingParams,
-    error: errorParams,
-  } = useQuery<ParameterValueEntity[]>({
-    queryKey: ['currentParameters'],
-    queryFn: fetchCurrentParameters,
-  });
+  // Estado para o período selecionado para exibição das metas
+  const [selectedPeriodMesAno, setSelectedPeriodMesAno] =
+    useState<string>('2025-04'); // Mês/Ano inicial
+
+  // Busca dados para os dropdowns do formulário e seletor de período da página
   const { data: activeCriteria, isLoading: isLoadingCriteria } = useQuery({
     queryKey: ['activeCriteriaSimple'],
     queryFn: fetchActiveCriteriaSimple,
@@ -159,51 +111,186 @@ export default function ParametersPage() {
     queryFn: fetchActiveSectorsSimple,
     staleTime: Infinity,
   });
+  const { data: competitionPeriods, isLoading: isLoadingPeriods } = useQuery({
+    queryKey: ['competitionPeriods'],
+    queryFn: fetchCompetitionPeriods,
+    staleTime: 1000 * 60 * 5, // Cache por 5 minutos
+  });
 
-  // Handler Fake para Salvar Parâmetro
-  const handleSaveParameter = (event: React.FormEvent) => {
+  // --- USAR O NOVO HOOK useParameters ---
+  const {
+    parameters, // Esta será a lista de ParameterValueAPI
+    isLoadingParameters,
+    parametersError,
+    // refetchParameters, // Para atualizar a lista
+    createParameter,
+    isCreatingParameter,
+    // createParameterError // Para mostrar erros da criação
+    getParameterHistory,
+  } = useParameters(
+    selectedPeriodMesAno, // Passa o período selecionado
+    undefined, // sectorId filter (opcional)
+    undefined, // criterionId filter (opcional)
+    true // onlyActive (listar apenas metas vigentes por padrão)
+  );
+  // Remover a query antiga:
+  // const { data: parameters, isLoading: isLoadingParams, error: errorParams } = useQuery<ParameterValueEntity[]> ...
+
+  // Estados para o formulário (mantenha ou adapte para react-hook-form)
+  const [formNomeParametro, setFormNomeParametro] = useState('');
+  const [formValor, setFormValor] = useState('');
+  const [formCriterionId, setFormCriterionId] = useState<string | undefined>();
+  const [formSectorId, setFormSectorId] = useState<string | undefined>(); // 'null' para geral, ID para específico
+  const [formCompetitionPeriodId, setFormCompetitionPeriodId] = useState<
+    string | undefined
+  >(
+    competitionPeriods?.find((p) => p.status === 'PLANEJAMENTO')?.id.toString() // Tenta pré-selecionar período em PLANEJAMENTO
+  );
+  const [formJustificativa, setFormJustificativa] = useState('');
+  const [formDataInicio, setFormDataInicio] = useState(
+    new Date().toISOString().split('T')[0]
+  );
+
+  const handleSaveParameter = async (event: React.FormEvent) => {
     event.preventDefault();
-    toast.success('Parâmetro salvo! (Simulação)');
-    setIsParamModalOpen(false);
+    if (
+      !formCompetitionPeriodId ||
+      !formCriterionId ||
+      !formValor ||
+      !formDataInicio ||
+      !formJustificativa
+    ) {
+      toast.error('Preencha todos os campos obrigatórios para a meta.');
+      return;
+    }
+
+    const dataToSave: CreateParameterDto = {
+      nomeParametro: formNomeParametro || undefined, // Opcional, serviço pode gerar
+      valor: formValor,
+      dataInicioEfetivo: formDataInicio,
+      criterionId: parseInt(formCriterionId, 10),
+      sectorId:
+        formSectorId === 'null' || formSectorId === undefined
+          ? null
+          : parseInt(formSectorId, 10),
+      competitionPeriodId: parseInt(formCompetitionPeriodId, 10),
+      justificativa: formJustificativa,
+    };
+
+    try {
+      toast.promise(createParameter(dataToSave), {
+        loading: 'Salvando nova meta...',
+        success: (savedParam) => {
+          setIsParamModalOpen(false);
+          // Limpar formulário
+          setFormNomeParametro('');
+          setFormValor('');
+          setFormCriterionId(undefined);
+          setFormSectorId(undefined);
+          return `Meta "${savedParam.nomeParametro}" salva com sucesso!`;
+        },
+        error: (err: typeof error) => err!.message || 'Falha ao salvar meta.',
+      });
+    } catch (error) {
+      // O hook useMutation já lida com o log do erro, o toast acima mostra ao usuário.
+      console.log(error);
+    }
   };
 
-  // Handler para abrir modal de histórico
-  const handleShowHistory = (param: ParameterValueEntity) => {
-    setHistoryParam(param);
+  const [parameterHistoryData, setParameterHistoryData] = useState<
+    ParameterValueAPI[]
+  >([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  // historyParam já existe no seu código
+
+  const handleShowHistory = async (param: ParameterValueAPI) => {
+    if (!param.competitionPeriodId || !param.criterionId) {
+      toast.error(
+        'Informações da meta (período ou critério) estão incompletas para buscar o histórico.'
+      );
+      setHistoryParam(param); // Abre o modal mesmo com erro para mostrar a msg
+      setParameterHistoryData([]);
+      return;
+    }
+    setIsLoadingHistory(true);
+    setHistoryParam(param); // Para o título do modal e para ter os IDs
+    try {
+      // sectorId pode ser null para metas gerais, o hook/API já trata isso
+      const history = await getParameterHistory(
+        param.competitionPeriodId,
+        param.criterionId,
+        param.sectorId
+      );
+      setParameterHistoryData(history || []); // Garante que é um array
+    } catch (e: any) {
+      // Erro já deve ser tratado e notificado pelo toast no hook getParameterHistory
+      setParameterHistoryData([]); // Limpa em caso de erro
+      console.error('Erro ao carregar histórico na página:', e.message);
+    }
+    setIsLoadingHistory(false);
   };
 
   const todayStr = new Date().toISOString().split('T')[0];
-  // Prioriza erro dos parâmetros para a tabela principal, mas considera outros para loading geral talvez
-  const isLoading = isLoadingParams; // Loading principal é o da tabela
-  const error = errorParams;
+  const isLoading =
+    isLoadingParameters ||
+    isLoadingCriteria ||
+    isLoadingSectors ||
+    isLoadingPeriods;
+  const error = parametersError; // Focar no erro de carregar a lista de parâmetros
 
   return (
     <TooltipProvider>
-      {/* Toaster precisa estar em algum lugar (aqui ou no layout) */}
       <Toaster position='top-right' richColors />
       <div className='space-y-6'>
         <h1 className='text-2xl font-bold'>Gerenciamento de Parâmetros</h1>
-        {/* Mostra erro principal se houver */}
-        {error && !isLoading && (
-          <Alert variant='destructive' className='mb-4'>
-            <AlertCircle className='h-4 w-4' />
-            <AlertTitle>Erro ao Carregar Parâmetros</AlertTitle>
-            <AlertDescription>
-              {error instanceof Error ? error.message : 'Erro desconhecido'}
-            </AlertDescription>
-          </Alert>
-        )}
-        {/* Card de Parâmetros */}
+
+        {/* Seletor de Período para a Tabela */}
+        <div className='mb-4 flex items-center space-x-2'>
+          <Label htmlFor='period-selector-page'>Período da Premiação:</Label>
+          <Select
+            value={selectedPeriodMesAno}
+            onValueChange={(value) => setSelectedPeriodMesAno(value)}
+            disabled={isLoadingPeriods}
+            name='period-selector-page'
+          >
+            <SelectTrigger className='w-[180px]'>
+              <SelectValue
+                placeholder={
+                  isLoadingPeriods ? 'Carregando...' : 'Selecione o Período'
+                }
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {competitionPeriods?.map((period) => (
+                <SelectItem key={period.id} value={period.mesAno}>
+                  {period.mesAno} ({period.status})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {error &&
+          !isLoadingParameters && ( // Mostra erro se houver ao carregar lista
+            <Alert variant='destructive' className='mb-4'>
+              <AlertCircle className='h-4 w-4' />
+              <AlertTitle>Erro ao Carregar Metas do Período</AlertTitle>
+              <AlertDescription>{error.message}</AlertDescription>
+            </Alert>
+          )}
+
         <Card>
           <CardHeader>
             <div className='flex justify-between items-start sm:items-center flex-col sm:flex-row gap-2'>
               <div>
-                <CardTitle>Parâmetros Atuais</CardTitle>
+                <CardTitle>
+                  Metas para {selectedPeriodMesAno || '...'}
+                </CardTitle>
                 <CardDescription>
-                  Regras de negócio e metas vigentes para a premiação.
+                  Regras de negócio e metas vigentes para a premiação no período
+                  selecionado.
                 </CardDescription>
               </div>
-              {/* --- Botão e Modal para Novo Parâmetro --- */}
               <Dialog
                 open={isParamModalOpen}
                 onOpenChange={setIsParamModalOpen}
@@ -211,45 +298,86 @@ export default function ParametersPage() {
                 <DialogTrigger asChild>
                   <Button
                     size='sm'
-                    disabled={isLoadingCriteria || isLoadingSectors}
-                    className='cursor-pointer'
+                    disabled={
+                      isLoadingCriteria ||
+                      isLoadingSectors ||
+                      isLoadingPeriods ||
+                      isCreatingParameter
+                    }
                   >
-                    + Novo Parâmetro/Meta
+                    <PlusCircle className='mr-2 h-4 w-4' /> Nova Meta
                   </Button>
                 </DialogTrigger>
                 <DialogContent className='sm:max-w-[500px]'>
-                  {' '}
-                  {/* Largura padrão */}
                   <DialogHeader>
-                    <DialogTitle>Definir Novo Parâmetro/Meta</DialogTitle>
+                    <DialogTitle>Definir Nova Meta</DialogTitle>
                     <DialogDescription>
                       Preencha os detalhes. A vigência começará na data de
-                      início informada. A justificativa é obrigatória.
+                      início informada.
                     </DialogDescription>
                   </DialogHeader>
-                  {/* --- FORMULÁRIO COMPLETO --- */}
+                  {/* --- FORMULÁRIO --- */}
                   <form onSubmit={handleSaveParameter}>
                     <div className='grid gap-4 py-4'>
-                      {/* Nome Parâmetro */}
+                      {/* Período de Competição (Select) */}
+                      <div className='grid grid-cols-4 items-center gap-4'>
+                        <Label htmlFor='param-period' className='text-right'>
+                          Período
+                        </Label>
+                        <Select
+                          name='param-period'
+                          required
+                          value={formCompetitionPeriodId}
+                          onValueChange={setFormCompetitionPeriodId}
+                          disabled={isLoadingPeriods}
+                        >
+                          <SelectTrigger className='col-span-3'>
+                            <SelectValue
+                              placeholder={
+                                isLoadingPeriods
+                                  ? 'Carregando...'
+                                  : 'Selecione...'
+                              }
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {competitionPeriods
+                              ?.filter((p) => p.status === 'PLANEJAMENTO')
+                              .map(
+                                (
+                                  p // Sugere apenas períodos em PLANEJAMENTO
+                                ) => (
+                                  <SelectItem key={p.id} value={String(p.id)}>
+                                    {p.mesAno} ({p.status})
+                                  </SelectItem>
+                                )
+                              )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {/* Nome Parâmetro (Opcional, pode ser gerado) */}
                       <div className='grid grid-cols-4 items-center gap-4'>
                         <Label htmlFor='param-name' className='text-right'>
-                          Nome
+                          Nome (Opc)
                         </Label>
                         <Input
                           id='param-name'
-                          placeholder='Ex: META_IPK_GAMA, PESO_CRITERIO_X'
+                          value={formNomeParametro}
+                          onChange={(e) => setFormNomeParametro(e.target.value)}
+                          placeholder='Ex: META_IPK_GAMA'
                           className='col-span-3'
-                          required
                         />
                       </div>
                       {/* Valor */}
                       <div className='grid grid-cols-4 items-center gap-4'>
                         <Label htmlFor='param-value' className='text-right'>
-                          Valor
+                          Valor*
                         </Label>
                         <Input
                           id='param-value'
-                          placeholder='Ex: 3.1, 150, true'
+                          value={formValor}
+                          onChange={(e) => setFormValor(e.target.value)}
+                          placeholder='Ex: 3.1, 150'
                           className='col-span-3'
                           required
                         />
@@ -257,21 +385,25 @@ export default function ParametersPage() {
                       {/* Critério (Select) */}
                       <div className='grid grid-cols-4 items-center gap-4'>
                         <Label htmlFor='param-crit' className='text-right'>
-                          Critério (Opc)
+                          Critério*
                         </Label>
-                        <Select name='param-crit' disabled={isLoadingCriteria}>
+                        <Select
+                          name='param-crit'
+                          required
+                          value={formCriterionId}
+                          onValueChange={setFormCriterionId}
+                          disabled={isLoadingCriteria}
+                        >
                           <SelectTrigger className='col-span-3'>
                             <SelectValue
                               placeholder={
                                 isLoadingCriteria
                                   ? 'Carregando...'
-                                  : 'Geral ou Específico...'
+                                  : 'Selecione...'
                               }
                             />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value='null'>Nenhum (Geral)</SelectItem>
-                            {/* Popula com dados da API */}
                             {activeCriteria?.map((c) => (
                               <SelectItem key={c.id} value={String(c.id)}>
                                 {c.nome}
@@ -285,7 +417,12 @@ export default function ParametersPage() {
                         <Label htmlFor='param-setor' className='text-right'>
                           Setor (Opc)
                         </Label>
-                        <Select name='param-setor' disabled={isLoadingSectors}>
+                        <Select
+                          name='param-setor'
+                          value={formSectorId}
+                          onValueChange={setFormSectorId}
+                          disabled={isLoadingSectors}
+                        >
                           <SelectTrigger className='col-span-3'>
                             <SelectValue
                               placeholder={
@@ -297,7 +434,6 @@ export default function ParametersPage() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value='null'>Nenhum (Geral)</SelectItem>
-                            {/* Popula com dados da API */}
                             {activeSectors?.map((s) => (
                               <SelectItem key={s.id} value={String(s.id)}>
                                 {s.nome}
@@ -309,12 +445,13 @@ export default function ParametersPage() {
                       {/* Início Vigência */}
                       <div className='grid grid-cols-4 items-center gap-4'>
                         <Label htmlFor='param-date' className='text-right'>
-                          Início Vigência
+                          Início Vigência*
                         </Label>
                         <Input
                           id='param-date'
                           type='date'
-                          defaultValue={todayStr}
+                          value={formDataInicio}
+                          onChange={(e) => setFormDataInicio(e.target.value)}
                           className='col-span-3'
                           required
                         />
@@ -322,266 +459,232 @@ export default function ParametersPage() {
                       {/* Justificativa */}
                       <div className='grid grid-cols-4 items-center gap-4'>
                         <Label htmlFor='param-just' className='text-right'>
-                          Justificativa
+                          Justificativa*
                         </Label>
                         <Textarea
                           id='param-just'
-                          placeholder='Detalhe o motivo da criação/alteração...'
+                          value={formJustificativa}
+                          onChange={(e) => setFormJustificativa(e.target.value)}
+                          placeholder='Detalhe o motivo...'
                           className='col-span-3'
                           required
                         />
                       </div>
                     </div>
                     <DialogFooter>
-                      <Button type='submit'>Salvar (Simulação)</Button>
+                      <Button
+                        type='button'
+                        variant='outline'
+                        onClick={() => setIsParamModalOpen(false)}
+                      >
+                        Cancelar
+                      </Button>
+                      <Button type='submit' disabled={isCreatingParameter}>
+                        {isCreatingParameter
+                          ? 'Salvando...'
+                          : 'Salvar Parâmetro'}
+                      </Button>
                     </DialogFooter>
                   </form>
-                  {/* --- FIM FORMULÁRIO COMPLETO --- */}
                 </DialogContent>
               </Dialog>
-              {/* --- FIM Botão/Modal NOVO PARÂMETRO --- */}
             </div>
-            {/* Filtros Placeholders */}
-            <div className='flex gap-2 pt-4'>
-              <Input placeholder='Buscar...' className='max-w-xs' disabled />
-              <Select disabled>
-                <SelectTrigger className='w-[180px]'>
-                  <SelectValue placeholder='Filtrar...' />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value='null'>...</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Filtros Placeholders - TODO: Implementar */}
+            {/* ... */}
           </CardHeader>
-          {/* ========================================================== */}
-          {/* GARANTIR QUE A TABELA ESTEJA DENTRO DO CardContent    */}
-          {/* ========================================================== */}
           <CardContent>
-            {isLoadingParams && (
+            {isLoadingParameters && (
               <div className='space-y-3 mt-2'>
-                <div className='flex justify-between space-x-2'>
-                  <Skeleton className='h-5 flex-1' />
-                  <Skeleton className='h-5 flex-1' />
-                  <Skeleton className='h-5 flex-1' />
-                  <Skeleton className='h-5 flex-1' />
-                </div>
+                <Skeleton className='h-8 w-1/4 mb-2' />
                 {[...Array(5)].map((_, i) => (
-                  <Skeleton key={i} className='h-8 w-full' />
+                  <Skeleton key={i} className='h-10 w-full mb-1' />
                 ))}
               </div>
             )}
-            {!isLoadingParams && errorParams && (
-              /* Erro já tratado acima, pode remover aqui se quiser */ <p className='text-red-500'>
-                Erro ao carregar.
-              </p>
+            {!isLoadingParameters && parametersError && (
+              <Alert variant='destructive'>
+                <AlertCircle className='h-4 w-4' />
+                <AlertTitle>Erro!</AlertTitle>
+                <AlertDescription>{parametersError.message}</AlertDescription>
+              </Alert>
             )}
-            {!isLoadingParams &&
-              !errorParams &&
-              parameters && ( // Renderiza a tabela AQUI DENTRO
-                <Table>
-                  <TableHeader>
+            {!isLoadingParameters && !parametersError && parameters && (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nome</TableHead> <TableHead>Valor</TableHead>
+                    <TableHead>Critério</TableHead> <TableHead>Setor</TableHead>
+                    <TableHead>Início</TableHead> <TableHead>Fim</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Justificativa</TableHead>
+                    <TableHead className='text-right'>Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {parameters.length === 0 && (
                     <TableRow>
-                      <TableHead>Parâmetro</TableHead>
-                      <TableHead>Valor</TableHead>
-                      <TableHead>Critério</TableHead>
-                      <TableHead>Setor</TableHead>
-                      <TableHead>Início</TableHead>
-                      <TableHead>Fim</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Justificativa</TableHead>
-                      <TableHead>Hist.</TableHead>
+                      <TableCell colSpan={9} className='text-center h-24'>
+                        Nenhuma meta encontrada para este período.
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {parameters.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={9} className='text-center h-24'>
-                          Nenhum parâmetro.
+                  )}
+                  {parameters.map((param) => {
+                    const isVigente =
+                      !param.dataFimEfetivo ||
+                      new Date(param.dataFimEfetivo) >= new Date(todayStr);
+                    return (
+                      <TableRow key={param.id}>
+                        <TableCell className='font-medium'>
+                          {param.nomeParametro}
+                        </TableCell>
+                        <TableCell>{param.valor}</TableCell>
+                        <TableCell>{param.criterio?.nome || '-'}</TableCell>
+                        <TableCell>{param.setor?.nome || 'Geral'}</TableCell>
+                        <TableCell>
+                          {formatDate(param.dataInicioEfetivo)}
+                        </TableCell>
+                        <TableCell>
+                          {param.dataFimEfetivo
+                            ? formatDate(param.dataFimEfetivo)
+                            : 'Vigente'}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={isVigente ? 'default' : 'outline'}>
+                            {isVigente ? 'Ativa' : 'Expirada'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className='max-w-[150px] truncate'>
+                          <Tooltip>
+                            <TooltipTrigger className='cursor-help'>
+                              {param.justificativa?.substring(0, 20) || '-'}
+                              {param.justificativa &&
+                              param.justificativa.length > 20
+                                ? '...'
+                                : ''}
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {param.justificativa}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TableCell>
+                        <TableCell className='text-right'>
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            onClick={() => handleShowHistory(param)}
+                            aria-label='Histórico'
+                          >
+                            <History className='h-4 w-4' />
+                          </Button>
+                          {/* TODO: Adicionar botões de Editar e Deletar que abrem modais/chamam funções */}
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            disabled
+                            /* onClick={() => handleOpenEditModal(param)} */ aria-label='Editar'
+                          >
+                            <Edit className='h-4 w-4' />
+                          </Button>
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            disabled
+                            /* onClick={() => handleOpenDeleteModal(param)} */ aria-label='Deletar'
+                          >
+                            <Trash2 className='h-4 w-4 text-red-500' />
+                          </Button>
                         </TableCell>
                       </TableRow>
-                    )}
-                    {parameters.map((param) => {
-                      const isVigente =
-                        !param.dataFimEfetivo ||
-                        new Date(param.dataFimEfetivo) >= new Date(todayStr);
-                      return (
-                        <TableRow key={param.id}>
-                          <TableCell className='font-medium'>
-                            {param.nomeParametro}
-                          </TableCell>
-                          <TableCell>{param.valor}</TableCell>
-                          <TableCell>{param.criterio?.nome ?? '-'}</TableCell>
-                          <TableCell>{param.setor?.nome ?? '-'}</TableCell>
-                          <TableCell>
-                            {formatDate(param.dataInicioEfetivo)}
-                          </TableCell>
-                          <TableCell>
-                            {param.dataFimEfetivo
-                              ? formatDate(param.dataFimEfetivo)
-                              : '-'}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={isVigente ? 'default' : 'outline'}
-                              className={isVigente ? 'bg-green-600...' : ''}
-                            >
-                              {isVigente ? 'Vigente' : 'Expirado'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className='max-w-[150px] truncate'>
-                            <Tooltip>
-                              <TooltipTrigger className='hover:underline cursor-help'>
-                                {param.justificativa ?? '-'}
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                {param.justificativa}
-                              </TooltipContent>
-                            </Tooltip>
-                          </TableCell>
-                          <TableCell>
-                            {/* Botão que abre o modal de Histórico */}
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant='ghost'
-                                  size='icon'
-                                  onClick={() => handleShowHistory(param)}
-                                  aria-label='Ver histórico'
-                                  className='cursor-pointer'
-                                >
-                                  <History className='h-4 w-4 text-muted-foreground hover:text-primary' />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>Ver histórico</TooltipContent>
-                            </Tooltip>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              )}
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
-          {/* ========================================================== */}
-          {/* FIM CardContent                                       */}
-          {/* ========================================================== */}
         </Card>
-        {/* Fim do Card Principal */}
-        {/* --- MODAL DE HISTÓRICO DE PARÂMETRO (FAKE) --- */}
-        {/* Estrutura do modal permanece a mesma, fora do Card */}
+        {/* Modal de Histórico (mantenha sua lógica atual com dados fake ou adapte para buscar histórico real) */}
         <Dialog
           open={!!historyParam}
           onOpenChange={(isOpen) => {
             if (!isOpen) setHistoryParam(null);
           }}
         >
-          {/* Aumentar largura máxima do modal em telas sm ou maiores */}
           <DialogContent className='sm:max-w-4xl'>
             <DialogHeader>
               <DialogTitle>
-                Histórico de Alterações: {historyParam?.nomeParametro}
+                Histórico: {historyParam?.nomeParametro}
               </DialogTitle>
-              <DialogDescription>
-                Visualização (simulada para MVP) das mudanças aplicadas.
-              </DialogDescription>
             </DialogHeader>
-            {/* Adicionar overflow e talvez borda/rounded ao redor da tabela */}
             <div className='py-4 max-h-[400px] overflow-y-auto border rounded-md overflow-x-auto w-full'>
-              {/* <-- MUDANÇA AQUI */}
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Valor Antigo</TableHead>
-                    <TableHead>Valor Novo</TableHead>
-                    <TableHead>Início</TableHead>
-                    <TableHead>Fim</TableHead>
-                    <TableHead>Usuário</TableHead>
-                    <TableHead>Justificativa</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {/* Linha 1 (Mostra transição do valor anterior para o ATUAL) */}
-                  <TableRow>
-                    <TableCell className='text-muted-foreground'>
-                      {/* Valor anterior FAKE - Idealmente viria do penúltimo registro real */}
-                      {(parseFloat(historyParam?.valor ?? '0') - 0.1).toFixed(
-                        2
-                      )}{' '}
-                      {/* Exemplo Fake */}
-                    </TableCell>
-                    <TableCell>{historyParam?.valor ?? '-'}</TableCell>
-                    <TableCell>
-                      {formatDate(historyParam?.dataInicioEfetivo)}
-                    </TableCell>
-                    <TableCell>
-                      {historyParam?.dataFimEfetivo
-                        ? formatDate(historyParam.dataFimEfetivo)
-                        : 'Vigente'}
-                    </TableCell>
-                    <TableCell>
-                      {historyParam?.criadoPor?.nome ?? 'Admin Sistema'}
-                    </TableCell>
-                    <TableCell className='text-xs max-w-[150px] truncate'>
-                      <Tooltip>
-                        <TooltipTrigger className='hover:underline cursor-help'>
-                          {historyParam?.justificativa
-                            ? `${historyParam.justificativa.substring(0, 30)}...`
-                            : '-'}
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {historyParam?.justificativa}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                  {/* Linha 2 (Mock Hardcoded - Exemplo) */}
-                  <TableRow className='bg-muted/30'>
-                    <TableCell className='text-muted-foreground'>
-                      2.90
-                    </TableCell>
-                    <TableCell className='text-muted-foreground'>
-                      3.00
-                    </TableCell>
-                    <TableCell>01/01/2025</TableCell>
-                    {/* CORRIGIDO: Mostra a data de início do registro ATUAL como FIM do anterior */}
-                    <TableCell>
-                      {formatDate(historyParam?.dataInicioEfetivo)}
-                    </TableCell>
-                    <TableCell>Diretor Exemplo</TableCell>
-                    <TableCell className='text-xs max-w-[150px] truncate text-muted-foreground'>
-                      <Tooltip>
-                        <TooltipTrigger className='hover:underline cursor-help'>
-                          Ajuste Q2...
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          Ajuste início Q2 conforme planejamento
-                        </TooltipContent>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                  {/* Linha 3 (Mock Hardcoded - Exemplo) */}
-                  <TableRow>
-                    <TableCell className='text-muted-foreground'>-</TableCell>
-                    <TableCell className='text-muted-foreground'>
-                      2.90
-                    </TableCell>
-                    <TableCell>01/10/2024</TableCell>
-                    <TableCell>31/12/2024</TableCell>
-                    <TableCell>Sistema</TableCell>
-                    <TableCell className='text-xs max-w-[150px] truncate text-muted-foreground'>
-                      <Tooltip>
-                        <TooltipTrigger className='hover:underline cursor-help'>
-                          Criação inicial...
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          Definição inicial do parâmetro para Q4 2024
-                        </TooltipContent>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
+              {isLoadingHistory ? (
+                <div className='flex justify-center items-center h-32'>
+                  <p>Carregando histórico...</p>
+                  {/* Pode usar um Skeleton aqui */}
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Valor</TableHead>
+                      <TableHead>Início Vigência</TableHead>
+                      <TableHead>Fim Vigência</TableHead>
+                      <TableHead>Criado Por</TableHead>
+                      <TableHead>Justificativa</TableHead>
+                      <TableHead>Data Criação</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {parameterHistoryData.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={6} className='text-center h-24'>
+                          Nenhum histórico encontrado para este parâmetro.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {parameterHistoryData.map((histParam) => (
+                      // A versão mais recente (sem dataFimEfetivo) pode ser destacada
+                      <TableRow
+                        key={histParam.id}
+                        className={!histParam.dataFimEfetivo ? 'bg-sky-50' : ''}
+                      >
+                        <TableCell
+                          className={
+                            !histParam.dataFimEfetivo ? 'font-semibold' : ''
+                          }
+                        >
+                          {histParam.valor}
+                        </TableCell>
+                        <TableCell>
+                          {formatDate(histParam.dataInicioEfetivo)}
+                        </TableCell>
+                        <TableCell>
+                          {histParam.dataFimEfetivo
+                            ? formatDate(histParam.dataFimEfetivo)
+                            : 'Vigente'}
+                        </TableCell>
+                        <TableCell>
+                          {histParam.criadoPor?.nome ?? '-'}
+                        </TableCell>
+                        <TableCell className='text-xs max-w-[200px] truncate'>
+                          <Tooltip>
+                            <TooltipTrigger className='cursor-help'>
+                              {histParam.justificativa
+                                ? `<span class="math-inline">\{histParam\.justificativa\.substring\(0, 30\)\}</span>{histParam.justificativa.length > 30 ? '...' : ''}`
+                                : '-'}
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {histParam.justificativa}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TableCell>
+                        <TableCell className='text-xs text-muted-foreground'>
+                          {new Date(histParam.createdAt).toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </div>
             <DialogFooter>
               <DialogClose asChild>
@@ -592,9 +695,7 @@ export default function ParametersPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        {/* --- FIM MODAL HISTÓRICO --- */}
       </div>
-      {/* Fim div space-y-6 */}
     </TooltipProvider>
   );
 }
