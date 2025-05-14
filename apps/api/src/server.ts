@@ -11,7 +11,10 @@ import { ParameterService } from '@/modules/parameters/parameter.service';
 import { CompetitionPeriodService } from '@/modules/periods/period.service';
 import { RankingService } from '@/modules/ranking/ranking.service';
 import {
+  ApproveRejectExpurgoDto,
+  CreateExpurgoDto,
   CreateParameterDto,
+  ExpurgoStatus,
   FindExpurgosDto,
   UpdateParameterDto,
 } from '@sistema-premiacao/shared-types';
@@ -38,7 +41,6 @@ const start = async () => {
         'http://localhost:3000',
         'http://127.0.0.1:3000',
         /http:\/\/192\.168\.\d+\.\d+:3000/,
-        'http://10.10.112.205:3000',
       ],
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     });
@@ -208,21 +210,6 @@ const start = async () => {
       }
     });
 
-    // --- NOVA ROTA EXPURGOS ---
-    fastify.get('/api/expurgos', async (request, reply) => {
-      // TODO: Validar e pegar os filtros de request.query
-      // Exemplo de como pegar filtros (você precisará do DTO FindExpurgosDto de shared-types)
-      const filters = request.query as FindExpurgosDto;
-      // Ex: filters.competitionPeriodId, filters.sectorId, filters.status, etc.
-
-      try {
-        const data = await expurgoService.findExpurgos(filters);
-        reply.send(data);
-      } catch (error: any) {
-        fastify.log.error(`Erro em /api/expurgos: ${error.message}`);
-        reply.status(500).send({ error: error.message || 'Erro.' });
-      }
-    });
     // --- NOVA ROTA PARA CRITÉRIOS ATIVOS ---
     fastify.get('/api/criteria/active', async (request, reply) => {
       fastify.log.info('Recebida requisição GET /api/criteria/active');
@@ -612,6 +599,199 @@ const start = async () => {
         }
       }
     });
+    // --- ROTAS PARA GESTÃO DE EXPURGOS ---
+    // Listar Expurgos (com filtros)
+    fastify.get('/api/expurgos', async (request, reply) => {
+      // Tipar query params para segurança e clareza
+      const queryParams = request.query as {
+        competitionPeriodId?: string;
+        sectorId?: string;
+        criterionId?: string;
+        status?: ExpurgoStatus;
+      };
+
+      const filters: FindExpurgosDto = {};
+      if (queryParams.competitionPeriodId)
+        filters.competitionPeriodId = parseInt(
+          queryParams.competitionPeriodId,
+          10
+        );
+      if (queryParams.sectorId)
+        filters.sectorId = parseInt(queryParams.sectorId, 10);
+      if (queryParams.criterionId)
+        filters.criterionId = parseInt(queryParams.criterionId, 10);
+      if (queryParams.status) filters.status = queryParams.status;
+
+      fastify.log.info('GET /api/expurgos com filtros:', filters);
+      try {
+        if (!AppDataSource.isInitialized) await AppDataSource.initialize();
+        const expurgos = await expurgoService.findExpurgos(filters);
+        reply.send(expurgos);
+      } catch (error: any) {
+        fastify.log.error(`Erro em GET /api/expurgos: ${error.message}`);
+        reply
+          .status(500)
+          .send({ error: error.message || 'Erro interno ao buscar expurgos.' });
+      }
+    });
+
+    // Buscar um Expurgo específico por ID
+    fastify.get('/api/expurgos/:id', async (request, reply) => {
+      const params = request.params as { id: string };
+      const expurgoId = parseInt(params.id, 10);
+      fastify.log.info(`GET /api/expurgos/${expurgoId}`);
+
+      if (isNaN(expurgoId)) {
+        return reply.status(400).send({ message: 'ID do expurgo inválido.' });
+      }
+      try {
+        if (!AppDataSource.isInitialized) await AppDataSource.initialize();
+        const expurgo = await expurgoService.findExpurgoById(expurgoId);
+        if (!expurgo) {
+          return reply
+            .status(404)
+            .send({ message: `Expurgo com ID ${expurgoId} não encontrado.` });
+        }
+        reply.send(expurgo);
+      } catch (error: any) {
+        fastify.log.error(
+          `Erro em GET /api/expurgos/${expurgoId}: ${error.message}`
+        );
+        reply
+          .status(500)
+          .send({ error: error.message || 'Erro interno ao buscar expurgo.' });
+      }
+    });
+
+    // Solicitar um novo Expurgo
+    fastify.post('/api/expurgos/request', async (request, reply) => {
+      // TODO: Validar o corpo da requisição com Zod usando CreateExpurgoDto
+      const data = request.body as CreateExpurgoDto;
+      // TODO: Obter o ID do usuário logado (requestingUser) da autenticação
+      const mockRequestingUser = {
+        id: 2,
+        nome: 'Usuário Solicitante (Mock)',
+      } as UserEntity; // Simulação
+
+      fastify.log.info('POST /api/expurgos/request com dados:', data);
+      try {
+        if (!AppDataSource.isInitialized) await AppDataSource.initialize();
+        const newExpurgo = await expurgoService.requestExpurgo(
+          data,
+          mockRequestingUser
+        );
+        reply.status(201).send(newExpurgo); // 201 Created
+      } catch (error: any) {
+        fastify.log.error(
+          `Erro em POST /api/expurgos/request: ${error.message}`
+        );
+        if (
+          error.message.includes('obrigatórios') ||
+          error.message.includes('não encontrado') ||
+          error.message.includes('não é elegível')
+        ) {
+          reply.status(400).send({ error: error.message }); // Bad Request
+        } else {
+          reply.status(500).send({
+            error: error.message || 'Erro interno ao solicitar expurgo.',
+          });
+        }
+      }
+    });
+
+    // Aprovar um Expurgo
+    fastify.post('/api/expurgos/:id/approve', async (request, reply) => {
+      const params = request.params as { id: string };
+      const expurgoId = parseInt(params.id, 10);
+      // TODO: Validar corpo com Zod usando ApproveRejectExpurgoDto
+      const dto = request.body as ApproveRejectExpurgoDto;
+      const mockApprovingUser = {
+        id: 1,
+        nome: 'Admin Aprovador (Mock)',
+      } as UserEntity; // Simulação
+
+      fastify.log.info(`POST /api/expurgos/${expurgoId}/approve`);
+      if (isNaN(expurgoId)) {
+        return reply.status(400).send({ message: 'ID do expurgo inválido.' });
+      }
+      if (!dto || !dto.justificativaAprovacaoOuRejeicao) {
+        return reply
+          .status(400)
+          .send({ message: 'Justificativa é obrigatória.' });
+      }
+      try {
+        if (!AppDataSource.isInitialized) await AppDataSource.initialize();
+        const approvedExpurgo = await expurgoService.approveExpurgo(
+          expurgoId,
+          dto,
+          mockApprovingUser
+        );
+        reply.send(approvedExpurgo);
+      } catch (error: any) {
+        fastify.log.error(
+          `Erro em POST /api/expurgos/${expurgoId}/approve: ${error.message}`
+        );
+        if (
+          error.message.includes('não encontrada') ||
+          error.message.includes('inválido')
+        ) {
+          reply.status(404).send({ error: error.message });
+        } else if (error.message.includes('não está com status PENDENTE')) {
+          reply.status(409).send({ error: error.message }); // Conflict
+        } else {
+          reply.status(500).send({
+            error: error.message || 'Erro interno ao aprovar expurgo.',
+          });
+        }
+      }
+    });
+
+    // Rejeitar um Expurgo
+    fastify.post('/api/expurgos/:id/reject', async (request, reply) => {
+      const params = request.params as { id: string };
+      const expurgoId = parseInt(params.id, 10);
+      const dto = request.body as ApproveRejectExpurgoDto;
+      const mockRejectingUser = {
+        id: 1,
+        nome: 'Admin Revisor (Mock)',
+      } as UserEntity; // Simulação
+
+      fastify.log.info(`POST /api/expurgos/${expurgoId}/reject`);
+      if (isNaN(expurgoId)) {
+        return reply.status(400).send({ message: 'ID do expurgo inválido.' });
+      }
+      if (!dto || !dto.justificativaAprovacaoOuRejeicao) {
+        return reply
+          .status(400)
+          .send({ message: 'Justificativa é obrigatória.' });
+      }
+      try {
+        if (!AppDataSource.isInitialized) await AppDataSource.initialize();
+        const rejectedExpurgo = await expurgoService.rejectExpurgo(
+          expurgoId,
+          dto,
+          mockRejectingUser
+        );
+        reply.send(rejectedExpurgo);
+      } catch (error: any) {
+        fastify.log.error(
+          `Erro em POST /api/expurgos/${expurgoId}/reject: ${error.message}`
+        );
+        if (
+          error.message.includes('não encontrada') ||
+          error.message.includes('inválido')
+        ) {
+          reply.status(404).send({ error: error.message });
+        } else if (error.message.includes('não está com status PENDENTE')) {
+          reply.status(409).send({ error: error.message }); // Conflict
+        } else {
+          reply.status(500).send({
+            error: error.message || 'Erro interno ao rejeitar expurgo.',
+          });
+        }
+      }
+    });
+    // --- FIM ROTAS EXPURGOS ---
     // --- Fim das Rotas ---
 
     // --- Listen ---
