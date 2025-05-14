@@ -12,6 +12,7 @@ import { CompetitionPeriodService } from '@/modules/periods/period.service';
 import { RankingService } from '@/modules/ranking/ranking.service';
 import {
   CreateParameterDto,
+  FindExpurgosDto,
   UpdateParameterDto,
 } from '@sistema-premiacao/shared-types';
 import { SectorEntity } from './entity/sector.entity';
@@ -209,8 +210,13 @@ const start = async () => {
 
     // --- NOVA ROTA EXPURGOS ---
     fastify.get('/api/expurgos', async (request, reply) => {
+      // TODO: Validar e pegar os filtros de request.query
+      // Exemplo de como pegar filtros (você precisará do DTO FindExpurgosDto de shared-types)
+      const filters = request.query as FindExpurgosDto;
+      // Ex: filters.competitionPeriodId, filters.sectorId, filters.status, etc.
+
       try {
-        const data = await expurgoService.getExpurgos(50);
+        const data = await expurgoService.findExpurgos(filters);
         reply.send(data);
       } catch (error: any) {
         fastify.log.error(`Erro em /api/expurgos: ${error.message}`);
@@ -550,11 +556,9 @@ const start = async () => {
         } else if (error.message.includes('Já existe uma meta ativa')) {
           reply.status(409).send({ error: error.message }); // Conflict
         } else {
-          reply
-            .status(500)
-            .send({
-              error: error.message || 'Erro interno ao criar parâmetro.',
-            });
+          reply.status(500).send({
+            error: error.message || 'Erro interno ao criar parâmetro.',
+          });
         }
       }
     });
