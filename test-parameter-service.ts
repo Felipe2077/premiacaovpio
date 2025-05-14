@@ -4,11 +4,12 @@ import path from 'path';
 import 'reflect-metadata';
 // Importa o ParameterService e os DTOs/Entidades que ele usa
 import { AppDataSource } from './apps/api/src/database/data-source';
+import { CompetitionPeriodEntity } from './apps/api/src/entity/competition-period.entity'; // Para buscar o período
+import { CriterionEntity } from './apps/api/src/entity/criterion.entity'; // Para buscar critério
+import { SectorEntity } from './apps/api/src/entity/sector.entity'; // Para buscar setor
 import { UserEntity } from './apps/api/src/entity/user.entity'; // Para simular o actingUser
-import {
-  CreateParameterDto,
-  ParameterService,
-} from './apps/api/src/modules/parameters/parameter.service';
+import { ParameterService } from './apps/api/src/modules/parameters/parameter.service';
+import { CreateParameterDto } from './packages/shared-types/dist';
 
 // --- Carregar .env da API ---
 const envPath = path.resolve(__dirname, 'apps/api/.env');
@@ -19,18 +20,12 @@ console.log(`[Test Parameter Script] .env carregado de: ${envPath}`);
 async function runParameterServiceTest() {
   console.log('--- Iniciando Teste do ParameterService ---');
 
-  // Verifica credenciais Postgres básicas
-  if (
-    !process.env.POSTGRES_USER ||
-    !process.env.POSTGRES_PASSWORD ||
-    !process.env.POSTGRES_DB
-  ) {
+  if (!process.env.POSTGRES_USER) {
     console.error('ERRO: Credenciais Postgres não encontradas no .env!');
     return;
   }
 
   try {
-    // 1. Garantir que o AppDataSource (Postgres) está inicializado
     if (!AppDataSource.isInitialized) {
       console.log(
         '[Test Parameter Script] Inicializando AppDataSource (Postgres)...'
@@ -39,54 +34,68 @@ async function runParameterServiceTest() {
       console.log(
         '[Test Parameter Script] AppDataSource (Postgres) INICIALIZADO.'
       );
-    } else {
-      console.log(
-        '[Test Parameter Script] AppDataSource (Postgres) já estava inicializado.'
-      );
     }
 
-    // 2. Instanciar o ParameterService
     const parameterService = new ParameterService();
-
-    // 3. Simular um usuário que está realizando a ação (actingUser)
-    // Em um sistema real, isso viria da autenticação. Aqui, vamos pegar o admin mockado do seed.
     const userRepository = AppDataSource.getRepository(UserEntity);
+    const periodRepository = AppDataSource.getRepository(
+      CompetitionPeriodEntity
+    );
+    const criterionRepository = AppDataSource.getRepository(CriterionEntity);
+    const sectorRepository = AppDataSource.getRepository(SectorEntity);
+
     let mockAdminUser = await userRepository.findOneBy({
       email: 'admin@sistema.com',
     });
     if (!mockAdminUser) {
-      // Se o admin do seed não existir, cria um temporário só para o teste (ou lança erro)
       console.warn(
         '[Test Parameter Script] Usuário admin mock não encontrado, criando um temporário...'
       );
       mockAdminUser = await userRepository.save({
-        nome: 'Admin Teste',
-        email: 'testadmin@sistema.com',
+        nome: 'Admin Teste Script',
+        email: 'testadmin@scripts.com',
         ativo: true,
       });
-      if (!mockAdminUser)
-        throw new Error('Não foi possível criar usuário mock para o teste.');
     }
+    if (!mockAdminUser)
+      throw new Error(
+        'Não foi possível obter/criar usuário mock para o teste.'
+      );
     console.log(
-      `[Test Parameter Script] Usando actingUser: ID=<span class="math-inline">\{mockAdminUser\.id\}, Nome\=</span>{mockAdminUser.nome}`
+      `[Test Parameter Script] Usando actingUser: ID=${mockAdminUser.id}, Nome=${mockAdminUser.nome}`
     );
 
-    // 4. Dados para criar uma nova meta
-    // Primeiro, precisamos de um competitionPeriodId, criterionId e sectorId válidos (que existem no seu seed)
-    // Vamos assumir que o período com mesAno '2025-04' (ID 2 no seu seed) e critério 'ATRASO' (ID 1) para setor 'GAMA' (ID 1)
-    const testPeriodId = 2; // ID do período '2025-04' (VERIFIQUE NO SEU SEED/DB)
-    const testCriterionId = 1; // ID do critério 'ATRASO' (VERIFIQUE NO SEU SEED/DB)
-    const testSectorId = 1; // ID do setor 'GAMA' (VERIFIQUE NO SEU SEED/DB)
+    // Buscar IDs reais do banco para usar no teste de criação
+    // (Assumindo que o SEED já rodou e populou estas tabelas)
+    const competitionPeriodApril = await periodRepository.findOneBy({
+      mesAno: '2025-04',
+    });
+    const criterionAtraso = await criterionRepository.findOneBy({
+      nome: 'ATRASO',
+    });
+    const sectorGama = await sectorRepository.findOneBy({ nome: 'GAMA' });
+
+    if (!competitionPeriodApril || !criterionAtraso || !sectorGama) {
+      console.error(
+        'ERRO: Período, Critério ou Setor de teste não encontrados no banco (verifique o seed).'
+      );
+      console.error({ competitionPeriodApril, criterionAtraso, sectorGama });
+      return;
+    }
+
+    const testPeriodId = competitionPeriodApril.id;
+    const testCriterionId = criterionAtraso.id;
+    const testSectorId = sectorGama.id;
 
     const newParameterData: CreateParameterDto = {
-      nomeParametro: 'TESTE_META_ATRASO_GAMA',
-      valor: '250', // Novo valor de meta para teste
+      nomeParametro: `TESTE_META_SCRIPT_${Date.now()}`, // Nome único para evitar conflito
+      valor: '275', // Novo valor de meta para teste
       dataInicioEfetivo: '2025-04-01',
       criterionId: testCriterionId,
       sectorId: testSectorId,
-      competitionPeriodId: testPeriodId, // Associando ao período de Abril/2025
+      competitionPeriodId: testPeriodId,
       justificativa:
-        'Meta de teste criada pelo script test-parameter-service.ts',
+        'Meta de teste criada automaticamente pelo script test-parameter-service.ts',
     };
 
     console.log(
@@ -99,36 +108,44 @@ async function runParameterServiceTest() {
     console.log('[Test Parameter Script] Parâmetro/Meta CRIADO COM SUCESSO:');
     console.log(JSON.stringify(createdParameter, null, 2));
 
-    // 5. Testar a busca de parâmetros para o período
     const periodToSearch = '2025-04';
     console.log(
-      `\n[Test Parameter Script] Buscando parâmetros para o período: ${periodToSearch}`
+      `\n[Test Parameter Script] Buscando parâmetros ATIVOS para o período: ${periodToSearch}`
     );
-    const foundParameters =
-      await parameterService.findParametersForPeriod(periodToSearch);
+    const foundActiveParameters =
+      await parameterService.findParametersForPeriod(
+        periodToSearch,
+        undefined,
+        undefined,
+        true
+      );
     console.log(
-      `[Test Parameter Script] Parâmetros encontrados para <span class="math-inline">\{periodToSearch\} \(</span>{foundParameters.length} registros):`
+      `[Test Parameter Script] Parâmetros ATIVOS encontrados para ${periodToSearch} (${foundActiveParameters.length} registros):`
     );
-    if (foundParameters.length > 0) {
-      console.log(JSON.stringify(foundParameters.slice(0, 5), null, 2)); // Mostra os 5 primeiros
+    if (foundActiveParameters.length > 0) {
+      console.log(JSON.stringify(foundActiveParameters.slice(0, 5), null, 2)); // Mostra os 5 primeiros
+      const isCreatedParamFoundActive = foundActiveParameters.some(
+        (p) => p.id === createdParameter.id
+      );
+      console.log(
+        `[Test Parameter Script] Meta recém-criada (ID: ${createdParameter.id}) encontrada entre as ativas? ${isCreatedParamFoundActive}`
+      );
     }
 
-    // 6. Testar a busca filtrando por setor e critério (usando os IDs do parâmetro que acabamos de criar)
-    if (createdParameter) {
-      console.log(
-        `\n[Test Parameter Script] Buscando parâmetros para período ${periodToSearch}, setor ${createdParameter.sectorId}, critério ${createdParameter.criterionId}`
-      );
-      const specificParams = await parameterService.findParametersForPeriod(
-        periodToSearch,
-        createdParameter.sectorId || undefined, // Passa undefined se for null
-        createdParameter.criterionId || undefined // Passa undefined se for null
-      );
-      console.log(
-        `[Test Parameter Script] Parâmetros específicos encontrados (${specificParams.length} registros):`
-      );
-      if (specificParams.length > 0) {
-        console.log(JSON.stringify(specificParams.slice(0, 5), null, 2));
-      }
+    console.log(
+      `\n[Test Parameter Script] Buscando TODOS os parâmetros (incluindo históricos) para o período: ${periodToSearch}`
+    );
+    const foundAllParameters = await parameterService.findParametersForPeriod(
+      periodToSearch,
+      undefined,
+      undefined,
+      false
+    );
+    console.log(
+      `[Test Parameter Script] TODOS os parâmetros encontrados para ${periodToSearch} (${foundAllParameters.length} registros):`
+    );
+    if (foundAllParameters.length > 0) {
+      console.log(JSON.stringify(foundAllParameters.slice(0, 5), null, 2)); // Mostra os 5 primeiros
     }
 
     console.log('\n--- Teste do ParameterService concluído com sucesso! ---');
@@ -142,7 +159,6 @@ async function runParameterServiceTest() {
       console.error('Stack Trace:', error.stack);
     }
   } finally {
-    // Garante que a conexão Postgres seja fechada
     if (AppDataSource && AppDataSource.isInitialized) {
       await AppDataSource.destroy();
       console.log('Conexão Postgres (AppDataSource) finalizada.');
@@ -151,5 +167,4 @@ async function runParameterServiceTest() {
   }
 }
 
-// Executa o teste
 runParameterServiceTest();

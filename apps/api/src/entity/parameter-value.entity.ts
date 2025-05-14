@@ -45,6 +45,9 @@ export class ParameterValueEntity {
   @ManyToOne(() => SectorEntity, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'sectorId' })
   setor?: SectorEntity;
+
+  @Column({ type: 'int', nullable: true })
+  previousVersionId?: number | null;
   // --------------------------
 
   // --- RELAÇÃO COM USER (createdBy) ---
@@ -61,6 +64,13 @@ export class ParameterValueEntity {
 
   @CreateDateColumn({ type: 'timestamp with time zone' })
   createdAt!: Date;
+
+  @ManyToOne(() => ParameterValueEntity, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
+  @JoinColumn({ name: 'previousVersionId' })
+  previousVersion?: ParameterValueEntity | null;
 
   // --- PROPRIEDADE E RELAÇÃO FALTANDO PARA COMPETITION PERIOD ---
   // Adicione estas linhas:

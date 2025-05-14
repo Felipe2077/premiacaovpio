@@ -10,6 +10,10 @@ import { ExpurgoService } from '@/modules/expurgos/expurgo.service';
 import { ParameterService } from '@/modules/parameters/parameter.service';
 import { CompetitionPeriodService } from '@/modules/periods/period.service';
 import { RankingService } from '@/modules/ranking/ranking.service';
+import {
+  CreateParameterDto,
+  UpdateParameterDto,
+} from '@sistema-premiacao/shared-types';
 import { SectorEntity } from './entity/sector.entity';
 import { UserEntity } from './entity/user.entity';
 
@@ -428,6 +432,178 @@ const start = async () => {
         } else {
           reply.status(500).send({
             error: error.message || 'Erro interno ao fechar período.',
+          });
+        }
+      }
+    });
+    // Rota GET para buscar um parâmetro/meta específico por ID
+    fastify.get('/api/parameters/:id', async (request, reply) => {
+      const params = request.params as { id: string };
+      const parameterId = parseInt(params.id, 10);
+      fastify.log.info(`GET /api/parameters/${parameterId}`);
+
+      if (isNaN(parameterId)) {
+        return reply.status(400).send({ message: 'ID do parâmetro inválido.' });
+      }
+      try {
+        if (!AppDataSource.isInitialized) await AppDataSource.initialize();
+        const parameter = await parameterService.findParameterById(parameterId);
+        if (!parameter) {
+          return reply.status(404).send({
+            message: `Parâmetro com ID ${parameterId} não encontrado.`,
+          });
+        }
+        reply.send(parameter);
+      } catch (error: any) {
+        fastify.log.error(
+          `Erro em GET /api/parameters/${parameterId}: ${error.message}`
+        );
+        reply.status(500).send({
+          error: error.message || 'Erro interno ao buscar parâmetro.',
+        });
+      }
+    });
+
+    // Rota PUT para ATUALIZAR um parâmetro/meta (com versionamento)
+    fastify.put('/api/parameters/:id', async (request, reply) => {
+      const params = request.params as { id: string };
+      const parameterId = parseInt(params.id, 10);
+      // TODO: Validar o corpo da requisição com Zod usando UpdateParameterDto
+      const updateData = request.body as UpdateParameterDto;
+      // TODO: Obter o ID do usuário logado (actingUser)
+      const mockActingUser = {
+        id: 1,
+        nome: 'Admin Sistema (Mock)',
+      } as UserEntity;
+
+      fastify.log.info(
+        `PUT /api/parameters/${parameterId} com dados:`,
+        updateData
+      );
+      if (isNaN(parameterId)) {
+        return reply.status(400).send({ message: 'ID do parâmetro inválido.' });
+      }
+      if (!updateData.justificativa) {
+        // Justificativa é crucial para update
+        return reply.status(400).send({
+          message: 'Justificativa é obrigatória para atualizar o parâmetro.',
+        });
+      }
+
+      try {
+        if (!AppDataSource.isInitialized) await AppDataSource.initialize();
+        const updatedParameter = await parameterService.updateParameter(
+          parameterId,
+          updateData,
+          mockActingUser
+        );
+        reply.send(updatedParameter);
+      } catch (error: any) {
+        fastify.log.error(
+          `Erro em PUT /api/parameters/${parameterId}: ${error.message}`
+        );
+        if (error.message.includes('não encontrado')) {
+          reply.status(404).send({ error: error.message });
+        } else if (
+          error.message.includes('expirado') ||
+          error.message.includes('não podem ser alteradas') ||
+          error.message.includes('anterior à sua data de início') ||
+          error.message.includes('posterior à data de fim')
+        ) {
+          reply.status(409).send({ error: error.message }); // Conflict or Bad Request
+        } else {
+          reply.status(500).send({
+            error: error.message || 'Erro interno ao atualizar parâmetro.',
+          });
+        }
+      }
+    });
+    // Em apps/api/src/server.ts, dentro da função start(), na seção de rotas de parâmetros
+
+    // --- ADICIONAR ESTA ROTA POST ---
+    fastify.post('/api/parameters', async (request, reply) => {
+      // TODO: Validar o corpo da requisição com Zod usando CreateParameterDto
+      const createData = request.body as CreateParameterDto;
+      // TODO: Obter o ID do usuário logado (actingUser)
+      const mockActingUser = {
+        id: 1,
+        nome: 'Admin Sistema (Mock)',
+      } as UserEntity; // Simulação
+
+      fastify.log.info('POST /api/parameters com dados:', createData);
+
+      try {
+        if (!AppDataSource.isInitialized) await AppDataSource.initialize();
+        const newParameter = await parameterService.createParameter(
+          createData,
+          mockActingUser
+        );
+        reply.status(201).send(newParameter); // 201 Created
+      } catch (error: any) {
+        fastify.log.error(`Erro em POST /api/parameters: ${error.message}`);
+        if (
+          error.message.includes('obrigatórios') ||
+          error.message.includes('não encontrado') ||
+          error.message.includes('inválido')
+        ) {
+          reply.status(400).send({ error: error.message }); // Bad Request
+        } else if (error.message.includes('Já existe uma meta ativa')) {
+          reply.status(409).send({ error: error.message }); // Conflict
+        } else {
+          reply
+            .status(500)
+            .send({
+              error: error.message || 'Erro interno ao criar parâmetro.',
+            });
+        }
+      }
+    });
+    // --- FIM DA ROTA POST ---
+
+    // Rota DELETE para "DELETAR" logicamente um parâmetro/meta
+    fastify.delete('/api/parameters/:id', async (request, reply) => {
+      const params = request.params as { id: string };
+      const parameterId = parseInt(params.id, 10);
+      // O corpo da requisição DELETE deve conter a justificativa
+      const body = request.body as { justificativa?: string };
+      const mockActingUser = {
+        id: 1,
+        nome: 'Admin Sistema (Mock)',
+      } as UserEntity;
+
+      fastify.log.info(`DELETE /api/parameters/${parameterId}`);
+      if (isNaN(parameterId)) {
+        return reply.status(400).send({ message: 'ID do parâmetro inválido.' });
+      }
+      if (!body || !body.justificativa) {
+        return reply.status(400).send({
+          message: 'Justificativa é obrigatória para deletar o parâmetro.',
+        });
+      }
+
+      try {
+        if (!AppDataSource.isInitialized) await AppDataSource.initialize();
+        const deletedParameter = await parameterService.deleteParameter(
+          parameterId,
+          mockActingUser,
+          body.justificativa
+        );
+        reply.send(deletedParameter); // Retorna o parâmetro com dataFimEfetivo atualizada
+      } catch (error: any) {
+        fastify.log.error(
+          `Erro em DELETE /api/parameters/${parameterId}: ${error.message}`
+        );
+        if (error.message.includes('não encontrado')) {
+          reply.status(404).send({ error: error.message });
+        } else if (
+          error.message.includes('expirado') ||
+          error.message.includes('não pode ser deletado') ||
+          error.message.includes('não iniciou sua vigência')
+        ) {
+          reply.status(409).send({ error: error.message }); // Conflict or Bad Request
+        } else {
+          reply.status(500).send({
+            error: error.message || 'Erro interno ao deletar parâmetro.',
           });
         }
       }

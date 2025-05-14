@@ -1,0 +1,14 @@
+// packages/shared-types/tsconfig.json
+{
+  "extends": "../../tsconfig.base.json", // Agora ele vai encontrar!
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "declaration": true, // Gera .d.ts
+    "declarationMap": true,
+    "sourceMap": true,
+    "composite": true // Adicione se for usar project references
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
