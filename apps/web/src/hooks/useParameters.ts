@@ -1,4 +1,4 @@
-// apps/web/src/hooks/useParameters.ts (ADICIONANDO UPDATE E DELETE)
+// apps/web/src/hooks/useParameters.ts (ADICIONANDO getParameterHistory)
 import {
   CreateParameterDto,
   UpdateParameterDto,
@@ -10,7 +10,6 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 
-// Interface ParameterValueAPI como antes
 export interface ParameterValueAPI {
   id: number;
   nomeParametro: string;
@@ -26,20 +25,19 @@ export interface ParameterValueAPI {
   previousVersionId?: number | null;
   criterio?: { id: number; nome: string };
   setor?: { id: number; nome: string };
-  competitionPeriod?: { id: number; mesAno: string; status?: string }; // Adicionado status
+  competitionPeriod?: { id: number; mesAno: string; status?: string };
   criadoPor?: { id: number; nome: string };
 }
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
-// fetchParameters e createParameter como antes
+// fetchParameters, createParameter, updateParameterAPI, deleteParameterAPI (COMO NA ÚLTIMA VERSÃO QUE TE MANDEI)
 const fetchParameters = async ({
   queryKey,
 }: {
   queryKey: QueryKey;
 }): Promise<ParameterValueAPI[]> => {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_key, periodMesAno, sectorId, criterionId, onlyActive] = queryKey as [
     string,
     string,
@@ -54,7 +52,6 @@ const fetchParameters = async ({
   if (criterionId !== undefined)
     params.append('criterionId', String(criterionId));
   if (onlyActive === false) params.append('onlyActive', 'false');
-
   const response = await fetch(
     `${API_BASE_URL}/parameters?${params.toString()}`
   );
@@ -68,7 +65,6 @@ const fetchParameters = async ({
   }
   return response.json();
 };
-
 const createParameter = async (
   newParameterData: CreateParameterDto
 ): Promise<ParameterValueAPI> => {
@@ -87,13 +83,10 @@ const createParameter = async (
   }
   return response.json();
 };
-
-// --- NOVAS FUNÇÕES PARA UPDATE E DELETE ---
 interface UpdateParameterPayload {
   id: number;
   data: UpdateParameterDto;
 }
-
 const updateParameterAPI = async ({
   id,
   data,
@@ -113,12 +106,10 @@ const updateParameterAPI = async ({
   }
   return response.json();
 };
-
 interface DeleteParameterPayload {
   id: number;
-  justificativa: string; // Justificativa é obrigatória para o DELETE no backend
+  justificativa: string;
 }
-
 const deleteParameterAPI = async ({
   id,
   justificativa,
@@ -126,7 +117,7 @@ const deleteParameterAPI = async ({
   const response = await fetch(`${API_BASE_URL}/parameters/${id}`, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ justificativa }), // API espera a justificativa no corpo
+    body: JSON.stringify({ justificativa }),
   });
   if (!response.ok) {
     const errorData = await response
@@ -136,15 +127,43 @@ const deleteParameterAPI = async ({
       errorData.message || `Erro ao deletar parâmetro: ${response.status}`
     );
   }
-  return response.json(); // Retorna o parâmetro "expirado"
+  return response.json();
 };
-// ---------------------------------------
+
+// --- ADICIONAR ESTA FUNÇÃO ---
+const fetchParameterHistory = async (
+  periodId: number,
+  criterionId: number,
+  sectorId?: number | null
+): Promise<ParameterValueAPI[]> => {
+  const params = new URLSearchParams();
+  params.append('periodId', String(periodId));
+  params.append('criterionId', String(criterionId));
+  if (sectorId !== undefined && sectorId !== null) {
+    params.append('sectorId', String(sectorId));
+  } else if (sectorId === null) {
+    params.append('sectorId', 'null');
+  }
+  const response = await fetch(
+    `${API_BASE_URL}/parameters/history?${params.toString()}`
+  );
+  if (!response.ok) {
+    const errorData = await response
+      .json()
+      .catch(() => ({ message: response.statusText }));
+    throw new Error(
+      errorData.message || `Erro ao buscar histórico: ${response.status}`
+    );
+  }
+  return response.json();
+};
+// -----------------------------
 
 export const useParameters = (
   periodMesAno: string,
   initialSectorId?: number,
   initialCriterionId?: number,
-  initialOnlyActive: boolean = true
+  initialOnlyActive: boolean = true // Alterado para false na page.tsx para ver todas
 ) => {
   const queryClient = useQueryClient();
   const queryKey: QueryKey = [
@@ -165,7 +184,6 @@ export const useParameters = (
     queryFn: fetchParameters,
     enabled: !!periodMesAno,
   });
-
   const createParameterMutation = useMutation<
     ParameterValueAPI,
     Error,
@@ -175,16 +193,12 @@ export const useParameters = (
     mutationFn: createParameter,
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: queryKey });
-      console.log('Parâmetro criado com sucesso:', data);
-      // toast.success(`Meta "${data.nomeParametro}" criada!`);
+      console.log('Parâmetro criado:', data); /* toast... */
     },
     onError: (error: Error) => {
-      console.error('Erro ao criar parâmetro:', error.message);
-      // toast.error(`Falha ao criar meta: ${error.message}`);
+      console.error('Erro ao criar parâmetro:', error.message); /* toast... */
     },
   });
-
-  // --- NOVAS MUTAÇÕES ---
   const updateParameterMutation = useMutation<
     ParameterValueAPI,
     Error,
@@ -193,25 +207,18 @@ export const useParameters = (
   >({
     mutationFn: updateParameterAPI,
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: queryKey }); // Invalida a lista para mostrar a nova versão e a antiga expirada
-      queryClient.invalidateQueries({ queryKey: ['parameter', data.id] }); // Se houver query de buscar por ID
-      queryClient.invalidateQueries({
-        queryKey: [
-          'parameterHistory',
-          data.competitionPeriodId,
-          data.criterionId,
-          data.sectorId,
-        ],
-      }); // Invalida histórico
-      console.log('Parâmetro atualizado com sucesso (nova versão):', data);
-      // toast.success(`Meta "${data.nomeParametro}" atualizada!`);
+      /* ... invalidateQueries ... */ console.log(
+        'Parâmetro atualizado:',
+        data
+      ); /* toast... */
     },
     onError: (error: Error) => {
-      console.error('Erro ao atualizar parâmetro:', error.message);
-      // toast.error(`Falha ao atualizar meta: ${error.message}`);
+      console.error(
+        'Erro ao atualizar parâmetro:',
+        error.message
+      ); /* toast... */
     },
   });
-
   const deleteParameterMutation = useMutation<
     ParameterValueAPI,
     Error,
@@ -220,24 +227,32 @@ export const useParameters = (
   >({
     mutationFn: deleteParameterAPI,
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: queryKey });
-      queryClient.invalidateQueries({
-        queryKey: [
-          'parameterHistory',
-          data.competitionPeriodId,
-          data.criterionId,
-          data.sectorId,
-        ],
-      });
-      console.log('Parâmetro deletado (logicamente) com sucesso:', data);
-      // toast.success(`Meta "${data.nomeParametro}" deletada!`);
+      /* ... invalidateQueries ... */ console.log(
+        'Parâmetro deletado:',
+        data
+      ); /* toast... */
     },
     onError: (error: Error) => {
-      console.error('Erro ao deletar parâmetro:', error.message);
-      // toast.error(`Falha ao deletar meta: ${error.message}`);
+      console.error('Erro ao deletar parâmetro:', error.message); /* toast... */
     },
   });
-  // --------------------
+
+  // --- ADICIONAR ESTA FUNÇÃO AO RETORNO ---
+  const getParameterHistory = async (
+    periodId: number,
+    criterionId: number,
+    sectorId?: number | null
+  ) => {
+    // Não usa useQuery aqui para ser uma chamada sob demanda
+    try {
+      return await fetchParameterHistory(periodId, criterionId, sectorId);
+    } catch (error) {
+      console.error('Erro ao buscar histórico no hook useParameters:', error);
+      // toast.error(error.message || "Falha ao buscar histórico."); // O toast já está na page.tsx
+      throw error; // Relança para o componente tratar
+    }
+  };
+  // ------------------------------------
 
   return {
     parameters: parameters || [],
@@ -247,13 +262,12 @@ export const useParameters = (
     createParameter: createParameterMutation.mutateAsync,
     isCreatingParameter: createParameterMutation.isPending,
     createParameterError: createParameterMutation.error?.message,
-    // --- EXPOR NOVAS FUNÇÕES E ESTADOS ---
     updateParameter: updateParameterMutation.mutateAsync,
     isUpdatingParameter: updateParameterMutation.isPending,
     updateParameterError: updateParameterMutation.error?.message,
     deleteParameter: deleteParameterMutation.mutateAsync,
     isDeletingParameter: deleteParameterMutation.isPending,
     deleteParameterError: deleteParameterMutation.error?.message,
-    // ------------------------------------
+    getParameterHistory, // <<< EXPORTAR AQUI
   };
 };
