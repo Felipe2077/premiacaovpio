@@ -126,7 +126,6 @@ export default function ParametersPage() {
     createParameter,
     isCreatingParameter,
     // createParameterError // Para mostrar erros da criação
-    getParameterHistory,
   } = useParameters(
     selectedPeriodMesAno, // Passa o período selecionado
     undefined, // sectorId filter (opcional)
@@ -179,6 +178,7 @@ export default function ParametersPage() {
 
     try {
       toast.promise(createParameter(dataToSave), {
+        // Usa o createParameter do hook
         loading: 'Salvando nova meta...',
         success: (savedParam) => {
           setIsParamModalOpen(false);
@@ -186,48 +186,19 @@ export default function ParametersPage() {
           setFormNomeParametro('');
           setFormValor('');
           setFormCriterionId(undefined);
-          setFormSectorId(undefined);
+          setFormSectorId(undefined); /* ... etc ... */
           return `Meta "${savedParam.nomeParametro}" salva com sucesso!`;
         },
-        error: (err: typeof error) => err!.message || 'Falha ao salvar meta.',
+        error: (err: any) => err.message || 'Falha ao salvar meta.',
       });
     } catch (error) {
       // O hook useMutation já lida com o log do erro, o toast acima mostra ao usuário.
-      console.log(error);
     }
   };
 
-  const [parameterHistoryData, setParameterHistoryData] = useState<
-    ParameterValueAPI[]
-  >([]);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  // historyParam já existe no seu código
-
-  const handleShowHistory = async (param: ParameterValueAPI) => {
-    if (!param.competitionPeriodId || !param.criterionId) {
-      toast.error(
-        'Informações da meta (período ou critério) estão incompletas para buscar o histórico.'
-      );
-      setHistoryParam(param); // Abre o modal mesmo com erro para mostrar a msg
-      setParameterHistoryData([]);
-      return;
-    }
-    setIsLoadingHistory(true);
-    setHistoryParam(param); // Para o título do modal e para ter os IDs
-    try {
-      // sectorId pode ser null para metas gerais, o hook/API já trata isso
-      const history = await getParameterHistory(
-        param.competitionPeriodId,
-        param.criterionId,
-        param.sectorId
-      );
-      setParameterHistoryData(history || []); // Garante que é um array
-    } catch (e: any) {
-      // Erro já deve ser tratado e notificado pelo toast no hook getParameterHistory
-      setParameterHistoryData([]); // Limpa em caso de erro
-      console.error('Erro ao carregar histórico na página:', e.message);
-    }
-    setIsLoadingHistory(false);
+  const handleShowHistory = (param: ParameterValueAPI) => {
+    // Usar ParameterValueAPI
+    setHistoryParam(param);
   };
 
   const todayStr = new Date().toISOString().split('T')[0];
@@ -503,8 +474,8 @@ export default function ParametersPage() {
             )}
             {!isLoadingParameters && parametersError && (
               <Alert variant='destructive'>
-                <AlertCircle className='h-4 w-4' />
-                <AlertTitle>Erro!</AlertTitle>
+                <AlertCircle className='h-4 w-4' />{' '}
+                <AlertTitle>Erro!</AlertTitle>{' '}
                 <AlertDescription>{parametersError.message}</AlertDescription>
               </Alert>
             )}
@@ -512,11 +483,11 @@ export default function ParametersPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nome</TableHead> <TableHead>Valor</TableHead>
+                    <TableHead>Nome</TableHead> <TableHead>Valor</TableHead>{' '}
                     <TableHead>Critério</TableHead> <TableHead>Setor</TableHead>
-                    <TableHead>Início</TableHead> <TableHead>Fim</TableHead>
+                    <TableHead>Início</TableHead> <TableHead>Fim</TableHead>{' '}
                     <TableHead>Status</TableHead>
-                    <TableHead>Justificativa</TableHead>
+                    <TableHead>Justificativa</TableHead>{' '}
                     <TableHead className='text-right'>Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -615,76 +586,9 @@ export default function ParametersPage() {
                 Histórico: {historyParam?.nomeParametro}
               </DialogTitle>
             </DialogHeader>
-            <div className='py-4 max-h-[400px] overflow-y-auto border rounded-md overflow-x-auto w-full'>
-              {isLoadingHistory ? (
-                <div className='flex justify-center items-center h-32'>
-                  <p>Carregando histórico...</p>
-                  {/* Pode usar um Skeleton aqui */}
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Valor</TableHead>
-                      <TableHead>Início Vigência</TableHead>
-                      <TableHead>Fim Vigência</TableHead>
-                      <TableHead>Criado Por</TableHead>
-                      <TableHead>Justificativa</TableHead>
-                      <TableHead>Data Criação</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {parameterHistoryData.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={6} className='text-center h-24'>
-                          Nenhum histórico encontrado para este parâmetro.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                    {parameterHistoryData.map((histParam) => (
-                      // A versão mais recente (sem dataFimEfetivo) pode ser destacada
-                      <TableRow
-                        key={histParam.id}
-                        className={!histParam.dataFimEfetivo ? 'bg-sky-50' : ''}
-                      >
-                        <TableCell
-                          className={
-                            !histParam.dataFimEfetivo ? 'font-semibold' : ''
-                          }
-                        >
-                          {histParam.valor}
-                        </TableCell>
-                        <TableCell>
-                          {formatDate(histParam.dataInicioEfetivo)}
-                        </TableCell>
-                        <TableCell>
-                          {histParam.dataFimEfetivo
-                            ? formatDate(histParam.dataFimEfetivo)
-                            : 'Vigente'}
-                        </TableCell>
-                        <TableCell>
-                          {histParam.criadoPor?.nome ?? '-'}
-                        </TableCell>
-                        <TableCell className='text-xs max-w-[200px] truncate'>
-                          <Tooltip>
-                            <TooltipTrigger className='cursor-help'>
-                              {histParam.justificativa
-                                ? `<span class="math-inline">\{histParam\.justificativa\.substring\(0, 30\)\}</span>{histParam.justificativa.length > 30 ? '...' : ''}`
-                                : '-'}
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              {histParam.justificativa}
-                            </TooltipContent>
-                          </Tooltip>
-                        </TableCell>
-                        <TableCell className='text-xs text-muted-foreground'>
-                          {new Date(histParam.createdAt).toLocaleString()}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
+            <div className='py-4 max-h-[400px] overflow-y-auto'>
+              {' '}
+              Placeholder para Tabela de Histórico{' '}
             </div>
             <DialogFooter>
               <DialogClose asChild>

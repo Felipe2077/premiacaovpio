@@ -1,15 +1,16 @@
-// apps/web/src/hooks/useParameters.ts (CORRIGIDO)
+// apps/web/src/hooks/useParameters.ts (ADICIONANDO UPDATE E DELETE)
+import {
+  CreateParameterDto,
+  UpdateParameterDto,
+} from '@sistema-premiacao/shared-types';
 import {
   QueryKey,
   useMutation,
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
-// Removido axios, vamos usar fetch como no seu padrão
-// import axios from 'axios';
-import { CreateParameterDto } from '@sistema-premiacao/shared-types';
 
-// Tipagem para o retorno da API de parâmetros
+// Interface ParameterValueAPI como antes
 export interface ParameterValueAPI {
   id: number;
   nomeParametro: string;
@@ -19,20 +20,20 @@ export interface ParameterValueAPI {
   criterionId: number;
   sectorId: number | null;
   competitionPeriodId: number;
-  createdByUserId?: number; // Pode ser opcional se não sempre retornado
-  justificativa?: string; // Pode ser opcional
-  createdAt: string; // ou Date
+  createdByUserId?: number;
+  justificativa?: string;
+  createdAt: string;
   previousVersionId?: number | null;
   criterio?: { id: number; nome: string };
   setor?: { id: number; nome: string };
-  competitionPeriod?: { id: number; mesAno: string };
+  competitionPeriod?: { id: number; mesAno: string; status?: string }; // Adicionado status
   criadoPor?: { id: number; nome: string };
 }
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
-// Função para buscar parâmetros/metas usando fetch
+// fetchParameters e createParameter como antes
 const fetchParameters = async ({
   queryKey,
 }: {
@@ -46,24 +47,13 @@ const fetchParameters = async ({
     number?,
     boolean?,
   ];
-
-  if (!periodMesAno) {
-    // Não faz a chamada se periodMesAno não estiver definido,
-    // embora a opção 'enabled' no useQuery já deva cuidar disso.
-    return Promise.resolve([]);
-  }
-
+  if (!periodMesAno) return Promise.resolve([]);
   const params = new URLSearchParams();
   params.append('period', periodMesAno);
   if (sectorId !== undefined) params.append('sectorId', String(sectorId));
   if (criterionId !== undefined)
     params.append('criterionId', String(criterionId));
-  // A API em ParameterService.findParametersForPeriod tem onlyActive: true por padrão
-  // Para buscar todas, a API precisa de um param como onlyActive=false
-  if (onlyActive === false) {
-    // Verifica explicitamente por false
-    params.append('onlyActive', 'false');
-  }
+  if (onlyActive === false) params.append('onlyActive', 'false');
 
   const response = await fetch(
     `${API_BASE_URL}/parameters?${params.toString()}`
@@ -79,7 +69,6 @@ const fetchParameters = async ({
   return response.json();
 };
 
-// Função para criar um novo parâmetro/meta usando fetch
 const createParameter = async (
   newParameterData: CreateParameterDto
 ): Promise<ParameterValueAPI> => {
@@ -99,7 +88,57 @@ const createParameter = async (
   return response.json();
 };
 
-// TODO: Funções para updateParameter e deleteParameter
+// --- NOVAS FUNÇÕES PARA UPDATE E DELETE ---
+interface UpdateParameterPayload {
+  id: number;
+  data: UpdateParameterDto;
+}
+
+const updateParameterAPI = async ({
+  id,
+  data,
+}: UpdateParameterPayload): Promise<ParameterValueAPI> => {
+  const response = await fetch(`${API_BASE_URL}/parameters/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const errorData = await response
+      .json()
+      .catch(() => ({ message: response.statusText }));
+    throw new Error(
+      errorData.message || `Erro ao atualizar parâmetro: ${response.status}`
+    );
+  }
+  return response.json();
+};
+
+interface DeleteParameterPayload {
+  id: number;
+  justificativa: string; // Justificativa é obrigatória para o DELETE no backend
+}
+
+const deleteParameterAPI = async ({
+  id,
+  justificativa,
+}: DeleteParameterPayload): Promise<ParameterValueAPI> => {
+  const response = await fetch(`${API_BASE_URL}/parameters/${id}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ justificativa }), // API espera a justificativa no corpo
+  });
+  if (!response.ok) {
+    const errorData = await response
+      .json()
+      .catch(() => ({ message: response.statusText }));
+    throw new Error(
+      errorData.message || `Erro ao deletar parâmetro: ${response.status}`
+    );
+  }
+  return response.json(); // Retorna o parâmetro "expirado"
+};
+// ---------------------------------------
 
 export const useParameters = (
   periodMesAno: string,
@@ -108,7 +147,6 @@ export const useParameters = (
   initialOnlyActive: boolean = true
 ) => {
   const queryClient = useQueryClient();
-
   const queryKey: QueryKey = [
     'parameters',
     periodMesAno,
@@ -117,47 +155,105 @@ export const useParameters = (
     initialOnlyActive,
   ];
 
-  // Correção Erro 1: useQuery com objeto de opções
   const {
     data: parameters,
-    isLoading,
-    error,
-    refetch,
+    isLoading: isLoadingParameters,
+    error: parametersError,
+    refetch: refetchParameters,
   } = useQuery<ParameterValueAPI[], Error>({
     queryKey: queryKey,
-    queryFn: fetchParameters, // queryFn agora recebe um objeto com queryKey
+    queryFn: fetchParameters,
     enabled: !!periodMesAno,
   });
 
-  // Correção Erro 2: useMutation com mutationFn e options
   const createParameterMutation = useMutation<
-    ParameterValueAPI, // TData (tipo do retorno do onSuccess)
-    Error, // TError
-    CreateParameterDto, // TVariables (tipo do input da mutationFn)
-    unknown // TContext (tipo do contexto do onMutate)
+    ParameterValueAPI,
+    Error,
+    CreateParameterDto,
+    unknown
   >({
-    mutationFn: createParameter, // Passa a função de mutação
-    onSuccess: (data: ParameterValueAPI) => {
-      // Tipar 'data' explicitamente
-      // Correção Erro 2 (invalidateQueries):
+    mutationFn: createParameter,
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: queryKey });
       console.log('Parâmetro criado com sucesso:', data);
-      // TODO: Adicionar notificação de sucesso
+      // toast.success(`Meta "${data.nomeParametro}" criada!`);
     },
     onError: (error: Error) => {
-      // Tipar 'error' explicitamente
       console.error('Erro ao criar parâmetro:', error.message);
-      // TODO: Adicionar notificação de erro
+      // toast.error(`Falha ao criar meta: ${error.message}`);
     },
   });
 
+  // --- NOVAS MUTAÇÕES ---
+  const updateParameterMutation = useMutation<
+    ParameterValueAPI,
+    Error,
+    UpdateParameterPayload,
+    unknown
+  >({
+    mutationFn: updateParameterAPI,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: queryKey }); // Invalida a lista para mostrar a nova versão e a antiga expirada
+      queryClient.invalidateQueries({ queryKey: ['parameter', data.id] }); // Se houver query de buscar por ID
+      queryClient.invalidateQueries({
+        queryKey: [
+          'parameterHistory',
+          data.competitionPeriodId,
+          data.criterionId,
+          data.sectorId,
+        ],
+      }); // Invalida histórico
+      console.log('Parâmetro atualizado com sucesso (nova versão):', data);
+      // toast.success(`Meta "${data.nomeParametro}" atualizada!`);
+    },
+    onError: (error: Error) => {
+      console.error('Erro ao atualizar parâmetro:', error.message);
+      // toast.error(`Falha ao atualizar meta: ${error.message}`);
+    },
+  });
+
+  const deleteParameterMutation = useMutation<
+    ParameterValueAPI,
+    Error,
+    DeleteParameterPayload,
+    unknown
+  >({
+    mutationFn: deleteParameterAPI,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: queryKey });
+      queryClient.invalidateQueries({
+        queryKey: [
+          'parameterHistory',
+          data.competitionPeriodId,
+          data.criterionId,
+          data.sectorId,
+        ],
+      });
+      console.log('Parâmetro deletado (logicamente) com sucesso:', data);
+      // toast.success(`Meta "${data.nomeParametro}" deletada!`);
+    },
+    onError: (error: Error) => {
+      console.error('Erro ao deletar parâmetro:', error.message);
+      // toast.error(`Falha ao deletar meta: ${error.message}`);
+    },
+  });
+  // --------------------
+
   return {
     parameters: parameters || [],
-    isLoadingParameters: isLoading,
-    parametersError: error,
-    refetchParameters: refetch,
+    isLoadingParameters,
+    parametersError,
+    refetchParameters,
     createParameter: createParameterMutation.mutateAsync,
-    isCreatingParameter: createParameterMutation.isPending, // MUDAR PARA isPending
+    isCreatingParameter: createParameterMutation.isPending,
     createParameterError: createParameterMutation.error?.message,
+    // --- EXPOR NOVAS FUNÇÕES E ESTADOS ---
+    updateParameter: updateParameterMutation.mutateAsync,
+    isUpdatingParameter: updateParameterMutation.isPending,
+    updateParameterError: updateParameterMutation.error?.message,
+    deleteParameter: deleteParameterMutation.mutateAsync,
+    isDeletingParameter: deleteParameterMutation.isPending,
+    deleteParameterError: deleteParameterMutation.error?.message,
+    // ------------------------------------
   };
 };
