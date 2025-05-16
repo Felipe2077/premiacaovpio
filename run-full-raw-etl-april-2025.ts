@@ -17,8 +17,8 @@ dotenv.config({ path: envPath });
 console.log(`[ETL Script] .env carregado de: ${envPath}`);
 
 // --- Datas para o período de Abril/2025 ---
-const START_DATE_APRIL = '2025-04-01';
-const END_DATE_APRIL = '2025-04-30';
+const START_DATE_APRIL = '2025-05-01';
+const END_DATE_APRIL = '2025-05-31';
 
 async function runFullRawEtl() {
   console.log(

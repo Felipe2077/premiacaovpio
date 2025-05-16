@@ -27,7 +27,7 @@ export function FilterControls() {
             <SelectValue placeholder='Selecione o Período' />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value='2025-04'>Abril / 2025</SelectItem>
+            <SelectItem value='2025-04'>Maio / 2025</SelectItem>
             <SelectItem value='2025-03'>Março / 2025</SelectItem>
             <SelectItem value='2025-02'>Fevereiro / 2025</SelectItem>
           </SelectContent>

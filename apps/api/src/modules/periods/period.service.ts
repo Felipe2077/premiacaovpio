@@ -207,7 +207,10 @@ export class CompetitionPeriodService {
     console.log(`[PeriodService] Buscando os últimos ${limit} períodos...`);
     try {
       const periods = await this.periodRepo.find({
-        order: { dataInicio: 'DESC' },
+        order: {
+          status: 'DESC', // Para 'PLANEJAMENTO' vir antes de 'FECHADA', 'ATIVA' no meio ou no topo
+          dataInicio: 'DESC', // Mais recentes primeiro dentro de cada status
+        },
         take: limit,
       });
       console.log(`[PeriodService] Encontrados ${periods.length} períodos.`);

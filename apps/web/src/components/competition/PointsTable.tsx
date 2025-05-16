@@ -60,7 +60,7 @@ export function PointsTable({
 
     const criterionIndex =
       activeCriteria.find((c) => c.id === criterionId)?.index ?? null;
-    const useInvertedScale = criterionIndex === 10 || criterionIndex === 11;
+    const useInvertedScale = criterionIndex === 0;
     const baseStyle = 'font-semibold px-2 py-1 rounded text-xs sm:text-sm ';
 
     const isBestPoints = useInvertedScale ? points === 2.5 : points === 1.0;

@@ -99,12 +99,9 @@ export class RankingService {
         const perf = performanceData.find(
           (p) => p.sectorId === sector.id && p.criterionId === criterion.id
         );
-        //! arredondando valor realizado para duas casas decimais antes do calculo
-        const valorRealizadoA =
-          perf?.valor != null ? parseFloat(String(perf.valor)) : null;
-        console.log('valor perf: ' + perf?.valor);
+
         const valorRealizado =
-          valorRealizadoA != null ? Number(valorRealizadoA.toFixed(2)) : null;
+          perf?.valor != null ? parseFloat(String(perf.valor)) : null;
 
         //  Buscar a meta, com fallback para meta genérica (sem setor)
         let targetParam = currentParameters.find(
@@ -137,6 +134,7 @@ export class RankingService {
           valorMeta !== 0
         ) {
           razaoCalculada = valorRealizado / valorMeta;
+          console.log(`PErcentual: ${razaoCalculada}`);
         } else if (valorRealizado != null && valorMeta === 0) {
           razaoCalculada =
             criterion.sentido_melhor === 'MAIOR' ? Infinity : -Infinity;
@@ -159,6 +157,9 @@ export class RankingService {
 
       // Ordenação
       resultsForCriterion.sort((a, b) => {
+        console.log(`PErcentual A na ordenação: ${a.razaoCalculada}`);
+        console.log(`PErcentual b na ordenação: ${b.razaoCalculada}`);
+
         const valA = a.razaoCalculada;
         const valB = b.razaoCalculada;
 
@@ -208,6 +209,7 @@ export class RankingService {
       let tieCount = 0; // Para ajustar o próximo rank após um empate
 
       resultsForCriterion.forEach((result, index) => {
+        console.log(`PErcentual resultsForCriterion: ${result.razaoCalculada}`);
         if (
           result.razaoCalculada === null ||
           result.razaoCalculada === undefined
@@ -256,6 +258,7 @@ export class RankingService {
           const todosMesmaRazao = resultsForCriterion.every(
             (r) => r.razaoCalculada === 1
           );
+          console.log(`PErcentual todosMesmaRazao: ${todosMesmaRazao}`);
 
           if (todosMesmaRazao) {
             pontos = 1.0; // Pontuação padrão (verde)
@@ -283,6 +286,9 @@ export class RankingService {
         const currentSectorScore = sectorScores[result.setorId];
         if (currentSectorScore && pontos !== null) {
           currentSectorScore.totalScore += pontos;
+          console.log(
+            `PErcentual  percentualAtingimento: ${result.razaoCalculada}`
+          );
 
           allDetailedResults.push({
             setorId: result.setorId,
@@ -306,7 +312,10 @@ export class RankingService {
 
     // 5. Calcular Ranking Final
     console.log('[RankingService] Calculando ranking final...');
-
+    console.log(
+      '[RankingService] Scores FINAIS antes de ranquear:',
+      JSON.stringify(sectorScores)
+    );
     const finalRankingArray = Object.values(sectorScores)
       .sort((a, b) => a.totalScore - b.totalScore)
       .map((score, index) => ({

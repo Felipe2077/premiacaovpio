@@ -30,7 +30,7 @@ export const formatNumber = (
 export const formatPercent = (ratio: number | null | undefined): string => {
   if (ratio === null || ratio === undefined || !isFinite(ratio)) return '-';
   if (!isFinite(ratio)) return 'N/A'; // Trata Infinity
-  return `${(ratio * 100).toFixed(1)}%`; // Formata como porcentagem
+  return `${(ratio * 100).toFixed(2)}%`; // Formata como porcentagem
 };
 
 // --- FUNÇÃO formatDate ---

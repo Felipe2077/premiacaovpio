@@ -25,13 +25,6 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
@@ -54,29 +47,16 @@ import {
   UpdateParameterDto,
 } from '@sistema-premiacao/shared-types';
 import { useQuery } from '@tanstack/react-query';
-import {
-  AlertCircle,
-  Badge,
-  Edit,
-  History,
-  MoreHorizontal,
-  PlusCircle,
-  Trash2,
-} from 'lucide-react';
+import { AlertCircle, PlusCircle } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Toaster, toast } from 'sonner';
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { PeriodSelector } from '@/components/shared/period-selector';
 import { ParameterValueAPI, useParameters } from '@/hooks/useParameters';
 import { columnsParameters } from './_components/columns-parameters';
+import { CreateEditParameterModal } from './_components/modals/CreateEditParameterModal';
 import { ParameterForm } from './_components/parameter-form';
+import { ParametersTable } from './_components/parameters-table';
 
 // Tipos para os dados dos dropdowns
 interface CompetitionPeriodForSelect {
@@ -95,7 +75,7 @@ interface SectorForSelect {
   nome: string;
 }
 
-// Funções de Fetch para Dropdowns (COMO NO SEU CÓDIGO)
+// Funções de Fetch para Dropdowns
 const fetchActiveCriteriaSimple = async (): Promise<CriterionForSelect[]> => {
   const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/criteria/active`;
   const res = await fetch(url);
@@ -176,16 +156,24 @@ export default function ParametersPage() {
   );
 
   const {
-    data: competitionPeriods,
+    data: competitionPeriodsData,
     isLoading: isLoadingPeriods,
     error: periodsError,
   } = useQuery<CompetitionPeriodForSelect[]>({
     queryKey: ['competitionPeriodsForAdminParamsPage'],
     queryFn: fetchCompetitionPeriodsForSelect,
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 15, // 15 minutos
   });
+  const competitionPeriods = useMemo(
+    () => competitionPeriodsData || [],
+    [competitionPeriodsData]
+  );
+  // Efeito para definir o período inicial ou quando o usuário ainda não selecionou um
   useEffect(() => {
-    if (competitionPeriods && competitionPeriods.length > 0) {
+    // Só roda se os períodos foram carregados e NENHUM período está selecionado ainda
+    if (competitionPeriods.length > 0 && !selectedPeriodMesAno) {
+      let initialPeriodToSet = '';
+      // Tenta pegar do localStorage
       if (typeof window !== 'undefined') {
         const savedPeriod = localStorage.getItem(
           'selectedAdminParameterPeriod'
@@ -194,19 +182,18 @@ export default function ParametersPage() {
           savedPeriod &&
           competitionPeriods.find((p) => p.mesAno === savedPeriod)
         ) {
-          if (selectedPeriodMesAno !== savedPeriod)
-            setSelectedPeriodMesAno(savedPeriod); // Evita loop
-          return;
+          initialPeriodToSet = savedPeriod;
         }
       }
-      if (!selectedPeriodMesAno) {
-        // Só seta se ainda não tiver um selectedPeriodMesAno
+      // Se não achou no localStorage ou não é válido, define um default
+      if (!initialPeriodToSet) {
         const planningPeriod = competitionPeriods.find(
           (p) => p.status === 'PLANEJAMENTO'
         );
         const activePeriod = competitionPeriods.find(
           (p) => p.status === 'ATIVA'
         );
+        // Fallback para o período mais recente (pela data de início)
         const sortedPeriods = [...competitionPeriods].sort(
           (a, b) =>
             new Date(b.dataInicio || 0).getTime() -
@@ -216,13 +203,16 @@ export default function ParametersPage() {
           planningPeriod ||
           activePeriod ||
           (sortedPeriods.length > 0 ? sortedPeriods[0] : null);
-        if (defaultPeriod && selectedPeriodMesAno !== defaultPeriod.mesAno) {
-          // Evita loop
-          setSelectedPeriodMesAno(defaultPeriod.mesAno);
+        if (defaultPeriod) {
+          initialPeriodToSet = defaultPeriod.mesAno;
         }
       }
+      // Define o estado APENAS SE encontrou um período válido para setar
+      if (initialPeriodToSet) {
+        setSelectedPeriodMesAno(initialPeriodToSet);
+      }
     }
-  }, [competitionPeriods, selectedPeriodMesAno]);
+  }, [competitionPeriods]);
 
   const {
     data: activeCriteria,
@@ -272,7 +262,7 @@ export default function ParametersPage() {
         setIsCreateModalOpen(false);
         return `Meta "${savedParam.nomeParametro || `ID ${savedParam.id}`}" criada!`;
       },
-      error: (err: any) => err.message || 'Falha ao salvar meta.',
+      error: (err) => err.message || 'Falha ao salvar meta.',
     });
   };
 
@@ -312,7 +302,7 @@ export default function ParametersPage() {
         setEditingParameter(null);
         return `Meta "${updatedParam.nomeParametro || `ID ${updatedParam.id}`}" atualizada! (Nova ID: ${updatedParam.id}, Anterior ID: ${updatedParam.previousVersionId || 'N/A'})`;
       },
-      error: (err: any) => err.message || 'Falha ao atualizar meta.',
+      error: (err) => err.message || 'Falha ao atualizar meta.',
     });
   };
 
@@ -361,7 +351,7 @@ export default function ParametersPage() {
           setParameterToDelete(null);
           return `Meta "${deletedParam.nomeParametro}" expirada com sucesso!`;
         },
-        error: (err: any) => err.message || 'Falha ao expirar meta.',
+        error: (err) => err.message || 'Falha ao expirar meta.',
       }
     );
   };
@@ -384,7 +374,7 @@ export default function ParametersPage() {
         param.sectorId
       );
       setParameterHistoryData(history || []);
-    } catch (e: any) {
+    } catch (e) {
       setParameterHistoryData([]);
       console.error('Erro ao carregar histórico:', e.message);
       toast.error(e.message || 'Falha ao buscar histórico.');
@@ -412,22 +402,19 @@ export default function ParametersPage() {
     return (
       <div className='container mx-auto py-6 px-4 md:px-6 space-y-6'>
         <div className='flex items-center justify-between'>
-          {' '}
-          <Skeleton className='h-8 w-48' />{' '}
-          <Skeleton className='h-10 w-32' />{' '}
+          <Skeleton className='h-8 w-48' />
+          <Skeleton className='h-10 w-32' />
         </div>
         <div className='flex flex-wrap gap-4 items-center pb-4 border-b'>
-          {' '}
-          <Skeleton className='h-10 w-48' />{' '}
+          <Skeleton className='h-10 w-48' />
         </div>
         <Card>
-          {' '}
           <CardHeader>
             <Skeleton className='h-6 w-1/2' />
-          </CardHeader>{' '}
+          </CardHeader>
           <CardContent>
             <Skeleton className='h-40 w-full' />
-          </CardContent>{' '}
+          </CardContent>
         </Card>
       </div>
     );
@@ -478,68 +465,40 @@ export default function ParametersPage() {
                 <PlusCircle className='mr-2 h-4 w-4' /> Nova Meta
               </Button>
             </DialogTrigger>
-            <DialogContent className='sm:max-w-[550px]'>
-              <DialogHeader>
-                <DialogTitle>Cadastrar Nova Meta</DialogTitle>
-                <DialogDescription>
-                  Defina os valores para a nova meta. A justificativa é
-                  obrigatória.
-                </DialogDescription>
-              </DialogHeader>
-              <ParameterForm
-                isLoading={isCreatingParameter}
-                onSubmit={handleCreateParameter}
-                competitionPeriods={
-                  competitionPeriods?.filter(
-                    (p) => p.status === 'PLANEJAMENTO'
-                  ) || []
-                }
-                criteria={activeCriteria || []}
-                sectors={activeSectors || []}
-                onClose={() => setIsCreateModalOpen(false)}
-                isUpdate={false}
-              />
-            </DialogContent>
+            <CreateEditParameterModal
+              isOpen={isCreateModalOpen}
+              onOpenChange={setIsCreateModalOpen}
+              isUpdate={false}
+              isLoadingSubmit={isCreatingParameter}
+              onSubmit={handleCreateParameter}
+              competitionPeriods={competitionPeriods || []}
+              criteria={activeCriteria || []}
+              sectors={activeSectors || []}
+              todayStr={todayStr}
+              // initialData não é necessário para criação
+            />
           </Dialog>
         </div>
 
         <div className='flex flex-wrap gap-4 items-center pb-4 border-b'>
           <div className='flex items-center space-x-2'>
             <Label htmlFor='period-select-page'>Período:</Label>
-            <Select
-              value={selectedPeriodMesAno}
-              onValueChange={(value) => setSelectedPeriodMesAno(value || '')}
-              disabled={isLoadingPeriods}
-              name='period-select-page'
-            >
-              <SelectTrigger className='w-[200px]'>
-                <SelectValue
-                  placeholder={
-                    isLoadingPeriods ? 'Carregando...' : 'Selecione o Período'
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {competitionPeriods && competitionPeriods.length > 0 ? (
-                  competitionPeriods.map((period) => (
-                    <SelectItem key={period.id} value={period.mesAno}>
-                      {period.mesAno} ({period.status})
-                    </SelectItem>
-                  ))
-                ) : (
-                  <SelectItem value='loading' disabled>
-                    Carregando...
-                  </SelectItem>
-                )}
-              </SelectContent>
-            </Select>
+            <PeriodSelector
+              id='period-select-page' // Passa um ID para o label interno
+              label='Período:' // O label que você quer
+              periods={competitionPeriods || []} // Sua lista de períodos
+              selectedPeriodMesAno={selectedPeriodMesAno}
+              onPeriodChange={setSelectedPeriodMesAno} // Passa a função de setState diretamente
+              isLoading={isLoadingPeriods}
+              triggerClassName='w-[200px]' // Mantém a largura que você tinha
+            />
           </div>
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle>
-              Metas para o período:{' '}
+              Metas para o período:
               {selectedPeriodMesAno || 'Nenhum período selecionado'}
             </CardTitle>
           </CardHeader>
@@ -553,182 +512,24 @@ export default function ParametersPage() {
             )}
             {!isLoadingParameters && parametersError && (
               <Alert variant='destructive' className='mt-4'>
-                <AlertCircle className='h-4 w-4' />{' '}
+                <AlertCircle className='h-4 w-4' />
                 <AlertTitle>Erro ao Carregar Metas!</AlertTitle>
                 <AlertDescription>{parametersError.message}</AlertDescription>
               </Alert>
             )}
             {/* Exibição da Tabela de Metas */}
             {!isLoadingParameters && !parametersError && parameters && (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className='w-[250px]'>
-                      Nome do Parâmetro
-                    </TableHead>
-                    <TableHead>Valor</TableHead>
-                    <TableHead>Critério</TableHead>
-                    <TableHead>Setor</TableHead>
-                    <TableHead>Início Vigência</TableHead>
-                    <TableHead>Fim Vigência</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className='max-w-[200px]'>
-                      Justificativa
-                    </TableHead>
-                    <TableHead className='text-right w-[120px]'>
-                      Ações
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {parameters.length === 0 && !isLoadingParameters && (
-                    <TableRow>
-                      <TableCell colSpan={9} className='h-24 text-center'>
-                        Nenhuma meta encontrada para o período selecionado.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {isLoadingParameters && (
-                    <>
-                      {[...Array(5)].map((_, i) => (
-                        <TableRow key={`skel-${i}`}>
-                          <TableCell>
-                            <Skeleton className='h-5 w-full' />
-                          </TableCell>
-                          <TableCell>
-                            <Skeleton className='h-5 w-12' />
-                          </TableCell>
-                          <TableCell>
-                            <Skeleton className='h-5 w-24' />
-                          </TableCell>
-                          <TableCell>
-                            <Skeleton className='h-5 w-24' />
-                          </TableCell>
-                          <TableCell>
-                            <Skeleton className='h-5 w-20' />
-                          </TableCell>
-                          <TableCell>
-                            <Skeleton className='h-5 w-20' />
-                          </TableCell>
-                          <TableCell>
-                            <Skeleton className='h-5 w-16' />
-                          </TableCell>
-                          <TableCell>
-                            <Skeleton className='h-5 w-28' />
-                          </TableCell>
-                          <TableCell>
-                            <Skeleton className='h-5 w-20' />
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </>
-                  )}
-                  {!isLoadingParameters &&
-                    parameters.map((param) => {
-                      // Determina se a meta está vigente
-                      const isCurrentlyActive =
-                        !param.dataFimEfetivo ||
-                        new Date(param.dataFimEfetivo) >= new Date(todayStr);
-
-                      // Determina se as ações de editar/deletar devem estar habilitadas
-                      const periodOfParam = competitionPeriods?.find(
-                        (p) => p.id === param.competitionPeriodId
-                      );
-                      const canModify =
-                        periodOfParam?.status === 'PLANEJAMENTO' &&
-                        isCurrentlyActive;
-
-                      return (
-                        <TableRow
-                          key={param.id}
-                          className={
-                            !param.dataFimEfetivo
-                              ? 'bg-sky-50 dark:bg-sky-900/30'
-                              : ''
-                          }
-                        >
-                          <TableCell className='font-medium'>
-                            {param.nomeParametro}
-                          </TableCell>
-                          <TableCell>{param.valor}</TableCell>
-                          <TableCell>{param.criterio?.nome || '-'}</TableCell>
-                          <TableCell>{param.setor?.nome || 'Geral'}</TableCell>
-                          <TableCell>
-                            {formatDate(param.dataInicioEfetivo)}
-                          </TableCell>
-                          <TableCell>
-                            {param.dataFimEfetivo ? (
-                              formatDate(param.dataFimEfetivo)
-                            ) : (
-                              <span className='italic text-slate-500'>
-                                Vigente
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              className={
-                                isCurrentlyActive
-                                  ? 'bg-green-100 text-green-700 border-green-300 dark:bg-green-900/50 dark:text-green-300 dark:border-green-700'
-                                  : 'border-amber-500 text-amber-600 dark:border-amber-400 dark:text-amber-400'
-                              }
-                            >
-                              {isCurrentlyActive ? 'Ativa' : 'Expirada'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className='max-w-[150px] truncate text-xs'>
-                            <Tooltip>
-                              <TooltipTrigger className='cursor-help hover:underline'>
-                                {param.justificativa
-                                  ? `${param.justificativa.substring(0, 30)}${param.justificativa.length > 30 ? '...' : ''}`
-                                  : '-'}
-                              </TooltipTrigger>
-                              <TooltipContent className='max-w-xs whitespace-pre-wrap bg-background p-2 shadow-lg border rounded-md'>
-                                <p>
-                                  {param.justificativa || 'Sem justificativa.'}
-                                </p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TableCell>
-                          <TableCell className='text-right'>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant='ghost' className='h-8 w-8 p-0'>
-                                  <span className='sr-only'>Abrir menu</span>
-                                  <MoreHorizontal className='h-4 w-4' />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align='end'>
-                                <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                                <DropdownMenuItem
-                                  onClick={() => handleShowHistory(param)}
-                                >
-                                  <History className='mr-2 h-4 w-4' /> Ver
-                                  Histórico
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onClick={() => handleOpenEditModal(param)}
-                                  disabled={!canModify}
-                                >
-                                  <Edit className='mr-2 h-4 w-4' /> Editar Meta
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => handleOpenDeleteModal(param)}
-                                  disabled={!canModify}
-                                  className='text-red-600 focus:text-red-600 dark:focus:text-red-400 dark:focus:bg-red-900/50'
-                                >
-                                  <Trash2 className='mr-2 h-4 w-4' /> Expirar
-                                  Meta
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                </TableBody>
-              </Table>
+              <ParametersTable
+                parameters={parameters}
+                isLoading={isLoadingParameters}
+                error={parametersError}
+                selectedPeriodMesAno={selectedPeriodMesAno}
+                todayStr={todayStr}
+                competitionPeriods={competitionPeriods || []} // Garante que é um array
+                onEdit={handleOpenEditModal}
+                onDelete={handleOpenDeleteModal}
+                onShowHistory={handleShowHistory}
+              />
             )}
           </CardContent>
         </Card>
@@ -755,20 +556,21 @@ export default function ParametersPage() {
               <ParameterForm
                 isLoading={isUpdatingParameter}
                 onSubmit={handleUpdateParameter}
-                competitionPeriods={competitionPeriods || []}
-                criteria={activeCriteria || []}
-                sectors={activeSectors || []}
+                competitionPeriods={competitionPeriods || []} // Passa todos, form desabilita
+                criteria={activeCriteria || []} // Passa todos, form desabilita
+                sectors={activeSectors || []} // Passa todos, form desabilita
                 initialData={{
+                  // Mapeia os dados de ParameterValueAPI para ParameterFormValues
                   id: editingParameter.id,
                   nomeParametro: editingParameter.nomeParametro,
                   valor: editingParameter.valor,
-                  dataInicioEfetivo: todayStr,
-                  criterionId: editingParameter.criterionId,
-                  sectorId: editingParameter.sectorId,
-                  competitionPeriodId: editingParameter.competitionPeriodId,
-                  justificativa: '',
+                  dataInicioEfetivo: todayStr, // Data de início da NOVA VERSÃO
+                  criterionId: editingParameter.criterionId, // ID para desabilitar
+                  sectorId: editingParameter.sectorId, // ID para desabilitar
+                  competitionPeriodId: editingParameter.competitionPeriodId, // ID para desabilitar
+                  justificativa: '', // Justificativa da ALTERAÇÃO
                 }}
-                isUpdate={true}
+                isUpdate={true} // Modo de Edição
                 onClose={() => {
                   setIsEditModalOpen(false);
                   setEditingParameter(null);
@@ -851,16 +653,14 @@ export default function ParametersPage() {
               ) : (
                 <Table>
                   <TableHeader>
-                    {' '}
                     <TableRow>
-                      {' '}
                       <TableHead>Valor</TableHead>
                       <TableHead>Início Vigência</TableHead>
-                      <TableHead>Fim Vigência</TableHead>{' '}
+                      <TableHead>Fim Vigência</TableHead>
                       <TableHead>Criado Por</TableHead>
                       <TableHead>Justificativa</TableHead>
-                      <TableHead>Data Criação</TableHead>{' '}
-                    </TableRow>{' '}
+                      <TableHead>Data Criação</TableHead>
+                    </TableRow>
                   </TableHeader>
                   <TableBody>
                     {parameterHistoryData.length === 0 && (

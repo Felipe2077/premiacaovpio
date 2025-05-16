@@ -191,7 +191,7 @@ export class EtlService {
             // Lógica para buscar dados RAW de OCORRENCIAS HORÁRIAS
             case 'ATRASO':
             case 'FURO POR ATRASO':
-            case 'FURO DE VIAGEM':
+            case 'FURO POR VIAGEM':
               const rawOHData = await this.rawOcorrenciasHorariasRepo.find({
                 where: {
                   sectorName: sector.nome,
@@ -280,6 +280,26 @@ export class EtlService {
               });
               totalRealizadoBruto = rawIpkData ? rawIpkData.ipkValue : null;
               break;
+            case 'FALTA FROTA': // Use o nome EXATO do seu critério
+              const rawFaltaFrotaData =
+                await this.rawOcorrenciasHorariasRepo.find({
+                  where: {
+                    sectorName: sector.nome,
+                    criterionName: criterionNameUpper as any, // Será 'FALTA FROTA'
+                    metricDate: Between(dataInicio, dataFim),
+                  },
+                });
+              // Se não houver registros na raw para Falta Frota (o que é provável se for raro),
+              // o reduce em um array vazio resultará em 0, que é o valor realizado correto.
+              totalRealizadoBruto = rawFaltaFrotaData.reduce(
+                (sum, item) => sum + (Number(item.totalCount) || 0),
+                0
+              );
+              // Para Falta Frota, a meta é 0. O EtlService já busca a meta.
+              // Se não encontrar meta no parameter_values, valorMeta será null.
+              // O CalculationService tratará Meta=0/null e Realizado=0 para dar 1.0 ponto.
+              break;
+
             case 'KM OCIOSA':
               const rawKmOciosaComp =
                 await this.rawKmOciosaComponentsRepo.findOneBy({

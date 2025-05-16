@@ -2,39 +2,28 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { ParameterValueAPI } from '@/hooks/useParameters'; // Do seu hook
-import { formatDate } from '@/lib/utils'; // Sua função utilitária
+import { ParameterValueAPI } from '@/hooks/useParameters';
+import { formatDate } from '@/lib/utils';
 import { ColumnDef } from '@tanstack/react-table';
-import { Edit, History, MoreHorizontal, Trash2 } from 'lucide-react';
+import { ParameterActionsCell } from './parameter-actions-cell'; // Importar o novo componente
 
-// Interface para os períodos, para checar o status
 interface CompetitionPeriodForActions {
   id: number;
   mesAno: string;
   status: string;
 }
 
-// Props para a função que define as colunas
 interface ColumnsParametersProps {
   onEdit: (parameter: ParameterValueAPI) => void;
   onDelete: (parameter: ParameterValueAPI) => void;
   onShowHistory: (parameter: ParameterValueAPI) => void;
-  todayStr: string; // Data de hoje no formato YYYY-MM-DD
-  competitionPeriods: CompetitionPeriodForActions[]; // Lista de períodos para verificar o status
+  todayStr: string;
+  competitionPeriods: CompetitionPeriodForActions[];
 }
 
 export const columnsParameters = ({
@@ -48,7 +37,7 @@ export const columnsParameters = ({
     accessorKey: 'nomeParametro',
     header: 'Nome do Parâmetro',
     cell: ({ row }) => (
-      <div className='font-medium'>{row.getValue('nomeParametro')}</div>
+      <div className='font-medium'>{row.original.nomeParametro}</div>
     ),
   },
   {
@@ -58,42 +47,35 @@ export const columnsParameters = ({
   {
     accessorKey: 'criterio.nome',
     header: 'Critério',
-    cell: ({ row }) => {
-      const parameter = row.original;
-      return parameter.criterio?.nome || '-';
-    },
+    cell: ({ row }) => row.original.criterio?.nome || '-',
   },
   {
     accessorKey: 'setor.nome',
     header: 'Setor',
-    cell: ({ row }) => {
-      const parameter = row.original;
-      return parameter.setor?.nome || 'Geral';
-    },
+    cell: ({ row }) => row.original.setor?.nome || 'Geral',
   },
   {
     accessorKey: 'dataInicioEfetivo',
     header: 'Início Vigência',
-    cell: ({ row }) => formatDate(row.getValue('dataInicioEfetivo')),
+    cell: ({ row }) => formatDate(row.original.dataInicioEfetivo),
   },
   {
     accessorKey: 'dataFimEfetivo',
     header: 'Fim Vigência',
     cell: ({ row }) => {
-      const dataFim = row.getValue('dataFimEfetivo') as string | null;
+      const dataFim = row.original.dataFimEfetivo;
       return dataFim ? (
         formatDate(dataFim)
       ) : (
-        <span className='text-slate-500 italic'>Vigente</span>
+        <span className='italic text-slate-500'>Vigente</span>
       );
     },
   },
   {
-    id: 'statusMeta', // ID único para a coluna
+    id: 'statusMeta',
     header: 'Status',
     cell: ({ row }) => {
       const param = row.original;
-      // Uma meta é vigente se não tem data de fim OU se a data de fim é hoje ou no futuro
       const isVigente =
         !param.dataFimEfetivo ||
         new Date(param.dataFimEfetivo) >= new Date(todayStr);
@@ -115,10 +97,7 @@ export const columnsParameters = ({
     accessorKey: 'justificativa',
     header: 'Justificativa',
     cell: ({ row }) => {
-      const justificativa = row.getValue('justificativa') as
-        | string
-        | null
-        | undefined;
+      const justificativa = row.original.justificativa;
       if (!justificativa) return '-';
       const shortJustificativa = justificativa.substring(0, 25);
       return (
@@ -127,7 +106,7 @@ export const columnsParameters = ({
             {shortJustificativa}
             {justificativa.length > 25 ? '...' : ''}
           </TooltipTrigger>
-          <TooltipContent className='max-w-xs whitespace-pre-wrap bg-background border shadow-lg rounded-md p-2'>
+          <TooltipContent className='max-w-xs whitespace-pre-wrap bg-background p-2 shadow-lg border rounded-md'>
             <p>{justificativa}</p>
           </TooltipContent>
         </Tooltip>
@@ -137,52 +116,15 @@ export const columnsParameters = ({
   {
     id: 'actions',
     header: () => <div className='text-right'>Ações</div>,
-    cell: ({ row }) => {
-      const parameter = row.original;
-      const periodOfParam = competitionPeriods.find(
-        (p) => p.id === parameter.competitionPeriodId
-      );
-      const isMetaExpired =
-        parameter.dataFimEfetivo &&
-        new Date(parameter.dataFimEfetivo) < new Date(todayStr);
-
-      // Permite modificar (editar ou expirar) apenas se o período da meta estiver em 'PLANEJAMENTO'
-      // E se a meta em si ainda não estiver expirada (dataFimEfetivo no passado)
-      const canModify =
-        periodOfParam?.status === 'PLANEJAMENTO' && !isMetaExpired;
-
-      return (
-        <div className='text-right'>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant='ghost' className='h-8 w-8 p-0'>
-                <span className='sr-only'>Abrir menu de ações</span>
-                <MoreHorizontal className='h-4 w-4' />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align='end'>
-              <DropdownMenuLabel>Ações da Meta</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => onShowHistory(parameter)}>
-                <History className='mr-2 h-4 w-4' /> Ver Histórico
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => onEdit(parameter)}
-                disabled={!canModify}
-              >
-                <Edit className='mr-2 h-4 w-4' /> Editar Meta
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => onDelete(parameter)}
-                disabled={!canModify}
-                className='text-red-600 focus:text-red-600 dark:focus:text-red-400 dark:focus:bg-red-900/50'
-              >
-                <Trash2 className='mr-2 h-4 w-4' /> Expirar Meta
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      );
-    },
+    cell: ({ row }) => (
+      <ParameterActionsCell
+        parameter={row.original}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onShowHistory={onShowHistory}
+        todayStr={todayStr}
+        competitionPeriods={competitionPeriods}
+      />
+    ),
   },
 ];

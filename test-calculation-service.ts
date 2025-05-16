@@ -48,7 +48,7 @@ async function runCalculationServiceTest() {
 
     // 3. Definir o período para o qual queremos calcular o ranking
     // Garanta que o EtlService já populou a performance_data para este período!
-    const targetPeriodMesAno = '2025-04';
+    const targetPeriodMesAno = '2025-05';
     console.log(
       `[Test Calculation Script] Solicitando cálculo do ranking para o período: ${targetPeriodMesAno}`
     );

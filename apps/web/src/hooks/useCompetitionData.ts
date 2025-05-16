@@ -15,7 +15,7 @@ const fetchRankingData = async (): Promise<EntradaRanking[]> => {
     const errorText = await res
       .text()
       .catch(() => 'Erro ao ler corpo da resposta');
-    console.error(
+    console.log(
       'API Response Status (Ranking):',
       res.status,
       res.statusText,
@@ -26,7 +26,7 @@ const fetchRankingData = async (): Promise<EntradaRanking[]> => {
   try {
     return await res.json();
   } catch (e) {
-    throw new Error('Resposta inválida da API de ranking');
+    throw new Error('Resposta inválida da API de ranking' + e);
   }
 };
 
@@ -36,7 +36,7 @@ const fetchDetailedResults = async (): Promise<EntradaResultadoDetalhado[]> => {
     const errorText = await res
       .text()
       .catch(() => 'Erro ao ler corpo da resposta');
-    console.error(
+    console.log(
       'API Response Status (Results):',
       res.status,
       res.statusText,
@@ -47,7 +47,7 @@ const fetchDetailedResults = async (): Promise<EntradaResultadoDetalhado[]> => {
   try {
     return await res.json();
   } catch (e) {
-    throw new Error('Resposta inválida da API de resultados.');
+    throw new Error('Resposta inválida da API de resultados.' + e);
   }
 };
 
@@ -60,7 +60,7 @@ const fetchActiveCriteria = async (): Promise<
     const errorText = await res
       .text()
       .catch(() => 'Erro ao ler corpo da resposta');
-    console.error(
+    console.log(
       'API Response Status (Criteria):',
       res.status,
       res.statusText,
@@ -80,15 +80,12 @@ const fetchActiveCriteria = async (): Promise<
           (typeof item.index === 'number' || item.index === null)
       )
     ) {
-      console.error(
-        'Formato inesperado recebido de /api/criteria/active:',
-        data
-      );
+      console.log('Formato inesperado recebido de /api/criteria/active:', data);
       throw new Error('Resposta inválida da API de critérios.');
     }
     return data;
   } catch (e) {
-    throw new Error('Resposta inválida da API de critérios.');
+    throw new Error('Resposta inválida da API de critérios.' + e);
   }
 };
 

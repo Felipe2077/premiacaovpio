@@ -1,7 +1,8 @@
-// apps/web/src/app/admin/parameters/_components/parameter-form.tsx
+// apps/web/src/app/admin/parameters/_components/parameter-form.tsx (COMPLETO E CORRIGIDO)
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useEffect, useMemo } from 'react'; // Importar useEffect e useMemo
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
@@ -29,67 +30,60 @@ import {
   CreateParameterDto,
   UpdateParameterDto,
 } from '@sistema-premiacao/shared-types';
-import { useEffect } from 'react';
 
-// Definir tipos para os dados dos dropdowns (idealmente viriam de shared-types ou de um arquivo de tipos)
-interface CompetitionPeriod {
+// Interfaces locais para os dados dos dropdowns (podem vir de props ou ser buscadas aqui)
+interface CompetitionPeriodOption {
   id: number;
   mesAno: string;
   status: string;
 }
-interface Criterion {
+interface CriterionOption {
   id: number;
   nome: string;
 }
-interface Sector {
+interface SectorOption {
   id: number;
   nome: string;
 }
 
 // Schema de validação com Zod
 const parameterFormSchema = z.object({
-  nomeParametro: z
-    .string()
-    .min(3, { message: 'Nome deve ter pelo menos 3 caracteres.' })
-    .max(100)
-    .optional()
-    .or(z.literal('')), // Opcional, mas se fornecido, tem regras
-  valor: z.string().min(1, { message: 'Valor é obrigatório.' }), // Validar como número se necessário após conversão
-  dataInicioEfetivo: z.string().min(10, {
-    message: 'Data de início é obrigatória no formato YYYY-MM-DD.',
+  nomeParametro: z.string().max(100).optional().or(z.literal('')), // Opcional, mas se fornecido, tem regras
+  valor: z.string().min(1, { message: 'Valor é obrigatório.' }),
+  dataInicioEfetivo: z.string().refine((val) => !isNaN(Date.parse(val)), {
+    message: 'Data de início inválida.',
   }), // YYYY-MM-DD
-  criterionId: z.string().min(1, { message: 'Critério é obrigatório.' }), // Será string do Select, converter para number no submit
-  sectorId: z.string().optional().nullable(), // Pode ser string 'null', ID numérico como string, ou undefined
-  competitionPeriodId: z.string().min(1, { message: 'Período é obrigatório.' }), // Será string do Select
+  criterionId: z.string().min(1, { message: 'Critério é obrigatório.' }),
+  sectorId: z.string().nullable().optional(), // 'null' para geral, ID string, ou undefined
+  competitionPeriodId: z.string().min(1, { message: 'Período é obrigatório.' }),
   justificativa: z
     .string()
     .min(5, {
-      message:
-        'Justificativa é obrigatória e deve ter pelo menos 5 caracteres.',
+      message: 'Justificativa obrigatória (mín. 5 caracteres).',
     })
     .max(500),
-  // Para Update, o DTO no backend pode precisar de dataFimEfetivoAnterior
-  dataFimEfetivoAnterior: z.string().optional(),
+  // Apenas para UpdateDto, o backend espera isso opcionalmente
+  dataFimEfetivoAnterior: z.string().optional().nullable(),
 });
 
-type ParameterFormValues = z.infer<typeof parameterFormSchema>;
+export type ParameterFormValues = z.infer<typeof parameterFormSchema>;
 
 interface ParameterFormProps {
   isLoading: boolean;
-  onSubmit: (data: CreateParameterDto | UpdateParameterDto) => Promise<void>; // O submit recebe Create ou Update DTO
-  competitionPeriods: CompetitionPeriod[] | undefined;
-  criteria: Criterion[] | undefined;
-  sectors: Sector[] | undefined;
+  onSubmit: (data: CreateParameterDto | UpdateParameterDto) => Promise<void>;
+  competitionPeriods: CompetitionPeriodOption[];
+  criteria: CriterionOption[];
+  sectors: SectorOption[];
   initialData?: Partial<
     ParameterFormValues & {
       id?: number;
-      competitionPeriodId?: number;
-      criterionId?: number;
-      sectorId?: number | null;
+      competitionPeriodId?: number | string; // Pode vir como number do ParameterValueAPI
+      criterionId?: number | string; // Pode vir como number
+      sectorId?: number | string | null; // Pode vir como number ou null
     }
-  >; // Para edição
+  >;
   isUpdate?: boolean;
-  onClose?: () => void; // Para fechar o modal
+  onClose: () => void; // Para fechar o modal
 }
 
 export function ParameterForm({
@@ -102,85 +96,97 @@ export function ParameterForm({
   isUpdate = false,
   onClose,
 }: ParameterFormProps) {
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+
   const form = useForm<ParameterFormValues>({
     resolver: zodResolver(parameterFormSchema),
     defaultValues: {
-      nomeParametro: initialData?.nomeParametro || '',
-      valor: initialData?.valor || '',
-      dataInicioEfetivo:
-        initialData?.dataInicioEfetivo ||
-        new Date().toISOString().split('T')[0],
-      criterionId: initialData?.criterionId?.toString() || undefined,
-      sectorId: initialData?.sectorId?.toString() || 'null', // 'null' para "Nenhum (Geral)"
-      competitionPeriodId:
-        initialData?.competitionPeriodId?.toString() ||
-        competitionPeriods
-          ?.find((p) => p.status === 'PLANEJAMENTO')
-          ?.id.toString() || // Tenta pré-selecionar
-        undefined,
-      justificativa: initialData?.justificativa || '',
-      dataFimEfetivoAnterior: undefined, // Só para update, se necessário
+      nomeParametro: '',
+      valor: '',
+      dataInicioEfetivo: todayStr,
+      criterionId: undefined,
+      sectorId: 'null', // Default para "Nenhum (Geral)"
+      competitionPeriodId: undefined,
+      justificativa: '',
+      dataFimEfetivoAnterior: undefined,
     },
   });
 
   useEffect(() => {
-    // Para resetar o formulário se initialData mudar (ao abrir modal de edição)
-    if (initialData) {
+    if (isUpdate && initialData) {
       form.reset({
         nomeParametro: initialData.nomeParametro || '',
         valor: initialData.valor || '',
-        dataInicioEfetivo:
-          initialData.dataInicioEfetivo ||
-          new Date().toISOString().split('T')[0],
+        dataInicioEfetivo: initialData.dataInicioEfetivo || todayStr, // Para edição, a data de início é da NOVA versão
         criterionId: initialData.criterionId?.toString() || undefined,
         sectorId: initialData.sectorId?.toString() || 'null',
         competitionPeriodId:
           initialData.competitionPeriodId?.toString() || undefined,
-        justificativa: initialData.justificativa || '',
+        justificativa: initialData.justificativa || '', // A justificativa no DTO de update é para a MUDANÇA
       });
-    } else {
-      // Reset para criação
+    } else if (!isUpdate) {
+      const planningPeriod = competitionPeriods?.find(
+        (p) => p.status === 'PLANEJAMENTO'
+      );
       form.reset({
         nomeParametro: '',
         valor: '',
-        dataInicioEfetivo: new Date().toISOString().split('T')[0],
+        dataInicioEfetivo: todayStr,
         criterionId: undefined,
         sectorId: 'null',
-        competitionPeriodId:
-          competitionPeriods
-            ?.find((p) => p.status === 'PLANEJAMENTO')
-            ?.id.toString() || undefined,
+        competitionPeriodId: planningPeriod?.id.toString() || undefined,
         justificativa: '',
+        dataFimEfetivoAnterior: undefined,
       });
     }
-  }, [initialData, form, competitionPeriods]);
+  }, [initialData, isUpdate, form, competitionPeriods, todayStr]);
 
   const handleSubmit = async (values: ParameterFormValues) => {
-    const dtoData: CreateParameterDto | UpdateParameterDto = {
-      nomeParametro: values.nomeParametro || undefined, // Opcional, serviço pode gerar
+    const commonData = {
+      nomeParametro: values.nomeParametro || undefined,
       valor: values.valor,
       dataInicioEfetivo: values.dataInicioEfetivo,
-      criterionId: parseInt(values.criterionId!, 10), // ! pois é required no schema
-      sectorId:
-        values.sectorId === 'null' || !values.sectorId
-          ? null
-          : parseInt(values.sectorId, 10),
-      competitionPeriodId: parseInt(values.competitionPeriodId!, 10), // ! pois é required
       justificativa: values.justificativa,
-      ...(isUpdate &&
-        values.dataFimEfetivoAnterior && {
+    };
+
+    if (isUpdate) {
+      // Para Update, não enviamos criterionId, sectorId, competitionPeriodId
+      // pois eles não mudam ao versionar uma meta.
+      // O backend já tem essa informação da meta original.
+      const updateData: UpdateParameterDto = {
+        ...commonData,
+        // Opcional: se o usuário puder definir quando a meta antiga expira
+        ...(values.dataFimEfetivoAnterior && {
           dataFimEfetivoAnterior: values.dataFimEfetivoAnterior,
         }),
-    };
-    await onSubmit(dtoData);
-    // A lógica de fechar o modal e mostrar toast pode ficar no componente pai (page.tsx)
-    // ou ser chamada aqui se `onClose` for passado.
+      };
+      await onSubmit(updateData);
+    } else {
+      // Para Create, todos os IDs são necessários
+      if (!values.competitionPeriodId || !values.criterionId) {
+        // Zod já deve ter pego isso, mas uma checagem extra.
+        console.error('Período ou Critério não selecionado para nova meta.');
+        return;
+      }
+      const createData: CreateParameterDto = {
+        ...commonData,
+        criterionId: parseInt(values.criterionId, 10),
+        sectorId:
+          values.sectorId === 'null' || !values.sectorId
+            ? null
+            : parseInt(values.sectorId, 10),
+        competitionPeriodId: parseInt(values.competitionPeriodId, 10),
+      };
+      await onSubmit(createData);
+    }
   };
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className='space-y-6'>
-        {/* Período de Competição (Select) */}
+      <form
+        onSubmit={form.handleSubmit(handleSubmit)}
+        className='space-y-4 md:space-y-6 py-4'
+      >
         <FormField
           control={form.control}
           name='competitionPeriodId'
@@ -189,28 +195,57 @@ export function ParameterForm({
               <FormLabel>Período da Premiação*</FormLabel>
               <Select
                 onValueChange={field.onChange}
-                defaultValue={field.value}
-                disabled={isUpdate || !competitionPeriods}
+                value={field.value}
+                disabled={
+                  isUpdate ||
+                  !competitionPeriods ||
+                  competitionPeriods.length === 0
+                }
               >
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder='Selecione o período...' />
+                    <SelectValue
+                      placeholder={
+                        !competitionPeriods || competitionPeriods.length === 0
+                          ? 'Nenhum período adequado'
+                          : 'Selecione o período...'
+                      }
+                    />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {competitionPeriods?.map((p) => (
-                    <SelectItem
-                      key={p.id}
-                      value={String(p.id)}
-                      disabled={
-                        isUpdate
-                          ? p.id !== initialData?.competitionPeriodId
-                          : p.status !== 'PLANEJAMENTO'
-                      }
-                    >
-                      {p.mesAno} ({p.status})
-                    </SelectItem>
-                  ))}
+                  {isUpdate &&
+                    initialData?.competitionPeriodId &&
+                    (() => {
+                      const currentPeriod = competitionPeriods.find(
+                        (p) =>
+                          p.id.toString() ===
+                          initialData.competitionPeriodId?.toString()
+                      );
+                      return currentPeriod ? (
+                        <SelectItem
+                          key={currentPeriod.id}
+                          value={currentPeriod.id.toString()}
+                        >
+                          {currentPeriod.mesAno} ({currentPeriod.status})
+                        </SelectItem>
+                      ) : (
+                        <SelectItem value='' disabled>
+                          Período não encontrado
+                        </SelectItem>
+                      );
+                    })()}
+                  {!isUpdate &&
+                    competitionPeriods?.map((p) => (
+                      <SelectItem
+                        key={p.id}
+                        value={String(p.id)}
+                        disabled={p.status !== 'PLANEJAMENTO'}
+                      >
+                        {p.mesAno} ({p.status}){' '}
+                        {p.status !== 'PLANEJAMENTO' ? '(Não editável)' : ''}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -218,25 +253,32 @@ export function ParameterForm({
           )}
         />
 
-        {/* Nome do Parâmetro */}
         <FormField
           control={form.control}
           name='nomeParametro'
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Nome do Parâmetro (Opcional)</FormLabel>
+              <FormLabel>
+                Nome do Parâmetro{' '}
+                <span className='text-xs text-muted-foreground'>
+                  (Opcional)
+                </span>
+              </FormLabel>
               <FormControl>
-                <Input placeholder='Ex: META_ATRASO_GAMA_ABR25' {...field} />
+                <Input
+                  placeholder='Ex: META_ATRASO_GAMA_MAI25'
+                  {...field}
+                  value={field.value || ''}
+                />
               </FormControl>
               <FormDescription>
-                Se deixado em branco, um nome será gerado.
+                Se em branco, será gerado automaticamente.
               </FormDescription>
               <FormMessage />
             </FormItem>
           )}
         />
 
-        {/* Valor */}
         <FormField
           control={form.control}
           name='valor'
@@ -251,7 +293,6 @@ export function ParameterForm({
           )}
         />
 
-        {/* Critério */}
         <FormField
           control={form.control}
           name='criterionId'
@@ -260,7 +301,7 @@ export function ParameterForm({
               <FormLabel>Critério*</FormLabel>
               <Select
                 onValueChange={field.onChange}
-                defaultValue={field.value}
+                value={field.value}
                 disabled={isUpdate || !criteria}
               >
                 <FormControl>
@@ -281,16 +322,20 @@ export function ParameterForm({
           )}
         />
 
-        {/* Setor */}
         <FormField
           control={form.control}
           name='sectorId'
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Setor (Opcional)</FormLabel>
+              <FormLabel>
+                Setor{' '}
+                <span className='text-xs text-muted-foreground'>
+                  (Opcional)
+                </span>
+              </FormLabel>
               <Select
                 onValueChange={field.onChange}
-                defaultValue={field.value || 'null'}
+                value={field.value || 'null'}
                 disabled={isUpdate || !sectors}
               >
                 <FormControl>
@@ -312,7 +357,6 @@ export function ParameterForm({
           )}
         />
 
-        {/* Data de Início Efetivo */}
         <FormField
           control={form.control}
           name='dataInicioEfetivo'
@@ -322,25 +366,34 @@ export function ParameterForm({
               <FormControl>
                 <Input type='date' {...field} />
               </FormControl>
+              <FormDescription>
+                {isUpdate
+                  ? 'Data de início para esta NOVA VERSÃO da meta.'
+                  : 'Data em que esta meta começa a valer.'}
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
         />
 
-        {/* Apenas para Update: Data Fim Efetivo Anterior */}
-        {isUpdate && (
+        {isUpdate && ( // Campo para definir a data de fim da meta anterior, se necessário
           <FormField
             control={form.control}
             name='dataFimEfetivoAnterior'
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Expirar Meta Anterior em (Opcional)</FormLabel>
+                <FormLabel>
+                  Expirar Versão Anterior em{' '}
+                  <span className='text-xs text-muted-foreground'>
+                    (Opcional)
+                  </span>
+                </FormLabel>
                 <FormControl>
-                  <Input type='date' {...field} />
+                  <Input type='date' {...field} value={field.value || ''} />
                 </FormControl>
                 <FormDescription>
-                  Se não informado, a meta anterior expira um dia antes do
-                  início desta.
+                  Se não informado, a versão anterior expira um dia antes do
+                  `&quot;`Início da Vigência `&quot;` acima.
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -348,7 +401,6 @@ export function ParameterForm({
           />
         )}
 
-        {/* Justificativa */}
         <FormField
           control={form.control}
           name='justificativa'
@@ -357,28 +409,31 @@ export function ParameterForm({
               <FormLabel>Justificativa*</FormLabel>
               <FormControl>
                 <Textarea
-                  placeholder='Motivo da criação ou alteração desta meta...'
+                  placeholder={
+                    isUpdate
+                      ? 'Motivo da ALTERAÇÃO desta meta...'
+                      : 'Motivo da CRIAÇÃO desta meta...'
+                  }
                   {...field}
+                  rows={3}
                 />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
-        <DialogFooter className='pt-4'>
-          {onClose && (
-            <Button type='button' variant='outline' onClick={onClose}>
-              Cancelar
-            </Button>
-          )}
+        <DialogFooter className='pt-6'>
+          <Button type='button' variant='outline' onClick={onClose}>
+            Cancelar
+          </Button>
           <Button type='submit' disabled={isLoading}>
             {isLoading
               ? isUpdate
-                ? 'Atualizando...'
-                : 'Salvando...'
+                ? 'Atualizando Meta...'
+                : 'Criando Meta...'
               : isUpdate
                 ? 'Salvar Alterações'
-                : 'Criar Parâmetro'}
+                : 'Criar Meta'}
           </Button>
         </DialogFooter>
       </form>
