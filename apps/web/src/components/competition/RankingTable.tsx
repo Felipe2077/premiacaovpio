@@ -50,9 +50,9 @@ export function RankingTable({
 
   // Se temos dados, renderiza a tabela
   return (
-    <div className='border rounded-md'>
+    <div className='border rounded-md '>
       <Table>
-        <TableCaption>
+        <TableCaption className='text-sm'>
           Classificação atual (Menor pontuação = Melhor posição).
         </TableCaption>
         <TableHeader>

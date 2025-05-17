@@ -23,11 +23,11 @@ import {
   EntradaResultadoDetalhado,
 } from '@sistema-premiacao/shared-types';
 
-// Tipos auxiliares e Props Interface (similar ao PointsTable/DetailedResultsTable)
-interface SimpleSector {
-  id: number;
-  name: string;
-}
+// // Tipos auxiliares e Props Interface (similar ao PointsTable/DetailedResultsTable)
+// interface SimpleSector {
+//   id: number;
+//   name: string;
+// }
 interface CriterionResultMap {
   [criterionId: number]: EntradaResultadoDetalhado | undefined;
 }
@@ -38,7 +38,7 @@ interface SectorData {
 
 interface PerformanceTableProps {
   resultsBySector: Record<number, SectorData>;
-  uniqueCriteria: Pick<Criterio, 'id' | 'nome'>[];
+  uniqueCriteria: Pick<Criterio, 'id' | 'name'>[];
   activeCriteria:
     | Pick<Criterio, 'id' | 'index' | 'sentido_melhor'>[]
     | undefined
@@ -139,13 +139,13 @@ export function PerformanceTable({
           </TableCaption>
           <TableHeader>
             <TableRow>
-              <TableHead className='sticky left-0 bg-background z-10 font-semibold min-w-[150px] px-2 sm:px-4'>
+              <TableHead className='sticky left-0 bg-background z-10 font-semibold px-2 sm:px-4'>
                 Setor
               </TableHead>
               {uniqueCriteria.map((criterion) => (
                 <TableHead
                   key={criterion.id}
-                  className='text-center font-semibold min-w-[120px] px-1 py-2 text-xs whitespace-normal align-top'
+                  className='text-center font-semibold min-w-[120px] px-1 py-2 text-xs whitespace-normal align-top char'
                 >
                   {criterion.name} <br />
                   <span className='text-muted-foreground font-normal'>

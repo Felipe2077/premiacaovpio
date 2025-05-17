@@ -171,7 +171,7 @@ export function PointsTable({
           </TableCaption>
           <TableHeader>
             <TableRow>
-              <TableHead className='sticky left-0 bg-background z-10 font-semibold min-w-[150px] px-2 sm:px-4'>
+              <TableHead className='sticky left-0 bg-background z-10 font-semibold min-w-[100px] px-2 sm:px-4'>
                 Setor
               </TableHead>
               {uniqueCriteria.map((criterion) => (

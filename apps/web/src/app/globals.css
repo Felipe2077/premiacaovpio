@@ -1,5 +1,5 @@
-@import "tailwindcss";
-@import "tw-animate-css";
+@import 'tailwindcss';
+@import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -118,5 +118,41 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+.table-responsive-container {
+  width: 100%;
+  overflow-x: auto;
+  margin-bottom: 1rem;
+  position: relative;
+  border-radius: 0.5rem;
+}
+
+.table-responsive-container table {
+  width: 100%;
+  min-width: 600px; /* Ajuste conforme necessário */
+}
+
+/* Colunas fixas */
+.sticky-column {
+  position: sticky;
+  left: 0;
+  background-color: white;
+  z-index: 10;
+}
+
+.dark .sticky-column {
+  background-color: #1f2937;
+}
+
+/* Fixar containers para evitar duplo overflow */
+.main-container {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+@media (min-width: 1024px) {
+  .table-responsive-container table {
+    min-width: 800px; /* Mais espaço em telas maiores */
   }
 }

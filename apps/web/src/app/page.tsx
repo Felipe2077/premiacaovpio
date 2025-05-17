@@ -20,8 +20,14 @@ export default function HomePage() {
     error, // Estado de erro combinado
   } = useCompetitionData();
 
-  // As funções de formatação e estilo agora estão em lib/utils ou dentro de DetailedResultsTable
+  function getDataAtual() {
+    const hoje = new Date();
+    const dia = String(hoje.getDate()).padStart(2, '0');
+    const mes = String(hoje.getMonth() + 1).padStart(2, '0'); // Janeiro é 0
+    const ano = hoje.getFullYear();
 
+    return `${dia}/${mes}/${ano}`;
+  }
   return (
     <TooltipProvider>
       <main className='container mx-auto px-4 lg:px-6 flex flex-col gap-8 flex-1'>
@@ -36,7 +42,9 @@ export default function HomePage() {
         <section>
           <div className='flex justify-between mt-4 mb-2 items-center'>
             <div>
-              <h2 className='text-2xl font-semibold my-1'>🏆 Ranking Atual</h2>
+              <h2 className='text-2xl font-semibold my-1'>
+                🏆 Ranking Atual - Atualizado em: {getDataAtual()}
+              </h2>
               <p className='text-sm text-gray-600 dark:text-gray-400 italic mb-3'>
                 Classificação final baseada na soma dos pontos por critério
                 (Menor pontuação = Melhor posição).

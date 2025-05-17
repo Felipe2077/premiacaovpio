@@ -1,4 +1,4 @@
-// apps/web/src/app/layout.tsx (ATUALIZADO)
+// apps/web/src/app/layout.tsx (CORRIGIDO)
 import Providers from '@/components/Providers';
 import { Header } from '@/components/layout/Header';
 import type { Metadata } from 'next';
@@ -19,10 +19,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang='pt-BR'>
-      <body className={`${inter.className} flex  flex-col min-h-screen`}>
+      <body className={`${inter.className} flex flex-col min-h-screen`}>
         <Header />
-        {/* Conteúdo principal da página */}
-        <main className='flex-grow container mx-auto p-4 lg:p-6'>
+        {/* Conteúdo principal da página - removido container fixo */}
+        <main className='flex-grow w-full'>
           <Providers>{children}</Providers>
         </main>
         {/* Footer simples */}
