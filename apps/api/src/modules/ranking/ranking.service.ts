@@ -140,7 +140,7 @@ export class RankingService {
 
     // Usar a data fim da vigência como data alvo para buscar parâmetros e dados de desempenho
     //const targetDate = competitionPeriod.dataFim;
-    const targetDate = '2025-05-01';
+    const targetDate = '2025-05-30';
     console.log(
       `[RankingService] ATENÇÃO: Usando data fixa para cálculos: ${targetDate} (em vez da data fim da vigência)`
     );
@@ -216,24 +216,24 @@ export class RankingService {
 
         // IMPORTANTE: Verificar se existem dados para a data fixa que funcionava antes
         console.log(
-          `[RankingService] Verificando se existem dados para a data fixa 2025-05-01...`
+          `[RankingService] Verificando se existem dados para a data fixa 2025-05-30...`
         );
         const fixedDateData = await this.performanceRepo.find({
-          where: { metricDate: '2025-05-01' },
+          where: { metricDate: '2025-05-30' },
           take: 5,
         });
 
         if (fixedDateData.length > 0) {
           console.log(
-            `[RankingService] Dados encontrados para a data fixa 2025-05-01: ${fixedDateData.length}`
+            `[RankingService] Dados encontrados para a data fixa 2025-05-30: ${fixedDateData.length}`
           );
           console.log(
-            `[RankingService] Amostra de dados para 2025-05-01:`,
+            `[RankingService] Amostra de dados para 2025-05-30:`,
             fixedDateData.slice(0, 2)
           );
         } else {
           console.log(
-            `[RankingService] Nenhum dado encontrado para a data fixa 2025-05-01`
+            `[RankingService] Nenhum dado encontrado para a data fixa 2025-05-30`
           );
         }
       } else {
@@ -757,7 +757,7 @@ export class RankingService {
     );
     try {
       // Usar a data fixa se não for especificada
-      const effectiveTargetDate = targetDate || '2025-05-01';
+      const effectiveTargetDate = targetDate || '2025-05-30';
 
       // Chamar método interno com a data alvo específica
       const { details } = await this.calculateAllResultsByDate(
@@ -873,7 +873,7 @@ export class RankingService {
     });
 
     // Usar a data alvo especificada ou a data fixa padrão
-    const effectiveTargetDate = targetDate || '2025-05-01';
+    const effectiveTargetDate = targetDate || '2025-05-30';
     console.log(
       `[RankingService] Usando data alvo para cálculos: ${effectiveTargetDate}`
     );
@@ -1465,4 +1465,212 @@ export class RankingService {
       throw error; // Propagar o erro para que o endpoint possa tratá-lo
     }
   }
-} // Fim Classe
+
+  // Em ranking.service.ts
+  // Em ranking.service.ts
+  /**
+   * Busca resultados detalhados para um intervalo de datas dentro de um período específico
+   * @param period O período no formato YYYY-MM
+   * @param startDate A data inicial do intervalo
+   * @param endDate A data final do intervalo
+   * @returns Array de resultados detalhados
+   */
+  async getDetailedResultsByDateRange(
+    period: string,
+    startDate: string,
+    endDate: string
+  ): Promise<EntradaResultadoDetalhado[]> {
+    if (!period || !startDate || !endDate) {
+      throw new Error('Período, data inicial e data final são obrigatórios');
+    }
+
+    console.log(
+      `[RankingService] getDetailedResultsByDateRange - Período: ${period}, Intervalo: ${startDate} a ${endDate}`
+    );
+
+    // Buscar a vigência correspondente ao período
+    const competitionPeriod = await this.periodRepo.findOne({
+      where: { mesAno: period },
+    });
+
+    if (!competitionPeriod) {
+      console.error(
+        `[RankingService] Vigência não encontrada para o período ${period}`
+      );
+      throw new Error(`Vigência não encontrada para o período ${period}`);
+    }
+
+    console.log(
+      `[RankingService] Vigência encontrada: ID ${competitionPeriod.id}, Status: ${competitionPeriod.status}`
+    );
+
+    // Determinar a data correta a usar com base no período
+    let effectiveDate: string;
+
+    if (period === '2025-04') {
+      effectiveDate = '2025-04-30'; // Sabemos que abril usa o último dia
+      console.log(
+        `[RankingService] Usando data específica para abril: ${effectiveDate}`
+      );
+    } else if (period === '2025-05') {
+      effectiveDate = '2025-05-01'; // Sabemos que maio usa o primeiro dia
+      console.log(
+        `[RankingService] Usando data específica para maio: ${effectiveDate}`
+      );
+    } else {
+      // Para outros períodos, verificar se há dados no primeiro dia
+      const firstDayData = await this.performanceRepo.findOne({
+        where: {
+          metricDate: startDate,
+          competitionPeriodId: competitionPeriod.id,
+        },
+      });
+
+      if (firstDayData) {
+        effectiveDate = startDate;
+        console.log(
+          `[RankingService] Usando primeiro dia do mês: ${effectiveDate}`
+        );
+      } else {
+        // Se não houver dados no primeiro dia, tentar o último dia
+        const lastDayData = await this.performanceRepo.findOne({
+          where: {
+            metricDate: endDate,
+            competitionPeriodId: competitionPeriod.id,
+          },
+        });
+
+        if (lastDayData) {
+          effectiveDate = endDate;
+          console.log(
+            `[RankingService] Usando último dia do mês: ${effectiveDate}`
+          );
+        } else {
+          // Se não houver dados nem no primeiro nem no último dia, buscar qualquer data disponível
+          const anyData = await this.performanceRepo.findOne({
+            where: {
+              competitionPeriodId: competitionPeriod.id,
+            },
+            order: {
+              metricDate: 'DESC',
+            },
+          });
+
+          if (anyData && anyData.metricDate) {
+            effectiveDate = anyData.metricDate;
+            console.log(
+              `[RankingService] Usando data disponível: ${effectiveDate}`
+            );
+          } else {
+            // Se não houver nenhum dado, usar o primeiro dia como fallback
+            effectiveDate = startDate;
+            console.log(
+              `[RankingService] Nenhum dado encontrado, usando primeiro dia como fallback: ${effectiveDate}`
+            );
+          }
+        }
+      }
+    }
+
+    console.log(
+      `[RankingService] Data efetiva final: ${effectiveDate} para período ${period}`
+    );
+
+    // Verificar se há dados para a data efetiva
+    const dataCount = await this.performanceRepo.count({
+      where: {
+        metricDate: effectiveDate,
+        competitionPeriodId: competitionPeriod.id,
+      },
+    });
+
+    console.log(
+      `[RankingService] Quantidade de dados para ${effectiveDate}: ${dataCount}`
+    );
+
+    // Usar o método existente com a data correta
+    try {
+      const { details } = await this.calculateAllResultsByDate(
+        period,
+        effectiveDate
+      );
+
+      console.log(`[RankingService] Resultados calculados: ${details.length}`);
+      return details;
+    } catch (error: any) {
+      console.error(
+        `[RankingService] Erro ao calcular resultados: ${error.message}`,
+        error
+      );
+
+      // Se falhar, tentar uma abordagem alternativa
+      console.log(`[RankingService] Tentando abordagem alternativa...`);
+
+      // Buscar todos os dados para este período
+      const allData = await this.performanceRepo.find({
+        where: {
+          competitionPeriodId: competitionPeriod.id,
+        },
+      });
+
+      if (allData.length === 0) {
+        console.warn(
+          `[RankingService] Nenhum dado encontrado para o período ${period}`
+        );
+        return [];
+      }
+
+      // Agrupar por data para encontrar a data com mais dados
+      const dataByDate = allData.reduce(
+        (acc, curr) => {
+          const date = curr.metricDate;
+          if (!acc[date]) {
+            acc[date] = [];
+          }
+          acc[date].push(curr);
+          return acc;
+        },
+        {} as Record<string, PerformanceDataEntity[]>
+      );
+
+      // Encontrar a data com mais dados
+      let bestDate = '';
+      let maxCount = 0;
+
+      for (const [date, data] of Object.entries(dataByDate)) {
+        if (data.length > maxCount) {
+          maxCount = data.length;
+          bestDate = date;
+        }
+      }
+
+      if (bestDate) {
+        console.log(
+          `[RankingService] Tentando com a data que tem mais dados: ${bestDate}`
+        );
+        try {
+          const { details } = await this.calculateAllResultsByDate(
+            period,
+            bestDate
+          );
+
+          console.log(
+            `[RankingService] Resultados calculados (alternativa): ${details.length}`
+          );
+          return details;
+        } catch (secondError: any) {
+          console.error(
+            `[RankingService] Erro na segunda tentativa: ${secondError.message}`,
+            secondError
+          );
+        }
+      }
+
+      // Se todas as tentativas falharem
+      console.error(
+        `[RankingService] Todas as tentativas falharam para o período ${period}`
+      );
+      return [];
+    }
+  }
+}

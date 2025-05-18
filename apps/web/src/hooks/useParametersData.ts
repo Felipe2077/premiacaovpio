@@ -84,9 +84,9 @@ export function useParametersData(selectedPeriod?: string) {
       // Adicionar timestamp para evitar cache
       const timestamp = new Date().getTime();
 
-      // Usar o novo endpoint com a data fixa e apontar para o backend
+      // Usar o novo endpoint que aceita apenas o período
       const response = await fetch(
-        `${API_BASE_URL}/api/results/by-date?period=${period}&targetDate=2025-05-01&_t=${timestamp}`
+        `${API_BASE_URL}/api/results/by-period?period=${period}&_t=${timestamp}`
       );
 
       if (!response.ok) {
@@ -121,13 +121,33 @@ export function useParametersData(selectedPeriod?: string) {
       // Tentar o endpoint original como fallback
       try {
         const timestamp = new Date().getTime();
-        const fallbackResponse = await fetch(
-          `${API_BASE_URL}/api/results?period=${period}&_t=${timestamp}`
+
+        // Primeiro tentar o endpoint by-date com data específica para o período
+        const fallbackDate = period === '2025-04' ? '2025-04-30' : '2025-05-01';
+
+        let fallbackResponse = await fetch(
+          `${API_BASE_URL}/api/results/by-date?period=${period}&targetDate=${fallbackDate}&_t=${timestamp}`
         );
+
         if (fallbackResponse.ok) {
           const fallbackData = await fallbackResponse.json();
           console.log(
-            `Resultados recebidos do endpoint fallback:`,
+            `Resultados recebidos do endpoint fallback by-date:`,
+            fallbackData
+          );
+          setResults(fallbackData);
+          return fallbackData;
+        }
+
+        // Se o primeiro fallback falhar, tentar o endpoint results genérico
+        fallbackResponse = await fetch(
+          `${API_BASE_URL}/api/results?period=${period}&_t=${timestamp}`
+        );
+
+        if (fallbackResponse.ok) {
+          const fallbackData = await fallbackResponse.json();
+          console.log(
+            `Resultados recebidos do endpoint fallback genérico:`,
             fallbackData
           );
           setResults(fallbackData);

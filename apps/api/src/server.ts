@@ -166,6 +166,8 @@ const start = async () => {
         reply.status(500).send({ error: error.message || 'Erro.' });
       }
     });
+
+    //Endpoint para buscar resultados
     fastify.get('/api/results', async (request, reply) => {
       try {
         // Extrair o parâmetro period da query string
@@ -215,6 +217,88 @@ const start = async () => {
         reply.send(data);
       } catch (error: any) {
         fastify.log.error(`Erro em /api/results/current: ${error.message}`);
+        reply.status(500).send({ error: error.message || 'Erro.' });
+      }
+    });
+
+    // Em routes.ts ou arquivo equivalente
+    // Em routes.ts ou arquivo equivalente
+    fastify.get('/api/results/by-period', async (request, reply) => {
+      try {
+        const query = request.query as { period?: string };
+        const { period } = query;
+
+        if (!period || !period.match(/^\d{4}-\d{2}$/)) {
+          return reply
+            .status(400)
+            .send({ error: 'Formato de período inválido. Use YYYY-MM' });
+        }
+
+        console.log(`[API] GET /api/results/by-period - Período: ${period}`);
+
+        // Extrair ano e mês do período com validação
+        const parts = period.split('-');
+
+        // Verificar se temos exatamente duas partes
+        if (parts.length !== 2) {
+          return reply
+            .status(400)
+            .send({ error: 'Formato de período inválido. Use YYYY-MM' });
+        }
+
+        // Garantir que parts[0] e parts[1] existem antes de usar parseInt
+        const yearStr = parts[0];
+        const monthStr = parts[1];
+
+        if (!yearStr || !monthStr) {
+          return reply
+            .status(400)
+            .send({ error: 'Formato de período inválido. Use YYYY-MM' });
+        }
+
+        const year = parseInt(yearStr, 10);
+        const month = parseInt(monthStr, 10);
+
+        if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+          return reply
+            .status(400)
+            .send({ error: 'Valores de ano ou mês inválidos' });
+        }
+
+        // Criar datas de início e fim do mês
+        const startDate = new Date(year, month - 1, 1);
+        const endDate = new Date(year, month, 0);
+
+        // Formatar as datas para o formato ISO (YYYY-MM-DD)
+        const startDateStr = startDate.toISOString().split('T')[0];
+        const endDateStr = endDate.toISOString().split('T')[0];
+
+        console.log(
+          `[API] Intervalo de datas: ${startDateStr} a ${endDateStr}`
+        );
+
+        // Verificar se as datas foram formatadas corretamente
+        if (!startDateStr || !endDateStr) {
+          return reply.status(500).send({ error: 'Erro ao formatar datas' });
+        }
+
+        // Buscar resultados usando o período completo
+        const data = await rankingService.getDetailedResultsByDateRange(
+          period,
+          startDateStr,
+          endDateStr
+        );
+
+        console.log(
+          `[API] GET /api/results/by-period - Resultados encontrados: ${data.length}`
+        );
+
+        reply.send(data);
+      } catch (error: any) {
+        console.error(
+          `[API] ERRO em /api/results/by-period: ${error.message}`,
+          error
+        );
         reply.status(500).send({ error: error.message || 'Erro.' });
       }
     });
