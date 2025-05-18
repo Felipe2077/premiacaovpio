@@ -1,14 +1,28 @@
 // hooks/useParametersData.ts
-import { useQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 
-// Interfaces
-export interface CompetitionPeriod {
+export interface Period {
   id: number;
   mesAno: string;
-  status: string;
-  dataInicio?: string;
-  dataFim?: string;
+  status: 'ATIVA' | 'FECHADA' | 'PLANEJAMENTO';
+  dataInicio: string;
+  dataFim: string;
+}
+
+export interface Criterion {
+  id: number;
+  nome: string;
+  descricao: string;
+  ativo: boolean;
+  sentido_melhor: 'MAIOR' | 'MENOR';
+  index: number;
+}
+
+export interface Sector {
+  id: number;
+  nome: string;
+  ativo: boolean;
 }
 
 export interface ResultData {
@@ -17,174 +31,498 @@ export interface ResultData {
   criterioId: number;
   criterioNome: string;
   periodo: string;
-  valorRealizado: number;
-  valorMeta: number;
-  percentualAtingimento: number;
-  pontos: number;
+  valorRealizado: number | null;
+  valorMeta: number | null;
+  percentualAtingimento: number | null;
+  pontos: number | null;
 }
 
-export interface Criterion {
-  id: number;
-  nome: string;
-  active?: boolean;
-}
+const API_BASE_URL = 'http://localhost:3001';
 
-export interface Sector {
-  id: number;
-  nome: string;
-  active?: boolean;
-}
+export function useParametersData(selectedPeriod?: string) {
+  const [periods, setPeriods] = useState<Period[]>([]);
+  const [criteria, setCriteria] = useState<Criterion[]>([]);
+  const [sectors, setSectors] = useState<Sector[]>([]);
+  const [results, setResults] = useState<ResultData[]>([]);
+  const [isLoadingPeriods, setIsLoadingPeriods] = useState(false);
+  const [isLoadingCriteria, setIsLoadingCriteria] = useState(false);
+  const [isLoadingSectors, setIsLoadingSectors] = useState(false);
+  const [isLoadingResults, setIsLoadingResults] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-// Funções de fetch
-const fetchPeriods = async (): Promise<CompetitionPeriod[]> => {
-  const API_BASE_URL =
-    process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-  console.log('Buscando períodos da API...');
-  const res = await fetch(`${API_BASE_URL}/api/periods`);
-  if (!res.ok) {
-    throw new Error(`Erro ${res.status} ao buscar períodos`);
-  }
-  const data = await res.json();
-  console.log('Períodos recebidos:', data);
-  return data;
-};
+  // Função para buscar períodos
+  const fetchPeriods = useCallback(async () => {
+    console.log('Buscando períodos da API...');
+    setIsLoadingPeriods(true);
+    try {
+      const timestamp = new Date().getTime();
+      const response = await fetch(
+        `${API_BASE_URL}/api/periods?_t=${timestamp}`
+      );
+      if (!response.ok) {
+        throw new Error('Falha ao buscar períodos');
+      }
+      const data = await response.json();
+      console.log('Períodos recebidos:', data);
+      setPeriods(data);
+      return data;
+    } catch (error) {
+      console.error('Erro ao buscar períodos:', error);
+      setError('Falha ao carregar períodos. Tente novamente mais tarde.');
+      return [];
+    } finally {
+      setIsLoadingPeriods(false);
+    }
+  }, []);
 
-const fetchResults = async (periodMesAno: string): Promise<ResultData[]> => {
-  if (!periodMesAno) return [];
+  // Função para buscar resultados
+  const fetchResults = useCallback(async (period: string) => {
+    console.log(`Buscando resultados para o período ${period}...`);
+    setIsLoadingResults(true);
+    setError(null);
+    try {
+      // Adicionar timestamp para evitar cache
+      const timestamp = new Date().getTime();
 
-  const API_BASE_URL =
-    process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-  console.log(`Buscando resultados para o período ${periodMesAno}...`);
-  const url = `${API_BASE_URL}/api/results?period=${periodMesAno}`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Erro ${res.status} ao buscar resultados`);
-  }
-  const data = await res.json();
-  console.log(`Resultados recebidos para o período ${periodMesAno}:`, data);
-  return data;
-};
+      // Usar o novo endpoint com a data fixa e apontar para o backend
+      const response = await fetch(
+        `${API_BASE_URL}/api/results/by-date?period=${period}&targetDate=2025-05-01&_t=${timestamp}`
+      );
 
-const fetchCriteria = async (): Promise<Criterion[]> => {
-  const API_BASE_URL =
-    process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-  console.log('Buscando critérios...');
-  const url = `${API_BASE_URL}/api/criteria/active`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Erro ${res.status} ao buscar critérios`);
-  }
-  const data = await res.json();
-  console.log('Critérios recebidos:', data);
-  return data;
-};
+      if (!response.ok) {
+        throw new Error('Falha ao buscar resultados');
+      }
+      const data = await response.json();
+      console.log(`Resultados recebidos para o período ${period}:`, data);
 
-const fetchSectors = async (): Promise<Sector[]> => {
-  const API_BASE_URL =
-    process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-  console.log('Buscando setores...');
-  const url = `${API_BASE_URL}/api/sectors/active`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Erro ${res.status} ao buscar setores`);
-  }
-  const data = await res.json();
-  console.log('Setores recebidos:', data);
-  return data;
-};
-
-// Hook principal
-export function useParametersData(selectedPeriod: string) {
-  // Buscar períodos
-  const periodsQuery = useQuery({
-    queryKey: ['periods'],
-    queryFn: fetchPeriods,
-    staleTime: 1000 * 60 * 15, // 15 minutos
-  });
-
-  // Buscar resultados
-  const resultsQuery = useQuery({
-    queryKey: ['results', selectedPeriod],
-    queryFn: () => fetchResults(selectedPeriod),
-    enabled: !!selectedPeriod, // Só executa se tiver um período selecionado
-    staleTime: 1000 * 60 * 5, // 5 minutos
-  });
-
-  // Buscar critérios
-  const criteriaQuery = useQuery({
-    queryKey: ['criteria'],
-    queryFn: fetchCriteria,
-    staleTime: Infinity, // Não muda com frequência
-  });
-
-  // Buscar setores
-  const sectorsQuery = useQuery({
-    queryKey: ['sectors'],
-    queryFn: fetchSectors,
-    staleTime: Infinity, // Não muda com frequência
-  });
-
-  // Processar dados para exibição
-  const processedData = useMemo(() => {
-    const results = resultsQuery.data || [];
-
-    // Extrair critérios únicos
-    const criteriaMap = new Map();
-    results.forEach((result) => {
-      if (!criteriaMap.has(result.criterioId)) {
-        criteriaMap.set(result.criterioId, {
-          id: result.criterioId,
-          name: result.criterioNome,
+      // Verificar a estrutura dos dados
+      if (data && data.length > 0) {
+        console.log('Estrutura de um resultado:', {
+          setorId: data[0].setorId,
+          setorNome: data[0].setorNome,
+          criterioId: data[0].criterioId,
+          criterioNome: data[0].criterioNome,
+          periodo: data[0].periodo,
+          valorRealizado: data[0].valorRealizado,
+          valorMeta: data[0].valorMeta,
+          percentualAtingimento: data[0].percentualAtingimento,
+          pontos: data[0].pontos,
         });
       }
-    });
-    const uniqueCriteria = Array.from(criteriaMap.values());
 
-    // Organizar resultados por setor
-    const resultsBySector = {};
+      setResults(data);
+      return data;
+    } catch (error) {
+      console.error(
+        `Erro ao buscar resultados para o período ${period}:`,
+        error
+      );
+
+      // Tentar o endpoint original como fallback
+      try {
+        const timestamp = new Date().getTime();
+        const fallbackResponse = await fetch(
+          `${API_BASE_URL}/api/results?period=${period}&_t=${timestamp}`
+        );
+        if (fallbackResponse.ok) {
+          const fallbackData = await fallbackResponse.json();
+          console.log(
+            `Resultados recebidos do endpoint fallback:`,
+            fallbackData
+          );
+          setResults(fallbackData);
+          return fallbackData;
+        }
+      } catch (fallbackError) {
+        console.error(`Erro no fallback:`, fallbackError);
+      }
+
+      setError('Falha ao carregar resultados. Tente novamente mais tarde.');
+      return [];
+    } finally {
+      setIsLoadingResults(false);
+    }
+  }, []);
+
+  // Função para buscar critérios
+  const fetchCriteria = useCallback(async () => {
+    console.log('Buscando critérios...');
+    setIsLoadingCriteria(true);
+    try {
+      const timestamp = new Date().getTime();
+      // Usar o endpoint correto para critérios ativos
+      const response = await fetch(
+        `${API_BASE_URL}/api/criteria/active?_t=${timestamp}`
+      );
+      if (!response.ok) {
+        throw new Error('Falha ao buscar critérios');
+      }
+      const data = await response.json();
+      console.log('Critérios recebidos:', data);
+      setCriteria(data);
+      return data;
+    } catch (error) {
+      console.error('Erro ao buscar critérios:', error);
+      setError('Falha ao carregar critérios. Tente novamente mais tarde.');
+      return [];
+    } finally {
+      setIsLoadingCriteria(false);
+    }
+  }, []);
+
+  // Função para buscar setores
+  const fetchSectors = useCallback(async () => {
+    console.log('Buscando setores...');
+    setIsLoadingSectors(true);
+    try {
+      const timestamp = new Date().getTime();
+      // Usar o endpoint correto para setores ativos
+      const response = await fetch(
+        `${API_BASE_URL}/api/sectors/active?_t=${timestamp}`
+      );
+      if (!response.ok) {
+        throw new Error('Falha ao buscar setores');
+      }
+      const data = await response.json();
+      console.log('Setores recebidos:', data);
+      setSectors(data);
+      return data;
+    } catch (error) {
+      console.error('Erro ao buscar setores:', error);
+      setError('Falha ao carregar setores. Tente novamente mais tarde.');
+      return [];
+    } finally {
+      setIsLoadingSectors(false);
+    }
+  }, []);
+
+  // Função para buscar todos os dados
+  const fetchAllData = useCallback(
+    async (period?: string) => {
+      setError(null);
+      try {
+        // Buscar períodos primeiro
+        const periodsData = await fetchPeriods();
+
+        // Se não houver período especificado, usar o período ATIVO ou o mais recente
+        let targetPeriod = period;
+        if (!targetPeriod && periodsData.length > 0) {
+          const activePeriod = periodsData.find(
+            (p: Period) => p.status === 'ATIVA'
+          );
+          if (activePeriod) {
+            targetPeriod = activePeriod.mesAno;
+          } else {
+            // Ordenar períodos por data de início (decrescente)
+            const sortedPeriods = [...periodsData].sort((a, b) => {
+              return (
+                new Date(b.dataInicio).getTime() -
+                new Date(a.dataInicio).getTime()
+              );
+            });
+            if (sortedPeriods.length > 0) {
+              targetPeriod = sortedPeriods[0].mesAno;
+            }
+          }
+        }
+
+        // Buscar resultados se houver um período alvo
+        if (targetPeriod) {
+          console.log(`Buscando resultados para período alvo: ${targetPeriod}`);
+          await fetchResults(targetPeriod);
+        } else {
+          console.warn('Nenhum período encontrado para buscar resultados');
+          setResults([]);
+        }
+
+        // Buscar critérios e setores em paralelo
+        await Promise.all([fetchCriteria(), fetchSectors()]);
+
+        return {
+          periods: periodsData,
+          targetPeriod,
+        };
+      } catch (error) {
+        console.error('Erro ao buscar todos os dados:', error);
+        setError('Falha ao carregar dados. Tente novamente mais tarde.');
+        toast.error('Erro ao carregar dados. Tente novamente mais tarde.');
+        return {
+          periods: [],
+          targetPeriod: undefined,
+        };
+      }
+    },
+    [fetchPeriods, fetchResults, fetchCriteria, fetchSectors]
+  );
+
+  // Função para forçar a atualização dos resultados
+  const refetchResults = useCallback(
+    async (period?: string) => {
+      const periodToFetch = period || selectedPeriod;
+      if (!periodToFetch) {
+        console.error('Nenhum período especificado para refetch');
+        return [];
+      }
+
+      console.log(`Forçando refetch para período: ${periodToFetch}`);
+      try {
+        // Limpar o cache do navegador para esta URL
+        try {
+          const cache = await caches.open('v1');
+          const url = `${API_BASE_URL}/api/results?period=${periodToFetch}`;
+          await cache.delete(url);
+        } catch (cacheError) {
+          console.warn('Erro ao limpar cache:', cacheError);
+        }
+
+        // Buscar resultados novamente
+        return await fetchResults(periodToFetch);
+      } catch (error) {
+        console.error(
+          `Erro ao forçar refetch para período ${periodToFetch}:`,
+          error
+        );
+        toast.error('Erro ao atualizar resultados. Tente novamente.');
+        return [];
+      }
+    },
+    [fetchResults, selectedPeriod]
+  );
+
+  // Função para buscar um período específico por ID
+  const getPeriodById = useCallback(
+    (id: number) => {
+      return periods.find((p) => p.id === id);
+    },
+    [periods]
+  );
+
+  // Função para buscar um período específico por mesAno
+  const getPeriodByMesAno = useCallback(
+    (mesAno: string) => {
+      return periods.find((p) => p.mesAno === mesAno);
+    },
+    [periods]
+  );
+
+  // Função para buscar um critério específico por ID
+  const getCriterionById = useCallback(
+    (id: number) => {
+      return criteria.find((c) => c.id === id);
+    },
+    [criteria]
+  );
+
+  // Função para buscar um setor específico por ID
+  const getSectorById = useCallback(
+    (id: number) => {
+      return sectors.find((s) => s.id === id);
+    },
+    [sectors]
+  );
+
+  // Função para buscar resultados filtrados por critério e/ou setor
+  const getFilteredResults = useCallback(
+    (criterionId?: number, sectorId?: number) => {
+      let filtered = [...results];
+
+      if (criterionId !== undefined) {
+        filtered = filtered.filter((r) => r.criterioId === criterionId);
+      }
+
+      if (sectorId !== undefined) {
+        filtered = filtered.filter((r) => r.setorId === sectorId);
+      }
+
+      return filtered;
+    },
+    [results]
+  );
+
+  // NOVO: Processar resultados por setor
+  const resultsBySector = useMemo(() => {
+    console.log('Processando resultsBySector...');
+    if (!results || results.length === 0) {
+      console.log('Sem resultados para processar em resultsBySector');
+      return {};
+    }
+
+    const bySector = {};
+
+    // Log para verificar a estrutura dos resultados
+    if (results.length > 0) {
+      console.log(
+        'Estrutura do primeiro resultado para resultsBySector:',
+        results[0]
+      );
+    }
+
     results.forEach((result) => {
-      if (!resultsBySector[result.setorId]) {
-        resultsBySector[result.setorId] = {
+      const sectorId = String(result.setorId);
+      const criterioId = String(result.criterioId);
+
+      if (!bySector[sectorId]) {
+        bySector[sectorId] = {
+          setorId: result.setorId,
           setorNome: result.setorNome,
-          criteriaResults: {},
+          criterios: {},
         };
       }
-      resultsBySector[result.setorId].criteriaResults[result.criterioId] =
-        result;
+
+      bySector[sectorId].criterios[criterioId] = {
+        criterioId: result.criterioId,
+        criterioNome: result.criterioNome,
+        valorRealizado: result.valorRealizado,
+        valorMeta: result.valorMeta,
+        percentualAtingimento: result.percentualAtingimento,
+        pontos: result.pontos,
+      };
     });
 
-    // Organizar resultados por critério
-    const resultsByCriterion = {};
+    console.log('resultsBySector processado:', {
+      setores: Object.keys(bySector).length,
+      primeiroSetor:
+        Object.keys(bySector).length > 0
+          ? {
+              id: Object.keys(bySector)[0],
+              nome: bySector[Object.keys(bySector)[0]].setorNome,
+              criterios: Object.keys(
+                bySector[Object.keys(bySector)[0]].criterios
+              ).length,
+            }
+          : 'nenhum',
+    });
+
+    return bySector;
+  }, [results]);
+
+  // NOVO: Processar resultados por critério
+  const resultsByCriterio = useMemo(() => {
+    console.log('Processando resultsByCriterio...');
+    if (!results || results.length === 0) {
+      console.log('Sem resultados para processar em resultsByCriterio');
+      return {};
+    }
+
+    const byCriterio = {};
+
     results.forEach((result) => {
-      if (!resultsByCriterion[result.criterioId]) {
-        resultsByCriterion[result.criterioId] = {
+      const criterioId = String(result.criterioId);
+      const sectorId = String(result.setorId);
+
+      if (!byCriterio[criterioId]) {
+        byCriterio[criterioId] = {
+          criterioId: result.criterioId,
           criterioNome: result.criterioNome,
-          sectorResults: {},
+          setores: {},
         };
       }
-      resultsByCriterion[result.criterioId].sectorResults[result.setorId] =
-        result;
+
+      byCriterio[criterioId].setores[sectorId] = {
+        valorRealizado: result.valorRealizado,
+        valorMeta: result.valorMeta,
+        percentualAtingimento: result.percentualAtingimento,
+        pontos: result.pontos,
+      };
     });
 
-    return { uniqueCriteria, resultsBySector, resultsByCriterion };
-  }, [resultsQuery.data]);
+    console.log('resultsByCriterio processado:', {
+      criterios: Object.keys(byCriterio).length,
+    });
+
+    return byCriterio;
+  }, [results]);
+
+  // NOVO: Extrair critérios únicos dos resultados
+  const uniqueCriteria = useMemo(() => {
+    console.log('Processando uniqueCriteria...');
+    if (!criteria || criteria.length === 0) {
+      console.log('Sem critérios para processar');
+      return [];
+    }
+
+    const criteriaMap = new Map();
+
+    // Primeiro adicionar todos os critérios da lista de critérios
+    criteria.forEach((criterion) => {
+      criteriaMap.set(criterion.id, {
+        id: criterion.id,
+        nome: criterion.nome,
+        sentido_melhor: criterion.sentido_melhor,
+        index: criterion.index,
+      });
+    });
+
+    // Depois adicionar critérios dos resultados (caso haja algum que não esteja na lista de critérios)
+    if (results && results.length > 0) {
+      results.forEach((result) => {
+        if (!criteriaMap.has(result.criterioId)) {
+          criteriaMap.set(result.criterioId, {
+            id: result.criterioId,
+            nome: result.criterioNome,
+          });
+        }
+      });
+    }
+
+    // Converter o Map para array e ordenar por index ou id
+    const uniqueCriteriaArray = Array.from(criteriaMap.values()).sort(
+      (a, b) => {
+        // Ordenar por index se disponível, senão por id
+        if (a.index !== undefined && b.index !== undefined) {
+          return a.index - b.index;
+        }
+        return a.id - b.id;
+      }
+    );
+
+    console.log('uniqueCriteria processado:', {
+      total: uniqueCriteriaArray.length,
+    });
+
+    return uniqueCriteriaArray;
+  }, [results, criteria]);
+
+  // Efeito para carregar dados iniciais
+  useEffect(() => {
+    fetchAllData(selectedPeriod);
+  }, [fetchAllData, selectedPeriod]);
+
+  // Efeito para recarregar resultados quando o período selecionado mudar
+  useEffect(() => {
+    if (selectedPeriod) {
+      fetchResults(selectedPeriod);
+    }
+  }, [selectedPeriod, fetchResults]);
 
   return {
-    periods: periodsQuery.data || [],
-    results: resultsQuery.data || [],
-    criteria: criteriaQuery.data || [],
-    sectors: sectorsQuery.data || [],
-    ...processedData,
+    periods,
+    criteria,
+    sectors,
+    results,
+    resultsBySector, // NOVO
+    resultsByCriterio, // NOVO
+    uniqueCriteria, // NOVO
+    isLoadingPeriods,
+    isLoadingCriteria,
+    isLoadingSectors,
+    isLoadingResults,
     isLoading:
-      periodsQuery.isLoading ||
-      resultsQuery.isLoading ||
-      criteriaQuery.isLoading ||
-      sectorsQuery.isLoading,
-    error:
-      periodsQuery.error ||
-      resultsQuery.error ||
-      criteriaQuery.error ||
-      sectorsQuery.error,
-    refetchResults: resultsQuery.refetch,
+      isLoadingPeriods ||
+      isLoadingCriteria ||
+      isLoadingSectors ||
+      isLoadingResults, // NOVO
+    error,
+    fetchPeriods,
+    fetchCriteria,
+    fetchSectors,
+    fetchResults,
+    fetchAllData,
+    refetchResults,
+    getPeriodById,
+    getPeriodByMesAno,
+    getCriterionById,
+    getSectorById,
+    getFilteredResults,
   };
 }

@@ -6,7 +6,7 @@ export interface Setor {
 
 export interface Criterio {
   id: number;
-  nome: string; // Ex: 'ATRASO', 'IPK', 'COMBUSTIVEL'
+  name: string; // Ex: 'ATRASO', 'IPK', 'COMBUSTIVEL'
   index: number | null; // O INDEX que vimos ser usado na Pontuação % (10, 11?) - pode ser nulo se não aplicável
   descricao?: string; // Opcional
   unidade_medida?: string; // Ex: '%', 'KM/L', 'R$'

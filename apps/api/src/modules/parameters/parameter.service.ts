@@ -10,15 +10,7 @@ import {
   UpdateParameterDto,
 } from '@sistema-premiacao/shared-types';
 import 'reflect-metadata';
-import {
-  DeepPartial,
-  FindOptionsWhere,
-  IsNull,
-  LessThanOrEqual,
-  MoreThanOrEqual,
-  Or,
-  Repository,
-} from 'typeorm';
+import { DeepPartial, FindOptionsWhere, IsNull, Repository } from 'typeorm';
 import { AuditLogService } from '../audit/audit.service';
 
 export class ParameterService {
@@ -144,47 +136,94 @@ export class ParameterService {
     console.log(
       `[ParameterService] Buscando parâmetros para período ${periodMesAno}, setor ${sectorIdInput}, critério ${criterionIdInput}, ativas: ${onlyActive}`
     );
+
+    // Buscar o período pelo mesAno
     const competitionPeriod = await this.periodRepo.findOneBy({
       mesAno: periodMesAno,
     });
+
     if (!competitionPeriod) {
+      console.warn(
+        `[ParameterService] Período ${periodMesAno} não encontrado.`
+      );
       return [];
     }
 
-    const whereClause: FindOptionsWhere<ParameterValueEntity> = {
-      competitionPeriodId: competitionPeriod.id,
-    };
+    // Construir a consulta base
+    const queryBuilder = this.parameterRepo
+      .createQueryBuilder('param')
+      .leftJoinAndSelect('param.criterio', 'criterio')
+      .leftJoinAndSelect('param.setor', 'setor')
+      .leftJoinAndSelect('param.criadoPor', 'criadoPor')
+      .leftJoinAndSelect('param.competitionPeriod', 'competitionPeriod')
+      .where('param.competitionPeriodId = :periodId', {
+        periodId: competitionPeriod.id,
+      });
 
-    if (onlyActive) {
-      whereClause.dataInicioEfetivo = LessThanOrEqual(
-        this.formatDate(competitionPeriod.dataFim)
-      );
-      whereClause.dataFimEfetivo = Or(
-        IsNull(),
-        MoreThanOrEqual(this.formatDate(competitionPeriod.dataInicio))
-      );
-    }
-
-    if (sectorIdInput !== undefined) {
-      whereClause.sectorId = sectorIdInput === null ? IsNull() : sectorIdInput;
-    }
+    // Adicionar filtros se fornecidos
     if (criterionIdInput !== undefined) {
-      whereClause.criterionId = criterionIdInput;
+      queryBuilder.andWhere('param.criterionId = :criterionId', {
+        criterionId: criterionIdInput,
+      });
     }
 
-    const parameters = await this.parameterRepo.find({
-      where: whereClause,
-      relations: ['criterio', 'setor', 'criadoPor', 'competitionPeriod'],
-      order: {
-        criterionId: 'ASC',
-        sectorId: 'ASC',
-        dataInicioEfetivo: 'DESC',
-        createdAt: 'DESC',
-      },
+    // Tratar o filtro de setor de forma especial
+    if (sectorIdInput !== undefined) {
+      if (sectorIdInput === null) {
+        queryBuilder.andWhere('param.sectorId IS NULL');
+      } else {
+        queryBuilder.andWhere('param.sectorId = :sectorId', {
+          sectorId: sectorIdInput,
+        });
+      }
+    }
+
+    // Adicionar filtros de data para parâmetros ativos
+    if (onlyActive) {
+      queryBuilder
+        .andWhere(
+          '(param.dataFimEfetivo IS NULL OR param.dataFimEfetivo >= :dataInicio)',
+          { dataInicio: this.formatDate(competitionPeriod.dataInicio) }
+        )
+        .andWhere('param.dataInicioEfetivo <= :dataFim', {
+          dataFim: this.formatDate(competitionPeriod.dataFim),
+        });
+    }
+
+    // Ordenar os resultados
+    queryBuilder.orderBy({
+      'param.criterionId': 'ASC',
+      'param.sectorId': 'ASC',
+      'param.dataInicioEfetivo': 'DESC',
+      'param.createdAt': 'DESC',
     });
+
+    // Executar a consulta e retornar os resultados
+    const parameters = await queryBuilder.getMany();
+
     console.log(
       `[ParameterService] ${parameters.length} parâmetros encontrados para ${periodMesAno}.`
     );
+
+    // Log detalhado para debug
+    if (parameters.length === 0) {
+      console.log(
+        `[ParameterService] Nenhum parâmetro encontrado com os filtros aplicados.`
+      );
+    } else {
+      console.log(
+        `[ParameterService] Parâmetros encontrados:`,
+        parameters.map((p) => ({
+          id: p.id,
+          criterionId: p.criterionId,
+          sectorId: p.sectorId,
+          valor: p.valor,
+          dataInicioEfetivo: p.dataInicioEfetivo,
+          dataFimEfetivo: p.dataFimEfetivo,
+        }))
+      );
+    }
+
     return parameters;
   }
 
@@ -276,7 +315,7 @@ export class ParameterService {
       competitionPeriodId: oldParameter.competitionPeriodId,
       justificativa: data.justificativa, // Justificativa da nova versão
       createdByUserId: actingUser.id,
-      previousVersionId: oldParameter.id,
+      previousVersionId: oldParameter.id, // Garantir que o previousVersionId seja definido
     };
 
     let savedNewParameter: ParameterValueEntity;

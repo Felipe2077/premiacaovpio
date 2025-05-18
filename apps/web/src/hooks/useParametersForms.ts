@@ -25,6 +25,7 @@ export function useParametersForms(selectedPeriod: string, periods: any[]) {
       criterionId: 0,
       sectorId: 0,
       competitionPeriodId: 0,
+      justificativa: 'Criação inicial da meta', // Adicionando justificativa padrão
     },
   });
 
@@ -73,6 +74,7 @@ export function useParametersForms(selectedPeriod: string, periods: any[]) {
       criterionId: criterionId || 0,
       sectorId: sectorId || 0,
       competitionPeriodId: periodId,
+      justificativa: 'Criação inicial da meta', // Adicionando justificativa padrão
     });
   };
 

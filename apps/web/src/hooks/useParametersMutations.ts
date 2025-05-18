@@ -11,17 +11,24 @@ export const createParameterSchema = z.object({
   criterionId: z.coerce.number().min(1, 'Critério é obrigatório'),
   sectorId: z.coerce.number().min(1, 'Setor é obrigatório'),
   competitionPeriodId: z.coerce.number().min(1, 'Período é obrigatório'),
+  justificativa: z.string().min(1, 'Justificativa é obrigatória'), // Adicionando justificativa
 });
 
 export const updateParameterSchema = z.object({
-  id: z.number(),
-  nomeParametro: z.string().min(1, 'Nome da meta é obrigatório'),
+  id: z.number(), // ID da meta a ser atualizada (usado na URL)
   valor: z.coerce.number().min(0, 'Valor deve ser maior ou igual a zero'),
   dataInicioEfetivo: z.string().min(1, 'Data de início é obrigatória'),
-  criterionId: z.coerce.number().min(1, 'Critério é obrigatório'),
-  sectorId: z.coerce.number().min(1, 'Setor é obrigatório'),
-  competitionPeriodId: z.coerce.number().min(1, 'Período é obrigatório'),
   justificativa: z.string().min(1, 'Justificativa é obrigatória'),
+  nomeParametro: z.string().min(1, 'Nome da meta é obrigatório'),
+  // Campos opcionais
+  dataFimEfetivoAnterior: z.string().optional(),
+  // Esses campos não são enviados na requisição, mas são usados internamente
+  criterionId: z.coerce.number().min(1, 'Critério é obrigatório').optional(),
+  sectorId: z.coerce.number().min(1, 'Setor é obrigatório').optional(),
+  competitionPeriodId: z.coerce
+    .number()
+    .min(1, 'Período é obrigatório')
+    .optional(),
 });
 
 export const deleteParameterSchema = z.object({
@@ -78,17 +85,61 @@ const updateParameter = async (
   const API_BASE_URL =
     process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
   console.log('Atualizando meta:', data);
-  const res = await fetch(`${API_BASE_URL}/api/parameters/${data.id}`, {
+
+  // Verificar se todos os campos obrigatórios estão presentes
+  if (
+    !data.id ||
+    !data.justificativa ||
+    !data.valor ||
+    !data.dataInicioEfetivo ||
+    !data.nomeParametro
+  ) {
+    console.error('Campos obrigatórios faltando para atualização:', {
+      id: !!data.id,
+      valor: !!data.valor,
+      dataInicioEfetivo: !!data.dataInicioEfetivo,
+      justificativa: !!data.justificativa,
+      nomeParametro: !!data.nomeParametro,
+    });
+    throw new Error('Campos obrigatórios estão faltando para atualização.');
+  }
+
+  // Preparar o corpo da requisição (apenas os campos necessários)
+  const requestBody = {
+    valor: data.valor,
+    dataInicioEfetivo: data.dataInicioEfetivo,
+    justificativa: data.justificativa,
+    nomeParametro: data.nomeParametro,
+  };
+
+  // Adicionar dataFimEfetivoAnterior se estiver presente
+  if (data.dataFimEfetivoAnterior) {
+    requestBody.dataFimEfetivoAnterior = data.dataFimEfetivoAnterior;
+  }
+
+  // Usar o endpoint PUT /api/parameters/:id
+  const url = `${API_BASE_URL}/api/parameters/${data.id}`;
+  console.log('URL para atualização:', url);
+  console.log('Corpo da requisição:', requestBody);
+
+  const res = await fetch(url, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(data),
+    body: JSON.stringify(requestBody),
   });
 
   if (!res.ok) {
-    const errorData = await res.json();
-    throw new Error(errorData.error || `Erro ${res.status} ao atualizar meta`);
+    let errorMessage = `Erro ${res.status} ao atualizar meta`;
+    try {
+      const errorData = await res.json();
+      console.error('Erro na resposta de atualização:', errorData);
+      errorMessage = errorData.error || errorData.message || errorMessage;
+    } catch (e) {
+      console.error('Erro ao processar resposta de erro:', e);
+    }
+    throw new Error(errorMessage);
   }
 
   const responseData = await res.json();

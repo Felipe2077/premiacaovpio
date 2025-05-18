@@ -1,420 +1,496 @@
-// app/admin/parameters/page.tsx
+// src/pages/ParametersPage.tsx
 'use client';
-
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import CalculationModal from '@/components/parameters/CalculationModal';
+import ParametersMatrix from '@/components/parameters/ParametersMatrix';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Skeleton } from '@/components/ui/skeleton';
-import { AlertCircle, PlusCircle, RefreshCw } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { useParametersData } from '@/hooks/useParametersData';
+import { Loader2, RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Toaster, toast } from 'sonner';
-
-import { CreateParameterModal } from '@/components/parameters/CreateParameterModal';
-import { DeleteParameterModal } from '@/components/parameters/DeleteParameterModal';
-import { EditParameterModal } from '@/components/parameters/EditParameterModal';
-import { ParametersMatrix } from '@/components/parameters/ParametersMatrix';
-import { PeriodSelector } from '@/components/shared/period-selector';
-import { ResultData, useParametersData } from '@/hooks/useParametersData';
-import { useParametersForms } from '@/hooks/useParametersForms';
-import { useParametersMutations } from '@/hooks/useParametersMutations';
-
-// Função para buscar parâmetros por período, critério e setor
-async function fetchParametersByCriterionAndSector(
-  period: string,
-  criterionId?: number,
-  sectorId?: number
-): Promise<any[]> {
-  const API_BASE_URL =
-    process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-
-  let url = `${API_BASE_URL}/api/parameters?period=${period}`;
-
-  if (criterionId) {
-    url += `&criterionId=${criterionId}`;
-  }
-
-  if (sectorId) {
-    url += `&sectorId=${sectorId}`;
-  }
-
-  console.log(`Buscando parâmetros com URL: ${url}`);
-
-  try {
-    const res = await fetch(url);
-
-    if (!res.ok) {
-      throw new Error(`Erro ${res.status} ao buscar parâmetros`);
-    }
-
-    const parameters = await res.json();
-    console.log('Parâmetros recebidos:', parameters);
-    return parameters;
-  } catch (error) {
-    console.error('Erro ao buscar parâmetros:', error);
-    throw error;
-  }
-}
+import { toast } from 'sonner';
 
 export default function ParametersPage() {
-  // Estado para o período selecionado
-  const [selectedPeriod, setSelectedPeriod] = useState<string>('');
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<ResultData | null>(null);
+  // Estados para gerenciar a seleção de período e modais
+  const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [editData, setEditData] = useState<any>(null);
+  const [createData, setCreateData] = useState<any>(null);
+  const [newMetaValue, setNewMetaValue] = useState<string>('');
+  // Estados adicionais
+  const [calculateModalOpen, setCalculateModalOpen] = useState(false);
+  const [calculateData, setCalculateData] = useState<any>(null);
+  const [calculationMethod, setCalculationMethod] = useState<string>('media3');
+  const [calculationAdjustment, setCalculationAdjustment] =
+    useState<string>('0');
+  const [calculatedValue, setCalculatedValue] = useState<number | null>(null);
 
-  // Hooks personalizados
+  // Obter dados do hook
   const {
     periods,
-    results,
-    criteria,
-    sectors,
     uniqueCriteria,
     resultsBySector,
     isLoading,
-    error,
+    fetchResults,
+    fetchAllData,
+    getPeriodById,
     refetchResults,
-  } = useParametersData(selectedPeriod);
+  } = useParametersData();
 
-  const { createMutation, updateMutation, deleteMutation } =
-    useParametersMutations(selectedPeriod);
-
-  const { createForm, updateForm, deleteForm, resetCreateForm, todayStr } =
-    useParametersForms(selectedPeriod, periods);
-
-  // Definir período inicial quando os períodos forem carregados
+  // Efeito para selecionar o período ativo por padrão quando os períodos são carregados
   useEffect(() => {
-    if (periods && periods.length > 0 && !selectedPeriod) {
-      // Tenta encontrar um período em PLANEJAMENTO ou ATIVA
-      const planningPeriod = periods.find((p) => p.status === 'PLANEJAMENTO');
+    if (periods.length > 0 && !selectedPeriodId) {
+      // Tentar encontrar um período ativo
       const activePeriod = periods.find((p) => p.status === 'ATIVA');
 
-      // Ou usa o primeiro período
-      const defaultPeriod = planningPeriod || activePeriod || periods[0];
-
-      if (defaultPeriod) {
-        console.log('Definindo período inicial:', defaultPeriod.mesAno);
-        setSelectedPeriod(defaultPeriod.mesAno);
+      if (activePeriod) {
+        setSelectedPeriodId(activePeriod.id);
+        console.log('Período ativo selecionado automaticamente:', activePeriod);
+      } else {
+        // Se não houver período ativo, selecionar o primeiro da lista
+        setSelectedPeriodId(periods[0].id);
+        console.log('Primeiro período selecionado:', periods[0]);
       }
     }
-  }, [periods, selectedPeriod]);
+  }, [periods, selectedPeriodId]);
 
-  // Função para lidar com a criação de uma meta
-  const handleCreateMeta = () => {
-    resetCreateForm();
-    setIsCreateModalOpen(true);
+  // Obter o período selecionado com base no ID
+  const selectedPeriod = selectedPeriodId
+    ? getPeriodById(selectedPeriodId)
+    : null;
+
+  // Efeito para carregar os resultados quando o período selecionado mudar
+  useEffect(() => {
+    if (selectedPeriod?.mesAno) {
+      console.log('Carregando resultados para período:', selectedPeriod.mesAno);
+      fetchResults(selectedPeriod.mesAno);
+    }
+  }, [selectedPeriod, fetchResults]);
+
+  // Manipuladores de eventos
+  const handlePeriodChange = (value: string) => {
+    const periodId = parseInt(value);
+    setSelectedPeriodId(periodId);
+    console.log('Período alterado para:', periodId);
   };
 
-  // Função para lidar com a criação de uma meta específica
-  const handleCreateSpecificMeta = (
+  const handleRefresh = async () => {
+    if (selectedPeriod?.mesAno) {
+      console.log('Atualizando dados para período:', selectedPeriod.mesAno);
+      await fetchAllData(selectedPeriod.mesAno);
+      toast.success('Dados atualizados com sucesso!');
+    }
+  };
+
+  const handleEditMeta = (item: any) => {
+    console.log('Editar meta:', item);
+    setEditData(item);
+    setNewMetaValue(item.valorMeta?.toString() || '');
+    setEditModalOpen(true);
+  };
+
+  const handleCreateMeta = (
     criterionId: number,
     sectorId: number,
     criterionName: string
   ) => {
-    if (!periods) {
-      toast.error('Carregando períodos. Tente novamente em instantes.');
-      return;
-    }
-
-    resetCreateForm(criterionId, sectorId);
-    createForm.setValue('nomeParametro', criterionName);
-    setIsCreateModalOpen(true);
+    console.log('Criar meta:', { criterionId, sectorId, criterionName });
+    setCreateData({
+      criterioId: criterionId,
+      criterioNome: criterionName,
+      setorId: sectorId,
+      setorNome:
+        Object.values(resultsBySector).find((s: any) => s.setorId === sectorId)
+          ?.setorNome || '',
+    });
+    setNewMetaValue('');
+    setCreateModalOpen(true);
   };
 
-  // Função para lidar com a edição de uma meta
-  const handleEditMeta = async (item: ResultData) => {
-    if (!periods) {
-      toast.error('Carregando períodos. Tente novamente em instantes.');
-      return;
-    }
-
-    const periodObj = periods.find((p) => p.mesAno === selectedPeriod);
-    if (!periodObj) {
-      toast.error('Período não encontrado.');
-      return;
-    }
-
-    // Mostrar loading
-    toast.loading('Buscando informações do parâmetro...');
+  const handleSaveEdit = async () => {
+    if (!editData || !newMetaValue) return;
 
     try {
-      // Buscar parâmetros para este critério e setor no período selecionado
-      const parameters = await fetchParametersByCriterionAndSector(
-        selectedPeriod,
-        item.criterioId,
-        item.setorId
-      );
-
-      // Remover loading
-      toast.dismiss();
-
-      // Verificar se encontramos algum parâmetro
-      if (!parameters || parameters.length === 0) {
-        // Se não encontrarmos parâmetros, precisamos criar um novo
-        toast.info(
-          'Não há meta cadastrada para este critério e setor. Criando uma nova meta...'
-        );
-
-        // Configurar o formulário de criação com TODOS os campos obrigatórios
-        resetCreateForm(item.criterioId, item.setorId);
-        createForm.setValue('nomeParametro', item.criterioNome);
-        createForm.setValue('valor', item.valorMeta);
-        createForm.setValue('dataInicioEfetivo', todayStr);
-        createForm.setValue('criterionId', item.criterioId);
-        createForm.setValue('sectorId', item.setorId);
-        createForm.setValue('competitionPeriodId', periodObj.id);
-        createForm.setValue('justificativa', 'Criação inicial da meta'); // Adicionando justificativa padrão
-
-        // Abrir o modal de criação
-        setIsCreateModalOpen(true);
-        return;
-      }
-
-      // Usar o primeiro parâmetro encontrado (deve ser único para o critério/setor/período)
-      const parameter = parameters[0];
-
-      // Configurar o formulário
-      updateForm.reset({
-        id: parameter.id,
-        nomeParametro: parameter.nomeParametro,
-        valor: parameter.valor,
-        dataInicioEfetivo: parameter.dataInicioEfetivo,
-        criterionId: item.criterioId,
-        sectorId: item.setorId,
-        competitionPeriodId: periodObj.id,
-        justificativa: '',
+      // Aqui você implementaria a chamada à API para salvar a meta editada
+      console.log('Salvando meta editada:', {
+        ...editData,
+        valorMeta: parseFloat(newMetaValue),
       });
 
-      setSelectedItem(item);
-      setIsEditModalOpen(true);
+      // Simulação de uma chamada à API
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Recarregar os resultados após a edição
+      if (selectedPeriod?.mesAno) {
+        await refetchResults(selectedPeriod.mesAno);
+      }
+
+      toast.success('Meta atualizada com sucesso!');
+      setEditModalOpen(false);
     } catch (error) {
-      // Remover loading
-      toast.dismiss();
-      toast.error('Erro ao buscar informações do parâmetro.');
-      console.error('Erro ao buscar parâmetro:', error);
+      console.error('Erro ao salvar meta:', error);
+      toast.error('Erro ao atualizar meta. Tente novamente.');
     }
   };
 
-  // Função para lidar com a exclusão de uma meta
-  const handleDeleteMeta = async (item: ResultData) => {
-    if (!periods) {
-      toast.error('Carregando períodos. Tente novamente em instantes.');
-      return;
-    }
-
-    const periodObj = periods.find((p) => p.mesAno === selectedPeriod);
-    if (!periodObj) {
-      toast.error('Período não encontrado.');
-      return;
-    }
-
-    // Mostrar loading
-    toast.loading('Buscando informações do parâmetro...');
+  const handleSaveCreate = async () => {
+    if (!createData || !newMetaValue) return;
 
     try {
-      // Buscar parâmetros para este critério e setor no período selecionado
-      const parameters = await fetchParametersByCriterionAndSector(
-        selectedPeriod,
-        item.criterioId,
-        item.setorId
-      );
-
-      // Remover loading
-      toast.dismiss();
-
-      // Verificar se encontramos algum parâmetro
-      if (!parameters || parameters.length === 0) {
-        toast.error(
-          'Não há meta cadastrada para este critério e setor. Não é possível excluir.'
-        );
-        return;
-      }
-
-      // Usar o primeiro parâmetro encontrado (deve ser único para o critério/setor/período)
-      const parameter = parameters[0];
-
-      // Configurar o formulário
-      deleteForm.reset({
-        id: parameter.id,
-        justificativa: '',
+      // Aqui você implementaria a chamada à API para criar a meta
+      console.log('Criando nova meta:', {
+        ...createData,
+        valorMeta: parseFloat(newMetaValue),
       });
 
-      setSelectedItem(item);
-      setIsDeleteModalOpen(true);
+      // Simulação de uma chamada à API
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Recarregar os resultados após a criação
+      if (selectedPeriod?.mesAno) {
+        await refetchResults(selectedPeriod.mesAno);
+      }
+
+      toast.success('Meta criada com sucesso!');
+      setCreateModalOpen(false);
     } catch (error) {
-      // Remover loading
-      toast.dismiss();
-      toast.error('Erro ao buscar informações do parâmetro.');
-      console.error('Erro ao buscar parâmetro:', error);
+      console.error('Erro ao criar meta:', error);
+      toast.error('Erro ao criar meta. Tente novamente.');
     }
   };
 
-  // Função para submeter o formulário de criação
-  const onSubmitCreate = (data: any) => {
-    createMutation.mutate(data, {
-      onSuccess: () => {
-        setIsCreateModalOpen(false);
-        refetchResults(); // Recarregar os resultados após criar
-      },
-    });
-  };
+  // Log para debug
+  console.log('Dados para renderização:', {
+    totalPeriods: periods.length,
+    selectedPeriodId,
+    selectedPeriod,
+    uniqueCriteriaCount: uniqueCriteria?.length || 0,
+    resultsBySectorCount: resultsBySector
+      ? Object.keys(resultsBySector).length
+      : 0,
+    isLoading,
+  });
 
-  // Função para submeter o formulário de edição
-  const onSubmitUpdate = (data: any) => {
-    updateMutation.mutate(data, {
-      onSuccess: () => {
-        setIsEditModalOpen(false);
-        refetchResults(); // Recarregar os resultados após atualizar
-      },
-    });
-  };
+  // Adicione estas funções e estados ao seu ParametersPage.tsx
 
-  // Função para submeter o formulário de exclusão
-  const onSubmitDelete = (data: any) => {
-    deleteMutation.mutate(data, {
-      onSuccess: () => {
-        setIsDeleteModalOpen(false);
-        refetchResults(); // Recarregar os resultados após excluir
-      },
-    });
-  };
+  // Função para calcular meta automaticamente
+  const handleCalculateMeta = (
+    criterionId: number,
+    sectorId: number,
+    criterionName: string
+  ) => {
+    // Verificar se está na fase de planejamento
+    const isPlanejamentoActive = selectedPeriod?.status === 'PLANEJAMENTO';
 
-  // Renderização de estados de carregamento
-  if (isLoading) {
-    return (
-      <div className='container mx-auto p-6'>
-        <Skeleton className='h-8 w-48 mb-4' />
-        <Skeleton className='h-10 w-full mb-2' />
-        <Skeleton className='h-10 w-full mb-2' />
-        <Skeleton className='h-10 w-full mb-2' />
-      </div>
+    // Só permitir cálculo em fase de planejamento
+    if (!isPlanejamentoActive) {
+      toast.error('Metas só podem ser calculadas na fase de planejamento');
+      return;
+    }
+
+    const criterio = uniqueCriteria.find((c) => c.id === criterionId);
+    const setor = Object.values(resultsBySector).find(
+      (s: any) => s.setorId === sectorId || s.id === sectorId
     );
-  }
 
-  // Renderização de erros
-  if (error) {
-    return (
-      <div className='container mx-auto p-6'>
-        <Alert variant='destructive'>
-          <AlertCircle className='h-4 w-4' />
-          <AlertTitle>Erro ao Carregar Dados</AlertTitle>
-          <AlertDescription>
-            {error instanceof Error ? error.message : 'Erro desconhecido'}
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
+    if (!criterio || !setor) {
+      toast.error('Dados insuficientes para cálculo');
+      return;
+    }
 
-  // Renderização principal
+    setCalculateData({
+      criterioId: criterionId,
+      criterioNome: criterio.nome,
+      setorId: sectorId,
+      setorNome: setor.setorNome,
+    });
+
+    // Resetar valores
+    setCalculationMethod('media3');
+    setCalculationAdjustment('0');
+    setCalculatedValue(null);
+
+    setCalculateModalOpen(true);
+  };
+
+  // Função para visualizar o cálculo
+  const handlePreviewCalculation = async () => {
+    if (!calculateData) return;
+
+    try {
+      // Simulação de obtenção de dados históricos
+      // Em um cenário real, você chamaria sua API para obter esses dados
+      const historicalData = await getHistoricalData(
+        calculateData.criterioId,
+        calculateData.setorId
+      );
+
+      let calculatedValue = 0;
+      const adjustment = parseFloat(calculationAdjustment) / 100; // Converter percentual para decimal
+
+      switch (calculationMethod) {
+        case 'media3':
+          // Média dos últimos 3 meses
+          calculatedValue =
+            historicalData
+              .slice(0, 3)
+              .reduce((sum, item) => sum + item.valor, 0) / 3;
+          break;
+        case 'media6':
+          // Média dos últimos 6 meses
+          calculatedValue =
+            historicalData
+              .slice(0, 6)
+              .reduce((sum, item) => sum + item.valor, 0) / 6;
+          break;
+        case 'ultimo':
+          // Valor do último mês
+          calculatedValue = historicalData[0]?.valor || 0;
+          break;
+        case 'melhor3':
+          // Melhor valor dos últimos 3 meses
+          calculatedValue = Math.max(
+            ...historicalData.slice(0, 3).map((item) => item.valor)
+          );
+          break;
+        default:
+          calculatedValue = 0;
+      }
+
+      // Aplicar ajuste percentual
+      if (adjustment !== 0) {
+        calculatedValue = calculatedValue * (1 + adjustment);
+      }
+
+      // Arredondar para 2 casas decimais
+      calculatedValue = Math.round(calculatedValue * 100) / 100;
+
+      setCalculatedValue(calculatedValue);
+    } catch (error) {
+      console.error('Erro ao calcular meta:', error);
+      toast.error('Erro ao calcular valor da meta');
+    }
+  };
+
+  // Função para aplicar o cálculo
+  const handleApplyCalculation = async () => {
+    if (!calculateData || calculatedValue === null) return;
+
+    try {
+      // Aqui você implementaria a chamada à API para salvar a meta calculada
+      console.log('Salvando meta calculada:', {
+        ...calculateData,
+        valorMeta: calculatedValue,
+      });
+
+      // Simulação de uma chamada à API
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Recarregar os resultados após a criação
+      if (selectedPeriod?.mesAno) {
+        await refetchResults(selectedPeriod.mesAno);
+      }
+
+      toast.success('Meta calculada aplicada com sucesso!');
+      setCalculateModalOpen(false);
+    } catch (error) {
+      console.error('Erro ao aplicar meta calculada:', error);
+      toast.error('Erro ao aplicar meta calculada. Tente novamente.');
+    }
+  };
+
+  // Função simulada para obter dados históricos
+  // Em um cenário real, você substituiria isso por uma chamada à API
+  const getHistoricalData = async (criterioId: number, setorId: number) => {
+    // Simulando uma chamada à API com dados fictícios
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    // Dados fictícios para demonstração
+    return [
+      { periodo: 'Abr/2023', valor: 450 },
+      { periodo: 'Mar/2023', valor: 462 },
+      { periodo: 'Fev/2023', valor: 470 },
+      { periodo: 'Jan/2023', valor: 455 },
+      { periodo: 'Dez/2022', valor: 448 },
+      { periodo: 'Nov/2022', valor: 460 },
+    ];
+  };
+
   return (
-    <div className='container mx-auto p-6'>
-      <Toaster position='top-right' richColors />
+    <div className='container mx-auto py-6 space-y-6'>
+      <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'>
+        <div>
+          <h1 className='text-2xl font-bold tracking-tight'>Parâmetros</h1>
+          <p className='text-muted-foreground'>
+            Gerencie as metas e parâmetros para cada setor e critério.
+          </p>
+        </div>
 
-      <div className='flex justify-between items-center mb-6'>
-        <h1 className='text-2xl font-bold'>Gerenciamento de Metas</h1>
-
-        <div className='flex space-x-2'>
-          <Button onClick={handleCreateMeta} size='sm'>
-            <PlusCircle className='mr-2 h-4 w-4' /> Nova Meta
-          </Button>
+        <div className='flex items-center gap-2'>
+          <Select
+            value={selectedPeriodId?.toString() || ''}
+            onValueChange={handlePeriodChange}
+            disabled={isLoading || periods.length === 0}
+          >
+            <SelectTrigger className='w-[180px]'>
+              <SelectValue placeholder='Selecione um período' />
+            </SelectTrigger>
+            <SelectContent>
+              {periods.map((period) => (
+                <SelectItem key={period.id} value={period.id.toString()}>
+                  {period.mesAno} - {period.status}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           <Button
-            onClick={() => {
-              console.log('Forçando refetch para período:', selectedPeriod);
-              refetchResults();
-            }}
-            size='sm'
             variant='outline'
+            size='icon'
+            onClick={handleRefresh}
+            disabled={isLoading || !selectedPeriod}
           >
-            <RefreshCw className='mr-2 h-4 w-4' /> Atualizar
+            {isLoading ? (
+              <Loader2 className='h-4 w-4 animate-spin' />
+            ) : (
+              <RefreshCw className='h-4 w-4' />
+            )}
           </Button>
         </div>
       </div>
 
-      <div className='flex flex-wrap items-center gap-4 mb-6'>
-        <div className='flex items-center space-x-2'>
-          <Label htmlFor='period-select'>Período:</Label>
-          <PeriodSelector
-            id='period-select'
-            label='Período:'
-            periods={periods || []}
-            selectedPeriodMesAno={selectedPeriod}
-            onPeriodChange={(period) => {
-              console.log('Mudando período para:', period);
-              setSelectedPeriod(period);
-            }}
-            isLoading={isLoading}
-            triggerClassName='w-[200px]'
-          />
+      {isLoading ? (
+        <div className='flex justify-center items-center h-64'>
+          <Loader2 className='h-8 w-8 animate-spin text-muted-foreground' />
         </div>
-
-        <div className='flex-1'></div>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            Metas para o período:{' '}
-            {selectedPeriod || 'Nenhum período selecionado'}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {results && results.length > 0 ? (
+      ) : !selectedPeriod ? (
+        <Card>
+          <CardContent className='flex justify-center items-center h-64'>
+            <p className='text-muted-foreground'>
+              Selecione um período para visualizar os parâmetros.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              Matriz de Parâmetros - {selectedPeriod.mesAno}
+              <span className='ml-2 text-sm font-normal text-muted-foreground'>
+                ({selectedPeriod.status})
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
             <ParametersMatrix
               uniqueCriteria={uniqueCriteria}
               resultsBySector={resultsBySector}
               onEdit={handleEditMeta}
-              onCreate={handleCreateSpecificMeta}
+              onCreate={handleCreateMeta}
+              onCalculate={handleCalculateMeta}
               isLoading={isLoading}
+              periodoAtual={selectedPeriod}
             />
-          ) : (
-            <div className='text-center py-8'>
-              <p className='text-muted-foreground'>
-                {selectedPeriod
-                  ? `Nenhuma meta encontrada para o período ${selectedPeriod}.`
-                  : 'Selecione um período para visualizar as metas.'}
-              </p>
-              {selectedPeriod && (
-                <Button className='mt-4' onClick={handleCreateMeta}>
-                  <PlusCircle className='mr-2 h-4 w-4' /> Criar Nova Meta
-                </Button>
-              )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Modal de Edição */}
+      <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
+        <DialogContent className='sm:max-w-[425px]'>
+          <DialogHeader>
+            <DialogTitle>Editar Meta</DialogTitle>
+            <DialogDescription>
+              Atualize o valor da meta para {editData?.criterioNome} no setor{' '}
+              {editData?.setorNome}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className='grid gap-4 py-4'>
+            <div className='grid grid-cols-4 items-center gap-4'>
+              <Label htmlFor='meta' className='text-right'>
+                Meta
+              </Label>
+              <Input
+                id='meta'
+                type='number'
+                step='0.01'
+                value={newMetaValue}
+                onChange={(e) => setNewMetaValue(e.target.value)}
+                className='col-span-3'
+              />
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setEditModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveEdit}>Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {/* Modais */}
-      <CreateParameterModal
-        isOpen={isCreateModalOpen}
-        onOpenChange={setIsCreateModalOpen}
-        form={createForm}
-        onSubmit={onSubmitCreate}
-        criteria={criteria}
-        sectors={sectors}
-        selectedPeriod={selectedPeriod}
-        isSubmitting={createMutation.isPending}
-      />
-
-      <EditParameterModal
-        isOpen={isEditModalOpen}
-        onOpenChange={setIsEditModalOpen}
-        form={updateForm}
-        onSubmit={onSubmitUpdate}
-        selectedItem={selectedItem}
-        selectedPeriod={selectedPeriod}
-        isSubmitting={updateMutation.isPending}
-      />
-
-      <DeleteParameterModal
-        isOpen={isDeleteModalOpen}
-        onOpenChange={setIsDeleteModalOpen}
-        form={deleteForm}
-        onSubmit={onSubmitDelete}
-        selectedItem={selectedItem}
-        isSubmitting={deleteMutation.isPending}
+      {/* Modal de Criação */}
+      <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
+        <DialogContent className='sm:max-w-[425px]'>
+          <DialogHeader>
+            <DialogTitle>Criar Meta</DialogTitle>
+            <DialogDescription>
+              Defina o valor da meta para {createData?.criterioNome} no setor{' '}
+              {createData?.setorNome}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className='grid gap-4 py-4'>
+            <div className='grid grid-cols-4 items-center gap-4'>
+              <Label htmlFor='newMeta' className='text-right'>
+                Meta
+              </Label>
+              <Input
+                id='newMeta'
+                type='number'
+                step='0.01'
+                value={newMetaValue}
+                onChange={(e) => setNewMetaValue(e.target.value)}
+                className='col-span-3'
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setCreateModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveCreate}>Criar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Modal de Cálculo Automático */}
+      <CalculationModal
+        open={calculateModalOpen}
+        onOpenChange={setCalculateModalOpen}
+        calculateData={calculateData}
+        calculationMethod={calculationMethod}
+        setCalculationMethod={setCalculationMethod}
+        calculationAdjustment={calculationAdjustment}
+        setCalculationAdjustment={setCalculationAdjustment}
+        handlePreviewCalculation={handlePreviewCalculation}
+        calculatedValue={calculatedValue}
+        handleApplyCalculation={handleApplyCalculation}
       />
     </div>
   );

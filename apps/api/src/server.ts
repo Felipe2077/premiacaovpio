@@ -4,6 +4,7 @@ import cors from '@fastify/cors';
 import * as dotenv from 'dotenv';
 import Fastify from 'fastify';
 // Importa todos os serviços
+import { CompetitionPeriodEntity } from '@/entity/competition-period.entity';
 import { CriterionEntity } from '@/entity/criterion.entity';
 import { AuditLogService } from '@/modules/audit/audit.service';
 import { ExpurgoService } from '@/modules/expurgos/expurgo.service';
@@ -31,6 +32,7 @@ const parameterService = new ParameterService();
 const auditLogService = new AuditLogService();
 const expurgoService = new ExpurgoService();
 const competitionPeriodService = new CompetitionPeriodService();
+const periodRepository = AppDataSource.getRepository(CompetitionPeriodEntity);
 
 // Função start async
 const start = async () => {
@@ -134,70 +136,126 @@ const start = async () => {
         reply.status(500).send({ error: error.message || 'Erro.' });
       }
     });
-
-    fastify.get('/api/results', async (request, reply) => {
+    // Endpoint para buscar resultados com data alvo específica
+    fastify.get('/api/results/by-date', async (request, reply) => {
       try {
-        const data = await rankingService.getDetailedResults();
+        // Extrair parâmetros da query string
+        const query = request.query as { period?: string; targetDate?: string };
+        const { period, targetDate } = query;
+
+        console.log(
+          `[API] GET /api/results/by-date - Período: ${period || 'não especificado'}, Data alvo: ${targetDate || 'não especificada'}`
+        );
+
+        // Chamar método específico no serviço
+        const data = await rankingService.getDetailedResultsByDate(
+          period,
+          targetDate
+        );
+
+        console.log(
+          `[API] GET /api/results/by-date - Resultados encontrados: ${data.length}`
+        );
+
         reply.send(data);
       } catch (error: any) {
-        fastify.log.error(`Erro em /api/results: ${error.message}`);
+        console.error(
+          `[API] ERRO em /api/results/by-date: ${error.message}`,
+          error
+        );
+        reply.status(500).send({ error: error.message || 'Erro.' });
+      }
+    });
+    fastify.get('/api/results', async (request, reply) => {
+      try {
+        // Extrair o parâmetro period da query string
+        const query = request.query as { period?: string };
+        const period = query.period;
+
+        console.log(
+          `[API] GET /api/results - Período solicitado: ${period || 'não especificado'}`
+        );
+
+        // Chamar o serviço com o período
+        const data = await rankingService.getDetailedResults(period);
+
+        console.log(
+          `[API] GET /api/results - Resultados encontrados: ${data.length}`
+        );
+
+        reply.send(data);
+      } catch (error: any) {
+        console.error(`[API] ERRO em /api/results: ${error.message}`, error);
         reply.status(500).send({ error: error.message || 'Erro.' });
       }
     });
 
-    // Handler agora usa o serviço atualizado (retorna dados com nomes)
-    fastify.get('/api/parameters', async (request, reply) => {
-      fastify.log.info('GET /api/parameters - Query Params:', request.query);
-      // Define uma interface para os query parameters esperados
-      interface GetParametersQuery {
-        period?: string; // YYYY-MM
-        sectorId?: string;
-        criterionId?: string;
-      }
-      const queryParams = request.query as GetParametersQuery;
-
-      // O periodMesAno é obrigatório para o serviço
-      if (!queryParams.period) {
-        return reply.status(400).send({
-          message: "Query parameter 'period' (formato YYYY-MM) é obrigatório.",
-        });
-      }
-      const sectorIdNum = queryParams.sectorId
-        ? parseInt(queryParams.sectorId, 10)
-        : undefined;
-      const criterionIdNum = queryParams.criterionId
-        ? parseInt(queryParams.criterionId, 10)
-        : undefined;
-
-      if (queryParams.sectorId && isNaN(sectorIdNum!)) {
-        // O ! é para o TS saber que se queryParams.sectorId existe, sectorIdNum foi tentado
-        return reply
-          .status(400)
-          .send({ message: "Query parameter 'sectorId' deve ser um número." });
-      }
-      if (queryParams.criterionId && isNaN(criterionIdNum!)) {
-        return reply.status(400).send({
-          message: "Query parameter 'criterionId' deve ser um número.",
-        });
-      }
-
+    // Endpoint para buscar resultados da vigência atual (ATIVA)
+    fastify.get('/api/results/current', async (request, reply) => {
       try {
-        // Garante inicialização do AppDataSource
-        if (!AppDataSource.isInitialized) await AppDataSource.initialize();
+        // Buscar a vigência ATIVA
+        const activePeriod = await periodRepository.findOne({
+          where: { status: 'ATIVA' },
+        });
 
-        const data = await parameterService.findParametersForPeriod(
-          queryParams.period, // Passa o periodMesAno
-          sectorIdNum, // Passa o sectorId (ou undefined)
-          criterionIdNum // Passa o criterionId (ou undefined)
+        if (!activePeriod) {
+          reply
+            .status(404)
+            .send({ error: 'Nenhuma vigência ATIVA encontrada' });
+          return;
+        }
+
+        fastify.log.info(
+          `Buscando resultados para vigência ATIVA: ${activePeriod.mesAno}`
+        );
+
+        const data = await rankingService.getDetailedResults(
+          activePeriod.mesAno
         );
         reply.send(data);
       } catch (error: any) {
-        fastify.log.error(`Erro em GET /api/parameters: ${error.message}`);
-        reply.status(500).send({
-          error: error.message || 'Erro interno ao buscar parâmetros.',
-        });
+        fastify.log.error(`Erro em /api/results/current: ${error.message}`);
+        reply.status(500).send({ error: error.message || 'Erro.' });
       }
     });
+
+    // Endpoint para buscar resultados de uma vigência específica por ID
+    interface ParamsWithId {
+      id: string;
+    }
+
+    fastify.get<{ Params: ParamsWithId }>(
+      '/api/results/period/:id',
+      async (request, reply) => {
+        try {
+          const { id } = request.params;
+
+          // Buscar a vigência pelo ID
+          const period = await periodRepository.findOne({
+            where: { id: parseInt(id) },
+          });
+
+          if (!period) {
+            reply
+              .status(404)
+              .send({ error: `Vigência com ID ${id} não encontrada` });
+            return;
+          }
+
+          fastify.log.info(
+            `Buscando resultados para vigência ID ${id}: ${period.mesAno} (${period.status})`
+          );
+
+          const data = await rankingService.getDetailedResults(period.mesAno);
+          reply.send(data);
+        } catch (error: any) {
+          fastify.log.error(
+            `Erro em /api/results/period/${request.params.id}: ${error.message}`
+          );
+          reply.status(500).send({ error: error.message || 'Erro.' });
+        }
+      }
+    );
 
     // Handler agora usa o serviço atualizado (retorna dados com user)
     fastify.get('/api/audit-logs', async (request, reply) => {
@@ -429,6 +487,70 @@ const start = async () => {
         }
       }
     });
+
+    // Handler agora usa o serviço atualizado (retorna dados com nomes)
+    fastify.get('/api/parameters', async (request, reply) => {
+      fastify.log.info('GET /api/parameters - Query Params:', request.query);
+      // Define uma interface para os query parameters esperados
+      interface GetParametersQuery {
+        period?: string; // YYYY-MM
+        sectorId?: string;
+        criterionId?: string;
+        onlyActive?: string; // "true" ou "false"
+      }
+      const queryParams = request.query as GetParametersQuery;
+
+      // O periodMesAno é obrigatório para o serviço
+      if (!queryParams.period) {
+        return reply.status(400).send({
+          message: "Query parameter 'period' (formato YYYY-MM) é obrigatório.",
+        });
+      }
+
+      const sectorIdNum = queryParams.sectorId
+        ? parseInt(queryParams.sectorId, 10)
+        : undefined;
+      const criterionIdNum = queryParams.criterionId
+        ? parseInt(queryParams.criterionId, 10)
+        : undefined;
+      const onlyActive = queryParams.onlyActive !== 'false'; // Por padrão é true
+
+      if (queryParams.sectorId && isNaN(sectorIdNum!)) {
+        return reply
+          .status(400)
+          .send({ message: "Query parameter 'sectorId' deve ser um número." });
+      }
+      if (queryParams.criterionId && isNaN(criterionIdNum!)) {
+        return reply.status(400).send({
+          message: "Query parameter 'criterionId' deve ser um número.",
+        });
+      }
+
+      try {
+        // Garante inicialização do AppDataSource
+        if (!AppDataSource.isInitialized) await AppDataSource.initialize();
+
+        const data = await parameterService.findParametersForPeriod(
+          queryParams.period, // Passa o periodMesAno
+          sectorIdNum, // Passa o sectorId (ou undefined)
+          criterionIdNum, // Passa o criterionId (ou undefined)
+          onlyActive // Passa o flag onlyActive
+        );
+
+        // Log detalhado para debug
+        fastify.log.info(
+          `GET /api/parameters - Retornando ${data.length} parâmetros`
+        );
+
+        reply.send(data);
+      } catch (error: any) {
+        fastify.log.error(`Erro em GET /api/parameters: ${error.message}`);
+        reply.status(500).send({
+          error: error.message || 'Erro interno ao buscar parâmetros.',
+        });
+      }
+    });
+
     // Rota GET para buscar um parâmetro/meta específico por ID
     fastify.get('/api/parameters/:id', async (request, reply) => {
       const params = request.params as { id: string };
@@ -459,56 +581,79 @@ const start = async () => {
 
     // Rota PUT para ATUALIZAR um parâmetro/meta (com versionamento)
     fastify.put('/api/parameters/:id', async (request, reply) => {
-      const params = request.params as { id: string };
-      const parameterId = parseInt(params.id, 10);
-      // TODO: Validar o corpo da requisição com Zod usando UpdateParameterDto
-      const updateData = request.body as UpdateParameterDto;
-      // TODO: Obter o ID do usuário logado (actingUser)
-      const mockActingUser = {
-        id: 1,
-        nome: 'Admin Sistema (Mock)',
-      } as UserEntity;
+      const { id } = request.params as { id: string };
+      const data = request.body as UpdateParameterDto;
 
-      fastify.log.info(
-        `PUT /api/parameters/${parameterId} com dados:`,
-        updateData
-      );
-      if (isNaN(parameterId)) {
-        return reply.status(400).send({ message: 'ID do parâmetro inválido.' });
-      }
-      if (!updateData.justificativa) {
-        // Justificativa é crucial para update
-        return reply.status(400).send({
-          message: 'Justificativa é obrigatória para atualizar o parâmetro.',
-        });
-      }
+      // Log para debug
+      fastify.log.info(`PUT /api/parameters/${id} - Dados recebidos:`, data);
 
       try {
-        if (!AppDataSource.isInitialized) await AppDataSource.initialize();
+        const idNum = parseInt(id, 10);
+        if (isNaN(idNum)) {
+          return reply.status(400).send({ message: 'ID inválido.' });
+        }
+
+        // Como não há autenticação, vamos criar um usuário mock para o serviço
+        // Isso é temporário até que a autenticação seja implementada
+        const mockUser = {
+          id: 1,
+          nome: 'Sistema (Temporário)',
+          email: 'sistema@exemplo.com',
+          // outros campos necessários...
+        };
+
+        // Garantir que o AppDataSource está inicializado
+        if (!AppDataSource.isInitialized) {
+          await AppDataSource.initialize();
+        }
+
+        // Buscar ou criar o usuário mock no banco de dados
+        const userRepo = AppDataSource.getRepository(UserEntity);
+        let user = await userRepo.findOneBy({ id: mockUser.id });
+
+        if (!user) {
+          // Se o usuário não existir, vamos criá-lo
+          user = userRepo.create(mockUser);
+          user = await userRepo.save(user);
+          fastify.log.info(
+            `Usuário mock criado para operações do sistema: ID ${user.id}`
+          );
+        }
+
+        // Chamar o serviço com o ID, dados e usuário mock
         const updatedParameter = await parameterService.updateParameter(
-          parameterId,
-          updateData,
-          mockActingUser
+          idNum,
+          data,
+          user
         );
+
+        fastify.log.info(`Parâmetro ID ${id} atualizado com sucesso.`);
         reply.send(updatedParameter);
       } catch (error: any) {
         fastify.log.error(
-          `Erro em PUT /api/parameters/${parameterId}: ${error.message}`
+          `Erro ao atualizar parâmetro ID ${id}:`,
+          error.message
         );
-        if (error.message.includes('não encontrado')) {
-          reply.status(404).send({ error: error.message });
+
+        // Melhorar o tratamento de erros para fornecer mensagens mais claras
+        let statusCode = 500;
+        let errorMessage =
+          error.message || 'Erro interno ao atualizar parâmetro.';
+
+        // Determinar o código de status apropriado com base na mensagem de erro
+        if (errorMessage.includes('não encontrado')) {
+          statusCode = 404;
         } else if (
-          error.message.includes('expirado') ||
-          error.message.includes('não podem ser alteradas') ||
-          error.message.includes('anterior à sua data de início') ||
-          error.message.includes('posterior à data de fim')
+          errorMessage.includes('não podem ser alteradas') ||
+          errorMessage.includes('Justificativa é obrigatória') ||
+          errorMessage.includes('deve estar dentro do período') ||
+          errorMessage.includes('não pode ser anterior') ||
+          errorMessage.includes('já está expirado')
         ) {
-          reply.status(409).send({ error: error.message }); // Conflict or Bad Request
-        } else {
-          reply.status(500).send({
-            error: error.message || 'Erro interno ao atualizar parâmetro.',
-          });
+          statusCode = 409; // Conflict para violações de regras de negócio
         }
+
+        reply.status(statusCode).send({ error: errorMessage });
       }
     });
     // Em apps/api/src/server.ts, dentro da função start(), na seção de rotas de parâmetros

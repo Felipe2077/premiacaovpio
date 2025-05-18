@@ -91,20 +91,30 @@ const updateParameterAPI = async ({
   id,
   data,
 }: UpdateParameterPayload): Promise<ParameterValueAPI> => {
+  console.log(`Enviando atualização para parâmetro ID ${id} com dados:`, data);
+
   const response = await fetch(`${API_BASE_URL}/parameters/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
+
   if (!response.ok) {
     const errorData = await response
       .json()
       .catch(() => ({ message: response.statusText }));
+
+    console.error(`Erro ${response.status} ao atualizar parâmetro:`, errorData);
+
     throw new Error(
       errorData.message || `Erro ao atualizar parâmetro: ${response.status}`
     );
   }
-  return response.json();
+
+  const responseData = await response.json();
+  console.log(`Parâmetro ID ${id} atualizado com sucesso:`, responseData);
+
+  return responseData;
 };
 interface DeleteParameterPayload {
   id: number;
