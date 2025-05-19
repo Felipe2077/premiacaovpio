@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useParametersData } from '@/hooks/useParametersData';
+import { CalculateParameterDto } from '@sistema-premiacao/shared-types';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -36,11 +37,22 @@ export default function ParametersPage() {
   const [newMetaValue, setNewMetaValue] = useState<string>('');
   // Estados adicionais
   const [calculateModalOpen, setCalculateModalOpen] = useState(false);
-  const [calculateData, setCalculateData] = useState<any>(null);
   const [calculationMethod, setCalculationMethod] = useState<string>('media3');
   const [calculationAdjustment, setCalculationAdjustment] =
     useState<string>('0');
   const [calculatedValue, setCalculatedValue] = useState<number | null>(null);
+  const [calculationModalOpen, setCalculationModalOpen] = useState(false);
+  const [calculateData, setCalculateData] = useState<{
+    criterioId: number;
+    criterioNome: string;
+    setorId: number | null;
+    setorNome: string;
+  } | null>(null);
+  const [roundingMethod, setRoundingMethod] = useState<string>('nearest');
+  const [decimalPlaces, setDecimalPlaces] = useState<string>('0');
+  const [saveAsDefault, setSaveAsDefault] = useState<boolean>(false);
+  const [isLoadingSettings, setIsLoadingSettings] = useState<boolean>(false);
+  const [isCalculating, setIsCalculating] = useState<boolean>(false);
 
   // Obter dados do hook
   const {
@@ -52,7 +64,88 @@ export default function ParametersPage() {
     fetchAllData,
     getPeriodById,
     refetchResults,
+    parameters,
+    isLoadingParameters,
+    createParameter,
+    updateParameter,
+    calculateParameterValue,
+    fetchCriterionCalculationSettings,
   } = useParametersData();
+
+  // Função para abrir o modal de cálculo
+  const handleOpenCalculationModal = (
+    criterionId: number,
+    sectorId: number | null,
+    criterionName: string
+  ) => {
+    // Verificar se está na fase de planejamento
+    const isPlanejamentoActive = selectedPeriod?.status === 'PLANEJAMENTO';
+
+    // Só permitir cálculo em fase de planejamento
+    if (!isPlanejamentoActive) {
+      toast.error('Metas só podem ser calculadas na fase de planejamento');
+      return;
+    }
+
+    // Encontrar o nome do setor
+    const sectorName =
+      sectorId === null
+        ? 'Geral'
+        : Object.values(resultsBySector).find(
+            (s: any) => s.setorId === sectorId || s.id === sectorId
+          )?.setorNome || `Setor ${sectorId}`;
+
+    setCalculateData({
+      criterioId: criterionId,
+      criterioNome: criterionName,
+      setorId: sectorId,
+      setorNome: sectorName,
+    });
+
+    // Resetar estados
+    setCalculatedValue(null);
+
+    // Carregar configurações padrão para este critério
+    loadDefaultSettings(criterionId);
+
+    // Abrir o modal
+    setCalculationModalOpen(true);
+  };
+
+  // Adicionar esta função se não existir
+  const refetchParameters = async () => {
+    if (selectedPeriod?.mesAno) {
+      await fetchResults(selectedPeriod.mesAno);
+    }
+  };
+  // Função para carregar configurações padrão
+  const loadDefaultSettings = async (criterionId: number) => {
+    setIsLoadingSettings(true);
+    try {
+      const settings = await fetchCriterionCalculationSettings(criterionId);
+
+      // Aplicar configurações carregadas
+      if (settings) {
+        setCalculationMethod(settings.calculationMethod || 'media3');
+        setCalculationAdjustment(
+          settings.adjustmentPercentage?.toString() || '0'
+        );
+        setRoundingMethod(settings.roundingMethod || 'nearest');
+        setDecimalPlaces(settings.roundingDecimalPlaces?.toString() || '0');
+      }
+    } catch (error) {
+      console.error('Erro ao carregar configurações de cálculo:', error);
+      toast.error('Não foi possível carregar as configurações padrão.');
+
+      // Manter valores padrão em caso de erro
+      setCalculationMethod('media3');
+      setCalculationAdjustment('0');
+      setRoundingMethod('nearest');
+      setDecimalPlaces('0');
+    } finally {
+      setIsLoadingSettings(false);
+    }
+  };
 
   // Efeito para selecionar o período ativo por padrão quando os períodos são carregados
   useEffect(() => {
@@ -234,85 +327,98 @@ export default function ParametersPage() {
   const handlePreviewCalculation = async () => {
     if (!calculateData) return;
 
+    setIsCalculating(true);
     try {
-      // Simulação de obtenção de dados históricos
-      // Em um cenário real, você chamaria sua API para obter esses dados
-      const historicalData = await getHistoricalData(
-        calculateData.criterioId,
-        calculateData.setorId
-      );
+      // Buscar dados históricos
+      // Na implementação real, você pode buscar esses dados da API
+      // ou usar os dados já disponíveis no frontend
 
-      let calculatedValue = 0;
-      const adjustment = parseFloat(calculationAdjustment) / 100; // Converter percentual para decimal
-
-      switch (calculationMethod) {
-        case 'media3':
-          // Média dos últimos 3 meses
-          calculatedValue =
-            historicalData
-              .slice(0, 3)
-              .reduce((sum, item) => sum + item.valor, 0) / 3;
-          break;
-        case 'media6':
-          // Média dos últimos 6 meses
-          calculatedValue =
-            historicalData
-              .slice(0, 6)
-              .reduce((sum, item) => sum + item.valor, 0) / 6;
-          break;
-        case 'ultimo':
-          // Valor do último mês
-          calculatedValue = historicalData[0]?.valor || 0;
-          break;
-        case 'melhor3':
-          // Melhor valor dos últimos 3 meses
-          calculatedValue = Math.max(
-            ...historicalData.slice(0, 3).map((item) => item.valor)
-          );
-          break;
-        default:
-          calculatedValue = 0;
-      }
+      // Simulação simplificada - na implementação real, você usaria dados históricos reais
+      const baseValue = 100; // Valor base simulado
 
       // Aplicar ajuste percentual
-      if (adjustment !== 0) {
-        calculatedValue = calculatedValue * (1 + adjustment);
+      let adjustedValue = baseValue;
+      const adjustmentPercent = parseFloat(calculationAdjustment);
+      if (!isNaN(adjustmentPercent)) {
+        adjustedValue = baseValue * (1 + adjustmentPercent / 100);
       }
 
-      // Arredondar para 2 casas decimais
-      calculatedValue = Math.round(calculatedValue * 100) / 100;
+      // Aplicar arredondamento
+      let finalValue = adjustedValue;
+      const decimalPlacesNum = parseInt(decimalPlaces, 10) || 0;
+      const multiplier = Math.pow(10, decimalPlacesNum);
 
-      setCalculatedValue(calculatedValue);
+      switch (roundingMethod) {
+        case 'nearest':
+          finalValue = Math.round(adjustedValue * multiplier) / multiplier;
+          break;
+        case 'up':
+          finalValue = Math.ceil(adjustedValue * multiplier) / multiplier;
+          break;
+        case 'down':
+          finalValue = Math.floor(adjustedValue * multiplier) / multiplier;
+          break;
+      }
+
+      // Atualizar o valor calculado
+      setCalculatedValue(finalValue);
     } catch (error) {
-      console.error('Erro ao calcular meta:', error);
-      toast.error('Erro ao calcular valor da meta');
+      console.error('Erro ao calcular prévia:', error);
+      toast.error(
+        'Erro ao calcular prévia. Verifique os dados e tente novamente.'
+      );
+    } finally {
+      setIsCalculating(false);
     }
   };
 
   // Função para aplicar o cálculo
   const handleApplyCalculation = async () => {
-    if (!calculateData || calculatedValue === null) return;
+    if (!calculateData || calculatedValue === null || !selectedPeriod) return;
 
     try {
-      // Aqui você implementaria a chamada à API para salvar a meta calculada
-      console.log('Salvando meta calculada:', {
-        ...calculateData,
-        valorMeta: calculatedValue,
+      // Preparar dados para a API
+      const calculateDto: CalculateParameterDto = {
+        criterionId: calculateData.criterioId,
+        sectorId: calculateData.setorId,
+        competitionPeriodId: selectedPeriod.id,
+        calculationMethod: calculationMethod as any,
+        adjustmentPercentage: parseFloat(calculationAdjustment) || 0,
+        wasRounded: true, // Sempre consideramos que houve arredondamento
+        roundingMethod: roundingMethod as any,
+        roundingDecimalPlaces: parseInt(decimalPlaces, 10) || 0,
+        finalValue: calculatedValue,
+        saveAsDefault,
+        justificativa: `Meta calculada automaticamente usando ${calculationMethod} com ajuste de ${calculationAdjustment}%.`,
+      };
+
+      // Chamar a API para calcular
+      const result = await calculateParameterValue(calculateDto);
+
+      // Criar o parâmetro com o valor calculado
+      await createParameter({
+        nomeParametro: `META_${calculateData.criterioNome.toUpperCase().replace(/\s+/g, '_')}`,
+        valor: result.value.toString(),
+        dataInicioEfetivo:
+          selectedPeriod.dataInicio || new Date().toISOString().split('T')[0],
+        criterionId: calculateData.criterioId,
+        sectorId: calculateData.setorId,
+        competitionPeriodId: selectedPeriod.id,
+        justificativa: `Meta calculada automaticamente usando ${calculationMethod} com ajuste de ${calculationAdjustment}%.`,
+        metadata: result.metadata,
       });
 
-      // Simulação de uma chamada à API
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Fechar o modal e exibir mensagem de sucesso
+      setCalculationModalOpen(false);
+      toast.success('Meta calculada e aplicada com sucesso!');
 
-      // Recarregar os resultados após a criação
-      if (selectedPeriod?.mesAno) {
-        await refetchResults(selectedPeriod.mesAno);
-      }
-
-      toast.success('Meta calculada aplicada com sucesso!');
-      setCalculateModalOpen(false);
+      // Atualizar a lista de parâmetros
+      refetchParameters();
     } catch (error) {
-      console.error('Erro ao aplicar meta calculada:', error);
-      toast.error('Erro ao aplicar meta calculada. Tente novamente.');
+      console.error('Erro ao aplicar cálculo:', error);
+      toast.error(
+        'Erro ao aplicar o cálculo. Verifique os dados e tente novamente.'
+      );
     }
   };
 
@@ -404,7 +510,7 @@ export default function ParametersPage() {
               resultsBySector={resultsBySector}
               onEdit={handleEditMeta}
               onCreate={handleCreateMeta}
-              onCalculate={handleCalculateMeta}
+              onCalculate={handleOpenCalculationModal}
               isLoading={isLoading}
               periodoAtual={selectedPeriod}
             />
@@ -480,17 +586,26 @@ export default function ParametersPage() {
         </DialogContent>
       </Dialog>
       {/* Modal de Cálculo Automático */}
+
       <CalculationModal
-        open={calculateModalOpen}
-        onOpenChange={setCalculateModalOpen}
+        open={calculationModalOpen}
+        onOpenChange={setCalculationModalOpen}
         calculateData={calculateData}
         calculationMethod={calculationMethod}
         setCalculationMethod={setCalculationMethod}
         calculationAdjustment={calculationAdjustment}
         setCalculationAdjustment={setCalculationAdjustment}
+        roundingMethod={roundingMethod}
+        setRoundingMethod={setRoundingMethod}
+        decimalPlaces={decimalPlaces}
+        setDecimalPlaces={setDecimalPlaces}
+        saveAsDefault={saveAsDefault}
+        setSaveAsDefault={setSaveAsDefault}
         handlePreviewCalculation={handlePreviewCalculation}
         calculatedValue={calculatedValue}
         handleApplyCalculation={handleApplyCalculation}
+        isLoadingSettings={isLoadingSettings}
+        isCalculating={isCalculating}
       />
     </div>
   );

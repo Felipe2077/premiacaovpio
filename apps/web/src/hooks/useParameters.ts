@@ -1,6 +1,9 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 // apps/web/src/hooks/useParameters.ts (ADICIONANDO getParameterHistory)
 import {
+  CalculateParameterDto,
   CreateParameterDto,
+  CriterionCalculationSettingsDto,
   UpdateParameterDto,
 } from '@sistema-premiacao/shared-types';
 import {
@@ -27,6 +30,14 @@ export interface ParameterValueAPI {
   setor?: { id: number; nome: string };
   competitionPeriod?: { id: number; mesAno: string; status?: string };
   criadoPor?: { id: number; nome: string };
+  metadata?: {
+    calculationMethod?: 'media3' | 'media6' | 'ultimo' | 'melhor3' | 'manual';
+    adjustmentPercentage?: number;
+    baseValue?: number;
+    wasRounded?: boolean;
+    roundingMethod?: 'nearest' | 'up' | 'down';
+    roundingDecimalPlaces?: number;
+  };
 }
 
 const API_BASE_URL =
@@ -169,6 +180,66 @@ const fetchParameterHistory = async (
 };
 // -----------------------------
 
+// Adicionar função para cálculo automático
+const calculateParameterValue = async (
+  calculateData: CalculateParameterDto
+): Promise<{ value: number; metadata: any }> => {
+  console.log('Enviando solicitação de cálculo:', calculateData);
+
+  const response = await fetch(`${API_BASE_URL}/parameters/calculate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(calculateData),
+  });
+
+  if (!response.ok) {
+    const errorData = await response
+      .json()
+      .catch(() => ({ message: response.statusText }));
+    throw new Error(
+      errorData.error ||
+        errorData.message ||
+        `Erro ao calcular parâmetro: ${response.status}`
+    );
+  }
+
+  return response.json();
+};
+
+// Adicionar função para buscar configurações de cálculo
+const fetchCriterionCalculationSettings = async (
+  criterionId: number
+): Promise<CriterionCalculationSettingsDto> => {
+  console.log(
+    `Buscando configurações de cálculo para critério ID: ${criterionId}`
+  );
+
+  const response = await fetch(
+    `${API_BASE_URL}/criteria/${criterionId}/calculation-settings`
+  );
+
+  if (!response.ok) {
+    // Se for 404, retornar configurações padrão
+    if (response.status === 404) {
+      const data = await response.json();
+      if (data.defaultSettings) {
+        return data.defaultSettings;
+      }
+    }
+
+    const errorData = await response
+      .json()
+      .catch(() => ({ message: response.statusText }));
+    throw new Error(
+      errorData.error ||
+        errorData.message ||
+        `Erro ao buscar configurações de cálculo: ${response.status}`
+    );
+  }
+
+  return response.json();
+};
+
 export const useParameters = (
   periodMesAno: string,
   initialSectorId?: number,
@@ -279,5 +350,6 @@ export const useParameters = (
     isDeletingParameter: deleteParameterMutation.isPending,
     deleteParameterError: deleteParameterMutation.error?.message,
     getParameterHistory, // <<< EXPORTAR AQUI
+    fetchCriterionCalculationSettings,
   };
 };

@@ -1,4 +1,4 @@
-//apps/api/src/modules/parameters/parameter.service.ts
+// apps/api/src/modules/parameters/parameter.service.ts
 import { AppDataSource } from '@/database/data-source';
 import { CompetitionPeriodEntity } from '@/entity/competition-period.entity';
 import { CriterionEntity } from '@/entity/criterion.entity';
@@ -7,12 +7,15 @@ import { PerformanceDataEntity } from '@/entity/performance-data.entity';
 import { SectorEntity } from '@/entity/sector.entity';
 import { UserEntity } from '@/entity/user.entity';
 import {
+  CalculateParameterDto,
   CreateParameterDto,
+  ParameterMetadata,
   UpdateParameterDto,
 } from '@sistema-premiacao/shared-types';
 import 'reflect-metadata';
 import { DeepPartial, FindOptionsWhere, IsNull, Repository } from 'typeorm';
 import { AuditLogService } from '../audit/audit.service';
+import { CriterionCalculationSettingsService } from './criterion-calculation-settings.service';
 
 export class ParameterService {
   private parameterRepo: Repository<ParameterValueEntity>;
@@ -21,6 +24,7 @@ export class ParameterService {
   private sectorRepo: Repository<SectorEntity>;
   private performanceDataRepo: Repository<PerformanceDataEntity>;
   private auditLogService: AuditLogService;
+  private criterionCalculationSettingsService: CriterionCalculationSettingsService;
 
   constructor() {
     this.parameterRepo = AppDataSource.getRepository(ParameterValueEntity);
@@ -31,6 +35,9 @@ export class ParameterService {
       PerformanceDataEntity
     );
     this.auditLogService = new AuditLogService();
+    this.criterionCalculationSettingsService =
+      new CriterionCalculationSettingsService();
+
     console.log('[ParameterService] Instanciado e repositórios configurados.');
   }
 
@@ -122,6 +129,7 @@ export class ParameterService {
       competitionPeriodId: data.competitionPeriodId,
       justificativa: data.justificativa,
       createdByUserId: actingUser.id,
+      metadata: data.metadata, // Adicionar os metadados se fornecidos
     });
 
     const savedParameter = await this.parameterRepo.save(parameterToCreate);
@@ -130,6 +138,237 @@ export class ParameterService {
       `[ParameterService] Parâmetro/Meta criado com ID: ${savedParameter.id}`
     );
     return savedParameter;
+  }
+
+  async calculateParameter(
+    data: CalculateParameterDto,
+    actingUser: UserEntity
+  ): Promise<{ value: number; metadata: ParameterMetadata }> {
+    console.log(`[ParameterService] Processando cálculo de meta:`, data);
+
+    // Validar dados de entrada
+    if (
+      !data.criterionId ||
+      !data.competitionPeriodId ||
+      !data.calculationMethod ||
+      data.finalValue === undefined
+    ) {
+      throw new Error(
+        'Campos obrigatórios (criterionId, competitionPeriodId, calculationMethod, finalValue) estão faltando.'
+      );
+    }
+
+    // Buscar o critério
+    const criterion = await this.criterionRepo.findOneBy({
+      id: data.criterionId,
+    });
+    if (!criterion) {
+      throw new Error(`Critério com ID ${data.criterionId} não encontrado.`);
+    }
+
+    // Buscar o período
+    const competitionPeriod = await this.periodRepo.findOneBy({
+      id: data.competitionPeriodId,
+    });
+    if (!competitionPeriod) {
+      throw new Error(
+        `Período de competição com ID ${data.competitionPeriodId} não encontrado.`
+      );
+    }
+
+    // Buscar dados históricos de desempenho para calcular o valor base
+    const historicalData = await this.getHistoricalPerformanceData(
+      data.criterionId,
+      data.sectorId,
+      competitionPeriod
+    );
+
+    // Calcular valor base conforme o método selecionado (para metadados)
+    let baseValue = 0;
+    try {
+      switch (data.calculationMethod) {
+        case 'media3':
+          baseValue = this.calculateAverage(historicalData, 3);
+          break;
+        case 'media6':
+          baseValue = this.calculateAverage(historicalData, 6);
+          break;
+        case 'ultimo':
+          baseValue = this.getLastValue(historicalData);
+          break;
+        case 'melhor3':
+          baseValue = this.getBestValue(
+            historicalData,
+            3,
+            criterion.sentido_melhor
+          );
+          break;
+        default:
+          console.warn(
+            `[ParameterService] Método de cálculo não reconhecido: ${data.calculationMethod}, usando valor fornecido.`
+          );
+          baseValue = data.finalValue;
+      }
+    } catch (error) {
+      console.error(`[ParameterService] Erro ao calcular valor base:`, error);
+      // Se houver erro no cálculo, usamos o valor final fornecido
+      baseValue = data.finalValue;
+    }
+
+    // Salvar configurações como padrão se solicitado
+    if (data.saveAsDefault) {
+      try {
+        await this.criterionCalculationSettingsService.saveSettings({
+          criterionId: data.criterionId,
+          calculationMethod: data.calculationMethod,
+          adjustmentPercentage: data.adjustmentPercentage,
+          requiresRounding: data.wasRounded,
+          roundingMethod: data.roundingMethod,
+          roundingDecimalPlaces: data.roundingDecimalPlaces,
+        });
+        console.log(
+          `[ParameterService] Configurações de cálculo salvas como padrão para critério ID: ${data.criterionId}`
+        );
+      } catch (error) {
+        console.error(
+          `[ParameterService] Erro ao salvar configurações de cálculo:`,
+          error
+        );
+        // Não interromper o fluxo se houver erro ao salvar configurações
+      }
+    }
+
+    // Preparar metadados
+    const metadata: ParameterMetadata = {
+      calculationMethod: data.calculationMethod,
+      adjustmentPercentage: data.adjustmentPercentage,
+      baseValue,
+      wasRounded: data.wasRounded,
+      roundingMethod: data.roundingMethod,
+      roundingDecimalPlaces: data.roundingDecimalPlaces,
+    };
+
+    // Usar o valor final já arredondado enviado pelo frontend
+    return { value: data.finalValue, metadata };
+  }
+
+  // Métodos auxiliares para cálculo
+  private async getHistoricalPerformanceData(
+    criterionId: number,
+    sectorId: number | undefined | null,
+    currentPeriod: CompetitionPeriodEntity
+  ): Promise<PerformanceDataEntity[]> {
+    console.log(
+      `[ParameterService] Buscando dados históricos para critério ID: ${criterionId}, setor ID: ${sectorId}`
+    );
+
+    // Construir a consulta base
+    const queryBuilder = this.performanceDataRepo
+      .createQueryBuilder('pd')
+      .where('pd.criterionId = :criterionId', { criterionId })
+      .andWhere('pd.competitionPeriodId != :currentPeriodId', {
+        currentPeriodId: currentPeriod.id,
+      });
+
+    // Adicionar filtro de setor
+    if (sectorId !== undefined) {
+      if (sectorId === null) {
+        queryBuilder.andWhere('pd.sectorId IS NULL');
+      } else {
+        queryBuilder.andWhere('pd.sectorId = :sectorId', { sectorId });
+      }
+    }
+
+    // Ordenar por período (mais recente primeiro)
+    queryBuilder
+      .leftJoin('pd.competitionPeriod', 'cp')
+      .orderBy('cp.mesAno', 'DESC')
+      .limit(12); // Limitar aos últimos 12 meses
+
+    return queryBuilder.getMany();
+  }
+
+  private calculateAverage(
+    data: PerformanceDataEntity[],
+    months: number
+  ): number {
+    if (!data || data.length === 0) {
+      throw new Error(
+        'Não há dados históricos suficientes para calcular a média.'
+      );
+    }
+
+    // Limitar ao número de meses solicitado
+    const recentData = data.slice(0, months);
+
+    if (recentData.length < months) {
+      console.warn(
+        `[ParameterService] Aviso: Solicitada média de ${months} meses, mas só há ${recentData.length} disponíveis.`
+      );
+    }
+
+    // Usar a propriedade 'valor' em vez de 'realizedValue'
+    const validValues = recentData
+      .filter((item) => item.valor !== null && !isNaN(Number(item.valor)))
+      .map((item) => Number(item.valor));
+
+    if (validValues.length === 0) {
+      throw new Error('Não há valores válidos para calcular a média.');
+    }
+
+    const sum = validValues.reduce((acc, val) => acc + val, 0);
+    return sum / validValues.length;
+  }
+
+  private getLastValue(data: PerformanceDataEntity[]): number {
+    if (!data || data.length === 0) {
+      throw new Error('Não há dados históricos para obter o último valor.');
+    }
+
+    // O primeiro item é o mais recente devido à ordenação na consulta
+    const lastItem = data[0];
+
+    if (!lastItem || lastItem.valor === null || isNaN(Number(lastItem.valor))) {
+      throw new Error('O último valor realizado não é válido.');
+    }
+
+    return Number(lastItem.valor);
+  }
+
+  private getBestValue(
+    data: PerformanceDataEntity[],
+    months: number,
+    direction: string | undefined
+  ): number {
+    if (!data || data.length === 0) {
+      throw new Error('Não há dados históricos para obter o melhor valor.');
+    }
+
+    // Limitar ao número de meses solicitado
+    const recentData = data.slice(0, months);
+
+    if (recentData.length < months) {
+      console.warn(
+        `[ParameterService] Aviso: Solicitados ${months} meses para melhor valor, mas só há ${recentData.length} disponíveis.`
+      );
+    }
+
+    // Filtrar valores válidos (usar 'valor' em vez de 'realizedValue')
+    const validValues = recentData
+      .filter((item) => item.valor !== null && !isNaN(Number(item.valor)))
+      .map((item) => Number(item.valor));
+
+    if (validValues.length === 0) {
+      throw new Error('Não há valores válidos para determinar o melhor.');
+    }
+
+    // Determinar o melhor valor com base na direção
+    if (direction === 'MENOR') {
+      return Math.min(...validValues);
+    } else {
+      // Por padrão, consideramos que maior é melhor
+      return Math.max(...validValues);
+    }
   }
 
   async findParametersForPeriod(
@@ -321,6 +560,7 @@ export class ParameterService {
       justificativa: data.justificativa, // Justificativa da nova versão
       createdByUserId: actingUser.id,
       previousVersionId: oldParameter.id, // Garantir que o previousVersionId seja definido
+      metadata: data.metadata || oldParameter.metadata, // Preservar ou atualizar os metadados
     };
 
     // Verificar se o valor foi alterado

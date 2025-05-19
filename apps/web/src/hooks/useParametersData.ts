@@ -50,6 +50,67 @@ export function useParametersData(selectedPeriod?: string) {
   const [isLoadingResults, setIsLoadingResults] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Adicionar função para buscar configurações de cálculo
+  const fetchCriterionCalculationSettings = async (criterionId: number) => {
+    try {
+      console.log(`Buscando configurações para critério ID: ${criterionId}`);
+
+      const response = await fetch(
+        `/api/criteria/${criterionId}/calculation-settings`
+      );
+
+      if (response.status === 404) {
+        console.log(
+          `Configurações não encontradas para critério ID: ${criterionId}, usando valores padrão`
+        );
+        // Retornar configurações padrão para critério não encontrado
+        return {
+          criterionId,
+          calculationMethod: 'media3',
+          adjustmentPercentage: 0,
+          requiresRounding: true,
+          roundingMethod: 'nearest',
+          roundingDecimalPlaces: 0,
+        };
+      }
+
+      if (!response.ok) {
+        console.warn(
+          `Erro ${response.status} ao buscar configurações: ${response.statusText}`
+        );
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.message ||
+            errorData.error ||
+            `Erro ${response.status}: ${response.statusText}`
+        );
+      }
+
+      const data = await response.json();
+      console.log('Configurações carregadas:', data);
+
+      // Se não houver configurações, o backend retorna defaultSettings
+      if (data.defaultSettings) {
+        console.log('Usando configurações padrão fornecidas pelo backend');
+        return data.defaultSettings;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro ao carregar configurações de cálculo:', error);
+
+      // Retornar configurações padrão em caso de erro
+      console.log('Usando configurações padrão devido a erro');
+      return {
+        criterionId,
+        calculationMethod: 'media3',
+        adjustmentPercentage: 0,
+        requiresRounding: true,
+        roundingMethod: 'nearest',
+        roundingDecimalPlaces: 0,
+      };
+    }
+  };
   // Função para buscar períodos
   const fetchPeriods = useCallback(async () => {
     console.log('Buscando períodos da API...');
@@ -544,5 +605,6 @@ export function useParametersData(selectedPeriod?: string) {
     getCriterionById,
     getSectorById,
     getFilteredResults,
+    fetchCriterionCalculationSettings,
   };
 }

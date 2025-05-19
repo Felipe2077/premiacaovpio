@@ -13,14 +13,16 @@ import { CompetitionPeriodService } from '@/modules/periods/period.service';
 import { RankingService } from '@/modules/ranking/ranking.service';
 import {
   ApproveRejectExpurgoDto,
+  CalculateParameterDto,
   CreateExpurgoDto,
   CreateParameterDto,
   ExpurgoStatus,
   FindExpurgosDto,
   UpdateParameterDto,
-} from '@sistema-premiacao/shared-types';
+} from '../../../packages/shared-types/src/index';
 import { SectorEntity } from './entity/sector.entity';
 import { UserEntity } from './entity/user.entity';
+import { CriterionCalculationSettingsService } from './modules/parameters/criterion-calculation-settings.service';
 
 dotenv.config();
 
@@ -634,7 +636,96 @@ const start = async () => {
         });
       }
     });
+    fastify.post('/api/parameters/calculate', async (request, reply) => {
+      const calculateData = request.body as CalculateParameterDto;
+      const mockActingUser = {
+        id: 1,
+        nome: 'Admin Sistema (Mock)',
+      } as UserEntity;
 
+      fastify.log.info(
+        'POST /api/parameters/calculate com dados:',
+        calculateData
+      );
+
+      try {
+        if (!AppDataSource.isInitialized) await AppDataSource.initialize();
+        const result = await parameterService.calculateParameter(
+          calculateData,
+          mockActingUser
+        );
+        reply.send(result);
+      } catch (error: any) {
+        fastify.log.error(
+          `Erro em POST /api/parameters/calculate: ${error.message}`
+        );
+
+        let statusCode = 500;
+        let errorMessage =
+          error.message || 'Erro interno ao calcular parâmetro.';
+
+        // Determinar o código de status apropriado
+        if (errorMessage.includes('não encontrado')) {
+          statusCode = 404;
+        } else if (
+          errorMessage.includes('obrigatórios') ||
+          errorMessage.includes('Não há dados históricos')
+        ) {
+          statusCode = 400;
+        }
+
+        reply.status(statusCode).send({ error: errorMessage });
+      }
+    });
+
+    // Adicionar rota para buscar configurações de cálculo
+    fastify.get(
+      '/api/criteria/:criterionId/calculation-settings',
+      async (request, reply) => {
+        const { criterionId } = request.params as { criterionId: string };
+        const criterionIdNum = parseInt(criterionId, 10);
+
+        if (isNaN(criterionIdNum)) {
+          return reply.status(400).send({ error: 'ID do critério inválido.' });
+        }
+
+        try {
+          if (!AppDataSource.isInitialized) await AppDataSource.initialize();
+          const criterionCalculationSettingsService =
+            new CriterionCalculationSettingsService();
+          const settings =
+            await criterionCalculationSettingsService.getSettingsForCriterion(
+              criterionIdNum
+            );
+
+          if (!settings) {
+            return reply.status(404).send({
+              message: `Nenhuma configuração de cálculo encontrada para o critério ID: ${criterionIdNum}`,
+              // Retornar configurações padrão
+              defaultSettings: {
+                criterionId: criterionIdNum,
+                calculationMethod: 'media3',
+                adjustmentPercentage: 0,
+                requiresRounding: true,
+                roundingMethod: 'nearest',
+                roundingDecimalPlaces: 0,
+              },
+            });
+          }
+
+          reply.send(settings);
+        } catch (error: any) {
+          fastify.log.error(
+            `Erro em GET /api/criteria/${criterionId}/calculation-settings: ${error.message}`
+          );
+          reply.status(500).send({
+            error:
+              error.message ||
+              'Erro interno ao buscar configurações de cálculo.',
+          });
+        }
+      }
+    );
     // Rota GET para buscar um parâmetro/meta específico por ID
     fastify.get('/api/parameters/:id', async (request, reply) => {
       const params = request.params as { id: string };

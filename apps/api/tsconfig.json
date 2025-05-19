@@ -5,8 +5,12 @@
     "rootDir": "./src", // Pasta raiz do código TS
     "experimentalDecorators": true, // Habilita decorators (TypeORM)
     "emitDecoratorMetadata": true, // Habilita metadados (TypeORM)
-    "baseUrl": "./",
-    "paths": { "@/*": ["src/*"] }
+    "strictPropertyInitialization": false,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@sistema-premiacao/shared-types": ["../../packages/shared-types/src"]
+    }
   },
   "include": ["src/**/*"], // Inclui todos os arquivos TS da pasta src
   "exclude": ["node_modules", "dist"] // Exclui pastas

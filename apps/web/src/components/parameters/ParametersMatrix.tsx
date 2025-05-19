@@ -26,6 +26,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import React, { useState } from 'react';
+import { CalculationSettings } from './CalculationSettings';
 
 interface ParametersMatrixProps {
   uniqueCriteria: any[]; // Critérios únicos
@@ -66,19 +67,6 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
     direction: 'ascending' | 'descending';
   } | null>(null);
 
-  console.log('ParametersMatrix - Dados recebidos:', {
-    uniqueCriteria: uniqueCriteria?.slice(0, 2), // Mostrar apenas os 2 primeiros para não sobrecarregar o console
-    resultsBySectorKeys: resultsBySector ? Object.keys(resultsBySector) : [],
-    firstSector:
-      resultsBySector && Object.keys(resultsBySector).length > 0
-        ? {
-            id: Object.keys(resultsBySector)[0],
-            data: resultsBySector[Object.keys(resultsBySector)[0]],
-          }
-        : null,
-    periodoAtual,
-  });
-
   // Verificar se os dados estão disponíveis
   if (isLoading) {
     return (
@@ -115,14 +103,6 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
   const isPlanejamento = currentStatus === 'PLANEJAMENTO';
   const isAtiva = currentStatus === 'ATIVA';
   const isFechada = currentStatus === 'FECHADA';
-
-  console.log('Estado do período:', {
-    currentStatus,
-    isPlanejamento,
-    isAtiva,
-    isFechada,
-    periodoAtual,
-  });
 
   // Função para ordenar critérios
   const sortedCriteria = React.useMemo(() => {
@@ -183,14 +163,6 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
       sectorData.criterios && criterioId in sectorData.criterios;
     const criterioData = hasCriterio ? sectorData.criterios[criterioId] : null;
 
-    console.log('Renderizando célula:', {
-      criterioId,
-      sectorId,
-      hasCriterio,
-      criterioData,
-      currentStatus,
-    });
-
     // Se não há dados para este critério/setor
     if (!criterioData) {
       return (
@@ -234,6 +206,9 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
       const temCalculoDetalhado =
         mediaUltimosMeses !== undefined && ajustePercentual !== undefined;
 
+      // Obter configurações de cálculo para este critério
+      const settings = CalculationSettings[criterio.id];
+
       return (
         <div className='p-3 bg-blue-50 rounded-md border border-blue-100 transition-all hover:shadow-sm'>
           <div className='text-center'>
@@ -256,26 +231,8 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
               </span>
             </div>
 
-            {/* Informações de cálculo detalhadas - exibidas apenas se disponíveis */}
-            {temCalculoDetalhado && (
-              <div className='mt-1 text-xs'>
-                <div className='flex justify-between text-gray-600'>
-                  <span>Média últimos 3 meses:</span>
-                  <span className='font-medium'>
-                    {mediaUltimosMeses.toLocaleString('pt-BR')}
-                  </span>
-                </div>
-                <div className='flex justify-between text-gray-600 mt-0.5'>
-                  <span>Ajuste aplicado:</span>
-                  <span
-                    className={`font-medium ${ajustePercentual >= 0 ? 'text-green-600' : 'text-red-600'}`}
-                  >
-                    {ajustePercentual >= 0 ? '+' : ''}
-                    {ajustePercentual}%
-                  </span>
-                </div>
-              </div>
-            )}
+            {/* Usar o componente separado para exibir configurações de cálculo */}
+            <CalculationSettings criterionId={criterio.id} />
           </div>
 
           {/* Botões de ação */}

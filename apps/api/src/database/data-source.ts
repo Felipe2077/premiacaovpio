@@ -9,6 +9,7 @@ import { AuditLogEntity } from '../entity/audit-log.entity';
 import { CriterionScoreEntity } from '../entity/calculation/criterion-score.entity';
 import { FinalRankingEntity } from '../entity/calculation/final-ranking.entity';
 import { CompetitionPeriodEntity } from '../entity/competition-period.entity';
+import { CriterionCalculationSettingsEntity } from '../entity/criterion-calculation-settings.entity';
 import { CriterionEntity } from '../entity/criterion.entity';
 import { ExpurgoEventEntity } from '../entity/expurgo-event.entity';
 import { ParameterValueEntity } from '../entity/parameter-value.entity';
@@ -82,6 +83,7 @@ export const AppDataSource = new DataSource({
     RawOracleIpkCalculadoEntity,
     CriterionScoreEntity,
     FinalRankingEntity,
+    CriterionCalculationSettingsEntity,
   ],
   migrations: [],
   subscribers: [],

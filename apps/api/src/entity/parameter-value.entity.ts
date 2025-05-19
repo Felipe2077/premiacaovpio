@@ -80,5 +80,8 @@ export class ParameterValueEntity {
   @ManyToOne(() => CompetitionPeriodEntity, { onDelete: 'CASCADE' }) // Ou 'RESTRICT'/'SET NULL' dependendo da regra
   @JoinColumn({ name: 'competitionPeriodId' })
   competitionPeriod!: CompetitionPeriodEntity;
+
+  @Column({ type: 'jsonb', nullable: true })
+  metadata: any;
   // -------------------------------------------------------------
 }
