@@ -1,3 +1,4 @@
+//packages/shared-types/src/dto/parameter.dto.ts
 export interface CreateParameterDto {
   nomeParametro?: string;
   valor: string;

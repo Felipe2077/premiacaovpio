@@ -1,3 +1,4 @@
+//apps/api/src/modules/parameters/parameter.service.ts
 import { AppDataSource } from '@/database/data-source';
 import { CompetitionPeriodEntity } from '@/entity/competition-period.entity';
 import { CriterionEntity } from '@/entity/criterion.entity';

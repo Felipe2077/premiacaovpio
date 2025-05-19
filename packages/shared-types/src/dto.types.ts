@@ -1,3 +1,4 @@
+//packages/shared-types/src/dto.types.ts
 // Para o Ranking Final (usado na API e Frontend)
 export interface EntradaRanking {
   RANK: number;

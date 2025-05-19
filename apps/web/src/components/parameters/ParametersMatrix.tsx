@@ -228,6 +228,12 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
 
     // Fase de Planejamento
     if (isPlanejamento) {
+      // Extrair informações de cálculo (assumindo que esses dados estão disponíveis ou serão adicionados)
+      const mediaUltimosMeses = criterioData.mediaUltimosMeses;
+      const ajustePercentual = criterioData.ajustePercentual;
+      const temCalculoDetalhado =
+        mediaUltimosMeses !== undefined && ajustePercentual !== undefined;
+
       return (
         <div className='p-3 bg-blue-50 rounded-md border border-blue-100 transition-all hover:shadow-sm'>
           <div className='text-center'>
@@ -239,7 +245,7 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
             <div className='text-xs text-gray-500 mt-1'>Meta Proposta</div>
           </div>
 
-          {/* Referência histórica - se disponível */}
+          {/* Seção aprimorada com informações detalhadas */}
           <div className='mt-3 pt-2 border-t border-blue-100'>
             <div className='text-xs text-gray-600 flex justify-between'>
               <span>Meta Anterior:</span>
@@ -249,6 +255,27 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
                   : '-'}
               </span>
             </div>
+
+            {/* Informações de cálculo detalhadas - exibidas apenas se disponíveis */}
+            {temCalculoDetalhado && (
+              <div className='mt-1 text-xs'>
+                <div className='flex justify-between text-gray-600'>
+                  <span>Média últimos 3 meses:</span>
+                  <span className='font-medium'>
+                    {mediaUltimosMeses.toLocaleString('pt-BR')}
+                  </span>
+                </div>
+                <div className='flex justify-between text-gray-600 mt-0.5'>
+                  <span>Ajuste aplicado:</span>
+                  <span
+                    className={`font-medium ${ajustePercentual >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                  >
+                    {ajustePercentual >= 0 ? '+' : ''}
+                    {ajustePercentual}%
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Botões de ação */}
@@ -266,6 +293,8 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
                           setorNome: sectorData.setorNome,
                           valorMeta: criterioData.valorMeta,
                           metaAnterior: criterioData.metaAnterior,
+                          mediaUltimosMeses: criterioData.mediaUltimosMeses,
+                          ajustePercentual: criterioData.ajustePercentual,
                         })
                       }
                       className='text-blue-600 hover:text-blue-800 transition-colors'

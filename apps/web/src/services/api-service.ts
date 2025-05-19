@@ -1,4 +1,4 @@
-// services/api-service.ts
+// apps/web/src/services/api-service.ts
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export interface CompetitionPeriodForSelect {
