@@ -1,8 +1,8 @@
-// apps/api/src/modules/parameters/parameter.service.ts (VERSÃO FINAL COM CRUD COMPLETO)
 import { AppDataSource } from '@/database/data-source';
 import { CompetitionPeriodEntity } from '@/entity/competition-period.entity';
 import { CriterionEntity } from '@/entity/criterion.entity';
 import { ParameterValueEntity } from '@/entity/parameter-value.entity';
+import { PerformanceDataEntity } from '@/entity/performance-data.entity';
 import { SectorEntity } from '@/entity/sector.entity';
 import { UserEntity } from '@/entity/user.entity';
 import {
@@ -18,6 +18,7 @@ export class ParameterService {
   private periodRepo: Repository<CompetitionPeriodEntity>;
   private criterionRepo: Repository<CriterionEntity>;
   private sectorRepo: Repository<SectorEntity>;
+  private performanceDataRepo: Repository<PerformanceDataEntity>;
   private auditLogService: AuditLogService;
 
   constructor() {
@@ -25,7 +26,10 @@ export class ParameterService {
     this.periodRepo = AppDataSource.getRepository(CompetitionPeriodEntity);
     this.criterionRepo = AppDataSource.getRepository(CriterionEntity);
     this.sectorRepo = AppDataSource.getRepository(SectorEntity);
-    this.auditLogService = new AuditLogService(); // Supondo que AuditLogService está pronto para uso
+    this.performanceDataRepo = AppDataSource.getRepository(
+      PerformanceDataEntity
+    );
+    this.auditLogService = new AuditLogService();
     console.log('[ParameterService] Instanciado e repositórios configurados.');
   }
 
@@ -318,9 +322,16 @@ export class ParameterService {
       previousVersionId: oldParameter.id, // Garantir que o previousVersionId seja definido
     };
 
+    // Verificar se o valor foi alterado
+    const isValueChanged =
+      data.valor !== undefined && String(data.valor) !== oldParameter.valor;
+    const newValue =
+      data.valor !== undefined ? String(data.valor) : oldParameter.valor;
+
     let savedNewParameter: ParameterValueEntity;
     await AppDataSource.manager.transaction(
       async (transactionalEntityManager) => {
+        // 1. Expirar o parâmetro antigo
         await transactionalEntityManager.save(
           ParameterValueEntity,
           oldParameter
@@ -328,6 +339,8 @@ export class ParameterService {
         console.log(
           `[ParameterService] Parâmetro antigo ID ${oldParameter.id} expirado em ${oldParameter.dataFimEfetivo}.`
         );
+
+        // 2. Criar o novo parâmetro versionado
         const newEntityInstance = transactionalEntityManager.create(
           ParameterValueEntity,
           newParameterData
@@ -339,6 +352,53 @@ export class ParameterService {
         console.log(
           `[ParameterService] Novo parâmetro versionado criado com ID: ${savedNewParameter.id}`
         );
+
+        // 3. Atualizar a tabela performance_data se o valor foi alterado
+        if (isValueChanged) {
+          const numericValue = parseFloat(newValue);
+          if (!isNaN(numericValue)) {
+            const updateResult = await transactionalEntityManager.update(
+              'performance_data',
+              {
+                criterionId: oldParameter.criterionId,
+                sectorId: oldParameter.sectorId,
+                competitionPeriodId: oldParameter.competitionPeriodId,
+              },
+              {
+                targetValue: numericValue,
+              }
+            );
+
+            console.log(
+              `[ParameterService] Atualizados ${updateResult.affected} registros em performance_data com o novo valor de meta: ${numericValue}`
+            );
+
+            // 4. Também atualizar a tabela criterion_scores
+            const updateScoresResult = await transactionalEntityManager.update(
+              'criterion_scores',
+              {
+                criterionId: oldParameter.criterionId,
+                sectorId: oldParameter.sectorId,
+                competitionPeriodId: oldParameter.competitionPeriodId,
+              },
+              {
+                targetValue: numericValue,
+              }
+            );
+
+            console.log(
+              `[ParameterService] Atualizados ${updateScoresResult.affected} registros em criterion_scores com o novo valor de meta: ${numericValue}`
+            );
+          } else {
+            console.warn(
+              `[ParameterService] Não foi possível converter o valor "${newValue}" para número. As tabelas performance_data e criterion_scores não foram atualizadas.`
+            );
+          }
+        } else {
+          console.log(
+            `[ParameterService] Valor da meta não foi alterado. Nenhuma atualização necessária em performance_data ou criterion_scores.`
+          );
+        }
       }
     );
 
