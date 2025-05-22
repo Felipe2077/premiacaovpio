@@ -22,7 +22,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useParametersData } from '@/hooks/useParametersData';
-import { CalculateParameterDto } from '@sistema-premiacao/shared-types';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -118,6 +117,7 @@ export default function ParametersPage() {
       await fetchResults(selectedPeriod.mesAno);
     }
   };
+  // Função para carregar configurações padrão
   // Função para carregar configurações padrão
   const loadDefaultSettings = async (criterionId: number) => {
     setIsLoadingSettings(true);
@@ -281,91 +281,54 @@ export default function ParametersPage() {
     isLoading,
   });
 
-  // Adicione estas funções e estados ao seu ParametersPage.tsx
-
-  // Função para calcular meta automaticamente
-  const handleCalculateMeta = (
-    criterionId: number,
-    sectorId: number,
-    criterionName: string
-  ) => {
-    // Verificar se está na fase de planejamento
-    const isPlanejamentoActive = selectedPeriod?.status === 'PLANEJAMENTO';
-
-    // Só permitir cálculo em fase de planejamento
-    if (!isPlanejamentoActive) {
-      toast.error('Metas só podem ser calculadas na fase de planejamento');
-      return;
-    }
-
-    const criterio = uniqueCriteria.find((c) => c.id === criterionId);
-    const setor = Object.values(resultsBySector).find(
-      (s: any) => s.setorId === sectorId || s.id === sectorId
-    );
-
-    if (!criterio || !setor) {
-      toast.error('Dados insuficientes para cálculo');
-      return;
-    }
-
-    setCalculateData({
-      criterioId: criterionId,
-      criterioNome: criterio.nome,
-      setorId: sectorId,
-      setorNome: setor.setorNome,
-    });
-
-    // Resetar valores
-    setCalculationMethod('media3');
-    setCalculationAdjustment('0');
-    setCalculatedValue(null);
-
-    setCalculateModalOpen(true);
-  };
-
   // Função para visualizar o cálculo
   const handlePreviewCalculation = async () => {
-    if (!calculateData) return;
+    if (!calculateData || !selectedPeriod) return;
 
     setIsCalculating(true);
     try {
-      // Buscar dados históricos
-      // Na implementação real, você pode buscar esses dados da API
-      // ou usar os dados já disponíveis no frontend
+      // Preparar dados para a API
+      const calculateDto = {
+        criterionId: calculateData.criterioId,
+        sectorId: calculateData.setorId,
+        competitionPeriodId: selectedPeriod.id,
+        calculationMethod,
+        adjustmentPercentage: parseFloat(calculationAdjustment) || 0,
+        wasRounded: true,
+        roundingMethod,
+        roundingDecimalPlaces: parseInt(decimalPlaces, 10) || 0,
+        finalValue: calculatedValue,
+        previewOnly: true, // Indicar que é apenas uma prévia
+        saveAsDefault: false, // Não salvar como padrão na prévia
+        justificativa: `Prévia de cálculo usando ${calculationMethod} com ajuste de ${calculationAdjustment}%.`,
+      };
 
-      // Simulação simplificada - na implementação real, você usaria dados históricos reais
-      const baseValue = 100; // Valor base simulado
+      // Chamar a API para calcular a prévia
+      const response = await fetch('/api/parameters/calculate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(calculateDto),
+      });
 
-      // Aplicar ajuste percentual
-      let adjustedValue = baseValue;
-      const adjustmentPercent = parseFloat(calculationAdjustment);
-      if (!isNaN(adjustmentPercent)) {
-        adjustedValue = baseValue * (1 + adjustmentPercent / 100);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.error || `Erro ${response.status}: ${response.statusText}`
+        );
       }
 
-      // Aplicar arredondamento
-      let finalValue = adjustedValue;
-      const decimalPlacesNum = parseInt(decimalPlaces, 10) || 0;
-      const multiplier = Math.pow(10, decimalPlacesNum);
-
-      switch (roundingMethod) {
-        case 'nearest':
-          finalValue = Math.round(adjustedValue * multiplier) / multiplier;
-          break;
-        case 'up':
-          finalValue = Math.ceil(adjustedValue * multiplier) / multiplier;
-          break;
-        case 'down':
-          finalValue = Math.floor(adjustedValue * multiplier) / multiplier;
-          break;
-      }
+      const result = await response.json();
 
       // Atualizar o valor calculado
-      setCalculatedValue(finalValue);
+      setCalculatedValue(result.value);
     } catch (error) {
       console.error('Erro ao calcular prévia:', error);
       toast.error(
-        'Erro ao calcular prévia. Verifique os dados e tente novamente.'
+        error instanceof Error
+          ? error.message
+          : 'Erro ao calcular prévia. Verifique os dados e tente novamente.'
       );
     } finally {
       setIsCalculating(false);
@@ -378,47 +341,81 @@ export default function ParametersPage() {
 
     try {
       // Preparar dados para a API
-      const calculateDto: CalculateParameterDto = {
+      const calculateDto = {
         criterionId: calculateData.criterioId,
         sectorId: calculateData.setorId,
         competitionPeriodId: selectedPeriod.id,
-        calculationMethod: calculationMethod as any,
+        calculationMethod,
         adjustmentPercentage: parseFloat(calculationAdjustment) || 0,
-        wasRounded: true, // Sempre consideramos que houve arredondamento
-        roundingMethod: roundingMethod as any,
+        wasRounded: true,
+        roundingMethod,
         roundingDecimalPlaces: parseInt(decimalPlaces, 10) || 0,
-        finalValue: calculatedValue,
-        saveAsDefault,
+        finalValue: calculatedValue, // Adicionar o valor calculado
+        previewOnly: false, // Indicar que deve salvar o resultado
+        saveAsDefault, // Salvar como padrão se solicitado
         justificativa: `Meta calculada automaticamente usando ${calculationMethod} com ajuste de ${calculationAdjustment}%.`,
       };
 
-      // Chamar a API para calcular
-      const result = await calculateParameterValue(calculateDto);
-
-      // Criar o parâmetro com o valor calculado
-      await createParameter({
-        nomeParametro: `META_${calculateData.criterioNome.toUpperCase().replace(/\s+/g, '_')}`,
-        valor: result.value.toString(),
-        dataInicioEfetivo:
-          selectedPeriod.dataInicio || new Date().toISOString().split('T')[0],
-        criterionId: calculateData.criterioId,
-        sectorId: calculateData.setorId,
-        competitionPeriodId: selectedPeriod.id,
-        justificativa: `Meta calculada automaticamente usando ${calculationMethod} com ajuste de ${calculationAdjustment}%.`,
-        metadata: result.metadata,
+      // Chamar a API para calcular e salvar
+      const response = await fetch('/api/parameters/calculate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(calculateDto),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.error || `Erro ${response.status}: ${response.statusText}`
+        );
+      }
+
+      const result = await response.json();
 
       // Fechar o modal e exibir mensagem de sucesso
       setCalculationModalOpen(false);
       toast.success('Meta calculada e aplicada com sucesso!');
 
       // Atualizar a lista de parâmetros
-      refetchParameters();
+      if (selectedPeriod?.mesAno) {
+        await fetchResults(selectedPeriod.mesAno);
+      }
     } catch (error) {
       console.error('Erro ao aplicar cálculo:', error);
       toast.error(
-        'Erro ao aplicar o cálculo. Verifique os dados e tente novamente.'
+        error instanceof Error
+          ? error.message
+          : 'Erro ao aplicar o cálculo. Verifique os dados e tente novamente.'
       );
+    }
+  };
+  // Função para buscar dados históricos (implementação real)
+  const fetchHistoricalData = async (
+    criterionId: number,
+    sectorId: number | null
+  ) => {
+    try {
+      // Verificar se temos um período selecionado
+      if (!selectedPeriod?.id) {
+        throw new Error('Nenhum período selecionado');
+      }
+
+      // Fazer a requisição para a API
+      const response = await fetch(
+        `/api/criteria/${criterionId}/historical-data?sectorId=${sectorId}&periodId=${selectedPeriod.id}`
+      );
+
+      if (!response.ok) {
+        throw new Error(`Erro ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Erro ao buscar dados históricos:', error);
+      throw error;
     }
   };
 
@@ -606,6 +603,7 @@ export default function ParametersPage() {
         handleApplyCalculation={handleApplyCalculation}
         isLoadingSettings={isLoadingSettings}
         isCalculating={isCalculating}
+        fetchHistoricalData={fetchHistoricalData} // Adicionar esta prop
       />
     </div>
   );

@@ -23,6 +23,7 @@ import {
 import { SectorEntity } from './entity/sector.entity';
 import { UserEntity } from './entity/user.entity';
 import { CriterionCalculationSettingsService } from './modules/parameters/criterion-calculation-settings.service';
+import { registerHistoricalResultsRoutes } from './routes/historical-results.routes';
 
 dotenv.config();
 
@@ -636,6 +637,7 @@ const start = async () => {
         });
       }
     });
+
     fastify.post('/api/parameters/calculate', async (request, reply) => {
       const calculateData = request.body as CalculateParameterDto;
       const mockActingUser = {
@@ -833,7 +835,6 @@ const start = async () => {
     });
     // Em apps/api/src/server.ts, dentro da função start(), na seção de rotas de parâmetros
 
-    // --- ADICIONAR ESTA ROTA POST ---
     fastify.post('/api/parameters', async (request, reply) => {
       // TODO: Validar o corpo da requisição com Zod usando CreateParameterDto
       const createData = request.body as CreateParameterDto;
@@ -1112,6 +1113,9 @@ const start = async () => {
       }
     });
     // --- FIM ROTAS EXPURGOS ---
+
+    registerHistoricalResultsRoutes(fastify);
+
     // --- Fim das Rotas ---
 
     // --- Listen ---
