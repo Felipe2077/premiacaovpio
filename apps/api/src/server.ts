@@ -1,4 +1,4 @@
-// apps/api/src/server.ts (ATUALIZADO COM NOVO SERVIÇO E ROTA)
+// apps/api/src/server.ts 
 import { AppDataSource } from '@/database/data-source';
 import cors from '@fastify/cors';
 import * as dotenv from 'dotenv';
