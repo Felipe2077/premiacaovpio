@@ -16,16 +16,16 @@ export function Header() {
         </Link>
         */}
 
-        <Link
-          href='/admin'
-          className='flex items-center gap-2 bg-amber-100 hover:bg-amber-200 active:bg-amber-300 
-                 px-4 py-2 rounded-md transition-all duration-200 
-                 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400'
-          aria-label='Abrir configurações'
-        >
-          <Settings className='h-4 w-4 text-amber-800 group-hover:rotate-45 transition-transform duration-300' />
-          <span className='font-medium text-amber-900'>Ajustes</span>
-        </Link>
+       <Link
+         href='/admin'
+         className='group flex items-center gap-2 bg-amber-100 hover:bg-amber-200 active:bg-amber-300
+           px-4 py-2 rounded-md transition-all duration-200
+          focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400'
+      aria-label='Abrir configurações'
+>
+  <Settings className='h-4 w-4 text-amber-800 group-hover:rotate-45 transition-transform duration-300' />
+  <span className='font-medium text-amber-900'>Ajustes</span>
+</Link>
       </nav>
     </header>
   );

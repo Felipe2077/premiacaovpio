@@ -1,4 +1,4 @@
-// apps/web/src/app/layout.tsx (CORRIGIDO)
+// apps/web/src/app/layout.tsx 
 import Providers from '@/components/Providers';
 import { Header } from '@/components/layout/Header';
 import type { Metadata } from 'next';
