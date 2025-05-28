@@ -19,18 +19,23 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea'; // <<< ADICIONADO PARA JUSTIFICATIVA
 import { useParametersData } from '@/hooks/useParametersData';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+// Esta interface precisa ser atualizada no componente pai também
 interface CalculationModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   calculateData: {
+    // <<< CERTIFIQUE-SE QUE ESTA ESTRUTURA É PASSADA CORRETAMENTE
     criterioId: number;
     criterioNome: string;
     setorId: number | null;
     setorNome: string;
+    competitionPeriodId: number; // ID do período de competição para o DTO
+    competitionPeriodDate: Date | string | number; // Data/string do período para buscar histórico (ex: '2025-05-01' ou new Date())
   } | null;
   calculationMethod: string;
   setCalculationMethod: (value: string) => void;
@@ -42,16 +47,91 @@ interface CalculationModalProps {
   setDecimalPlaces: (value: string) => void;
   saveAsDefault: boolean;
   setSaveAsDefault: (value: boolean) => void;
-  handlePreviewCalculation: () => void;
-  calculatedValue: number | null;
-  handleApplyCalculation: () => void;
+
+  // Assinaturas atualizadas para refletir os DTOs
+  handlePreviewCalculation: (payload: {
+    criterionId: number;
+    competitionPeriodId: number;
+    sectorId?: number | null;
+    calculationMethod: string;
+    adjustmentPercentage?: number;
+    finalValue: number;
+    wasRounded?: boolean;
+    roundingMethod?: string;
+    roundingDecimalPlaces?: number;
+    saveAsDefault?: boolean;
+    previewOnly: true;
+  }) => Promise<void>; // Assumindo que pode ser async se a chamada API for direta aqui
+
+  calculatedValuePreview: number | null; // Valor retornado pela API de preview
+
+  handleApplyCalculation: (payload: {
+    criterionId: number;
+    competitionPeriodId: number;
+    sectorId?: number | null;
+    calculationMethod: string;
+    adjustmentPercentage?: number;
+    finalValueFrontend?: number; // O valor calculado pelo frontend, para log/metadados
+    wasRounded?: boolean;
+    roundingMethod?: string;
+    roundingDecimalPlaces?: number;
+    saveAsDefault?: boolean;
+    previewOnly: false;
+    justificativa: string;
+  }) => Promise<void>; // Assumindo que pode ser async
+
   isLoadingSettings: boolean;
-  isCalculating: boolean;
+  isCalculatingPreview: boolean; // Renomeado para clareza (loading do preview)
+  isApplying: boolean; // Novo estado para loading do "Aplicar"
+
+  // fetchHistoricalData agora precisa de currentPeriodYYYYMM e count
   fetchHistoricalData: (
     criterionId: number,
-    sectorId: number | null
+    sectorId: number | null,
+    currentPeriodYYYYMM: string,
+    count: number
   ) => Promise<any[]>;
 }
+
+// // Sua função formatDateToYearMonth (movida para dentro do arquivo para fácil referência)
+// const formatDateToYearMonth = (dateInput: Date | string | number): string => {
+//   const date = new Date(dateInput);
+//   if (isNaN(date.getTime())) {
+//     console.error('formatDateToYearMonth: Data inválida fornecida', dateInput);
+//     const now = new Date();
+//     const year = now.getFullYear();
+//     const month = (now.getMonth() + 1).toString().padStart(2, '0');
+//     return `${year}-${month}`; // Fallback
+//   }
+//   const year = date.getFullYear();
+//   const month = (date.getMonth() + 1).toString().padStart(2, '0');
+//   return `${year}-${month}`;
+// };
+
+const formatDateToYearMonth = (dateInput: Date | string | number): string => {
+  // Mantenha seus logs se quiser testar, ou remova-os depois
+  console.log('[formatDateToYearMonth] dateInput recebido:', dateInput);
+  const date = new Date(dateInput);
+  // Não precisa mais deste log ou ele mostrará a data com fuso local, o que é esperado
+  // console.log('[formatDateToYearMonth] Objeto Date criado:', date);
+
+  if (isNaN(date.getTime())) {
+    console.error('formatDateToYearMonth: Data inválida fornecida', dateInput);
+    // Sua lógica de fallback atual, por exemplo:
+    const now = new Date();
+    const year = now.getUTCFullYear(); // Use UTC aqui também no fallback se apropriado
+    const month = (now.getUTCMonth() + 1).toString().padStart(2, '0');
+    return `${year}-${month}`;
+  }
+
+  // Use os métodos UTC para obter o ano e o mês
+  const year = date.getUTCFullYear();
+  const month = (date.getUTCMonth() + 1).toString().padStart(2, '0'); // getUTCMonth() também é 0-indexado
+
+  const formatted = `${year}-${month}`;
+  console.log('[formatDateToYearMonth] Retornando (com UTC):', formatted); // Log do resultado
+  return formatted;
+};
 
 export default function CalculationModal({
   open,
@@ -68,63 +148,81 @@ export default function CalculationModal({
   saveAsDefault,
   setSaveAsDefault,
   handlePreviewCalculation,
+  calculatedValuePreview, // <<< USAR ESTE PARA O VALOR DA API DE PREVIEW
   handleApplyCalculation,
   isLoadingSettings,
-  isCalculating,
+  isCalculatingPreview, // <<< USAR ESTE PARA O LOADING DO PREVIEW
+  isApplying, // <<< NOVO PROP PARA LOADING DO APPLY
   fetchHistoricalData,
 }: CalculationModalProps) {
-  const [historicalData, setHistoricalData] = useState([]);
-  const [calculatedValue, setCalculatedValue] = useState(null);
+  const [historicalData, setHistoricalData] = useState<any[]>([]); // Tipar melhor se possível
+  const [calculatedValueLocal, setCalculatedValueLocal] = useState<
+    number | null
+  >(null); // Valor calculado localmente no modal
+  const [justification, setJustification] = useState(''); // <<< NOVO ESTADO PARA JUSTIFICATIVA
 
-  // Inicializar o hook useParametersData
   const parametersData = useParametersData();
 
-  // Funções de cálculo
-  const calculateAverage = (data, count) => {
+  // Funções de cálculo (calculateAverage, getLastValue, getBestValue, applyAdjustment, applyRounding)
+  // permanecem as mesmas que você forneceu, mas atenção à estrutura de 'historicalData'
+  // que virá da API (ex: { periodo, valorRealizado, status })
+  const calculateAverage = (data: any[], count: number) => {
     const validData = data
       .filter(
-        (item) => item.status === 'FECHADO' && item.valorRealizado !== null
-      )
+        (item) =>
+          item.valorRealizado !== null && !isNaN(Number(item.valorRealizado))
+      ) // Simplificado, o modal já recebe dados transformados
       .slice(0, count);
-
     if (validData.length === 0) return null;
-
-    const sum = validData.reduce((acc, item) => acc + item.valorRealizado, 0);
+    const sum = validData.reduce(
+      (acc, item) => acc + Number(item.valorRealizado),
+      0
+    );
     return sum / validData.length;
   };
 
-  const getLastValue = (data) => {
+  const getLastValue = (data: any[]) => {
     const validData = data.filter(
-      (item) => item.status === 'FECHADO' && item.valorRealizado !== null
+      (item) =>
+        item.valorRealizado !== null && !isNaN(Number(item.valorRealizado))
     );
-
-    return validData.length > 0 ? validData[0].valorRealizado : null;
+    return validData.length > 0 ? Number(validData[0].valorRealizado) : null;
   };
 
-  const getBestValue = (data, count, betterDirection) => {
+  const getBestValue = (
+    data: any[],
+    count: number,
+    betterDirection: string | undefined
+  ) => {
     const validData = data
       .filter(
-        (item) => item.status === 'FECHADO' && item.valorRealizado !== null
+        (item) =>
+          item.valorRealizado !== null && !isNaN(Number(item.valorRealizado))
       )
       .slice(0, count);
-
     if (validData.length === 0) return null;
-
-    if (betterDirection === 'MAIOR') {
-      return Math.max(...validData.map((item) => item.valorRealizado));
-    } else {
-      return Math.min(...validData.map((item) => item.valorRealizado));
-    }
+    const values = validData.map((item) => Number(item.valorRealizado));
+    if (betterDirection === 'MAIOR') return Math.max(...values);
+    return Math.min(...values);
   };
 
-  const applyAdjustment = (value, adjustmentPercentage) => {
-    return value * (1 + adjustmentPercentage / 100);
+  const applyAdjustment = (value: number, adjustmentPercentageStr: string) => {
+    const adjustment = parseFloat(adjustmentPercentageStr);
+    if (isNaN(adjustment)) return value;
+    return value * (1 + adjustment / 100);
   };
 
-  const applyRounding = (value, roundingMethod, decimalPlaces) => {
-    const multiplier = Math.pow(10, decimalPlaces);
-
-    switch (roundingMethod) {
+  const applyRounding = (
+    value: number,
+    roundingMethodValue: string,
+    decimalPlacesStr: string
+  ) => {
+    if (roundingMethodValue === 'none' || roundingMethodValue === '')
+      return value; // Trata "Sem arredondar"
+    const places = parseInt(decimalPlacesStr, 10);
+    if (isNaN(places) || places < 0) return value;
+    const multiplier = Math.pow(10, places);
+    switch (roundingMethodValue) {
       case 'nearest':
         return Math.round(value * multiplier) / multiplier;
       case 'up':
@@ -136,14 +234,12 @@ export default function CalculationModal({
     }
   };
 
-  const calculateFinalValue = () => {
-    if (!historicalData || historicalData.length === 0) {
+  // Recalcula o valor localmente
+  const calculateFinalValueLocalHandler = (): number | null => {
+    if (!historicalData || historicalData.length === 0 || !calculateData) {
       return null;
     }
-
     let baseValue;
-
-    // Calcular valor base de acordo com o método selecionado
     switch (calculationMethod) {
       case 'media3':
         baseValue = calculateAverage(historicalData, 3);
@@ -155,101 +251,168 @@ export default function CalculationModal({
         baseValue = getLastValue(historicalData);
         break;
       case 'melhor3':
-        let betterDirection = 'MENOR';
-        try {
-          const criterion = parametersData.getCriterionById(
-            calculateData.criterioId
-          );
-          betterDirection = criterion?.sentido_melhor || 'MENOR';
-        } catch (error) {
-          console.warn(
-            'Erro ao obter direção do critério, usando MENOR como padrão:',
-            error
-          );
-        }
-        baseValue = getBestValue(historicalData, 3, betterDirection);
+        const criterion = parametersData.getCriterionById(
+          calculateData.criterioId
+        );
+        baseValue = getBestValue(historicalData, 3, criterion?.sentido_melhor);
         break;
       default:
         baseValue = null;
     }
-
-    if (baseValue === null) {
-      return null;
-    }
-
-    // Aplicar ajuste percentual
-    const adjustedValue = applyAdjustment(
-      baseValue,
-      parseFloat(calculationAdjustment) || 0
-    );
-
-    // Aplicar arredondamento
-    const finalValue = applyRounding(
-      adjustedValue,
-      roundingMethod,
-      parseInt(decimalPlaces, 10) || 0
-    );
-
-    return finalValue;
+    if (baseValue === null) return null;
+    const adjustedValue = applyAdjustment(baseValue, calculationAdjustment);
+    return applyRounding(adjustedValue, roundingMethod, decimalPlaces);
   };
 
-  // Efeito para carregar dados históricos quando o modal for aberto
+  // Efeito para carregar dados históricos quando o modal for aberto ou calculateData mudar
   useEffect(() => {
-    const loadHistoricalData = async () => {
-      if (open && calculateData) {
-        try {
-          const data = await fetchHistoricalData(
-            calculateData.criterioId,
-            calculateData.setorId
-          );
-          console.log('Dados históricos carregados:', data);
-          setHistoricalData(data);
+    console.log('[CalculationModal] calculateData recebido:', calculateData);
+    const loadData = async () => {
+      if (open && calculateData && calculateData.competitionPeriodDate) {
+        setHistoricalData([]); // Limpa dados anteriores
+        setCalculatedValueLocal(null);
+        setJustification(''); // Limpa justificativa
 
-          // Calcular o valor inicial
-          const initialValue = calculateFinalValue();
-          setCalculatedValue(initialValue);
+        try {
+          console.log(
+            '[CalculationModal] Valor de calculateData.competitionPeriodDate ANTES de formatDateToYearMonth:',
+            calculateData.competitionPeriodDate
+          );
+          const currentPeriodForAPI = formatDateToYearMonth(
+            calculateData.competitionPeriodDate
+          );
+          console.log(
+            '[CalculationModal] VALOR SENDO PASSADO para fetchHistoricalData como currentPeriodYYYYMM:',
+            currentPeriodForAPI
+          );
+          const dataFromApi = await fetchHistoricalData(
+            calculateData.criterioId,
+            calculateData.setorId,
+            currentPeriodForAPI,
+            6 // Buscar 6 meses de histórico
+          );
+          console.log(
+            '[CalculationModal] Dados históricos carregados (API):',
+            dataFromApi
+          );
+          setHistoricalData(dataFromApi);
+          // O cálculo do preview será acionado pelo próximo useEffect ao mudar historicalData ou parâmetros
         } catch (error) {
-          console.error('Erro ao carregar dados históricos:', error);
+          console.error(
+            '[CalculationModal] Erro ao carregar dados históricos:',
+            error
+          );
+          setHistoricalData([]); // Garante que fique vazio
         }
+      } else if (!open) {
+        // Limpar estados quando o modal for fechado, se desejar
+        setHistoricalData([]);
+        setCalculatedValueLocal(null);
+        setJustification('');
       }
     };
+    loadData();
+  }, [open, calculateData, fetchHistoricalData]); // fetchHistoricalData é uma prop e deve ser estável
 
-    loadHistoricalData();
-  }, [open, calculateData, fetchHistoricalData]);
-
-  // Efeito para recalcular o valor quando as configurações mudarem
+  // Efeito para recalcular o valor local E CHAMAR O PREVIEW quando os parâmetros ou dados históricos mudarem
   useEffect(() => {
-    if (historicalData && historicalData.length > 0) {
-      const value = calculateFinalValue();
-      setCalculatedValue(value);
+    if (open && calculateData && historicalData.length > 0) {
+      const localValue = calculateFinalValueLocalHandler();
+      setCalculatedValueLocal(localValue); // Atualiza o valor calculado localmente
+
+      // Se o valor local for válido, chama o handlePreviewCalculation (que fará a chamada à API de preview)
+      if (localValue !== null && calculateData.competitionPeriodId) {
+        const payloadPreview = {
+          criterionId: calculateData.criterioId,
+          competitionPeriodId: calculateData.competitionPeriodId,
+          sectorId: calculateData.setorId,
+          calculationMethod: calculationMethod,
+          adjustmentPercentage: parseFloat(calculationAdjustment) || 0,
+          finalValue: localValue, // Envia o valor calculado pelo frontend
+          wasRounded:
+            roundingMethod !== 'none' &&
+            roundingMethod !== '' &&
+            parseInt(decimalPlaces, 10) >= 0,
+          roundingMethod:
+            roundingMethod === 'none' || roundingMethod === ''
+              ? undefined
+              : roundingMethod,
+          roundingDecimalPlaces:
+            roundingMethod === 'none' || roundingMethod === ''
+              ? undefined
+              : parseInt(decimalPlaces, 10) || 0,
+          saveAsDefault: saveAsDefault,
+          previewOnly: true as const,
+        };
+        handlePreviewCalculation(payloadPreview);
+      }
+    } else if (
+      open &&
+      calculateData &&
+      historicalData.length === 0 &&
+      !isLoadingSettings
+    ) {
+      // Se não há dados históricos (e não está carregando settings), o valor local deve ser null
+      // e o preview não deve ser chamado ou deve ser "limpo"
+      setCalculatedValueLocal(null);
+      // O pai deve limpar calculatedValuePreview se handlePreviewCalculation não for chamado
     }
   }, [
+    open,
+    calculateData,
+    historicalData, // O preview depende dos dados carregados
     calculationMethod,
     calculationAdjustment,
     roundingMethod,
     decimalPlaces,
-    historicalData,
+    saveAsDefault,
+    handlePreviewCalculation, // Prop da função que chama a API
+    isLoadingSettings,
   ]);
 
-  // Função wrapper para handlePreviewCalculation
-  const onPreviewCalculation = () => {
-    // Atualizar o valor calculado antes de chamar a função do pai
-    const value = calculateFinalValue();
-    setCalculatedValue(value);
+  // Handler para o botão "Aplicar Meta"
+  const onInternalApplyCalculation = async () => {
+    if (
+      !calculateData ||
+      !calculateData.competitionPeriodId ||
+      calculatedValueLocal === null
+    ) {
+      alert('Não é possível aplicar a meta. Verifique os dados e o cálculo.');
+      return;
+    }
+    if (!justification.trim()) {
+      alert('A justificativa é obrigatória para aplicar a meta.');
+      return;
+    }
 
-    // Chamar a função do pai
-    handlePreviewCalculation();
+    const payloadApply = {
+      criterionId: calculateData.criterioId,
+      competitionPeriodId: calculateData.competitionPeriodId,
+      sectorId: calculateData.setorId,
+      calculationMethod: calculationMethod,
+      adjustmentPercentage: parseFloat(calculationAdjustment) || 0,
+      finalValueFrontend: calculatedValueLocal, // O valor que o frontend calculou localmente
+      wasRounded:
+        roundingMethod !== 'none' &&
+        roundingMethod !== '' &&
+        parseInt(decimalPlaces, 10) >= 0,
+      roundingMethod:
+        roundingMethod === 'none' || roundingMethod === ''
+          ? undefined
+          : roundingMethod,
+      roundingDecimalPlaces:
+        roundingMethod === 'none' || roundingMethod === ''
+          ? undefined
+          : parseInt(decimalPlaces, 10) || 0,
+      saveAsDefault: saveAsDefault,
+      previewOnly: false as const,
+      justificativa: justification,
+    };
+    await handleApplyCalculation(payloadApply); // Chama a prop do pai
   };
 
-  // Função wrapper para handleApplyCalculation
-  const onApplyCalculation = () => {
-    // Atualizar o valor calculado antes de chamar a função do pai
-    const value = calculateFinalValue();
-    setCalculatedValue(value);
-
-    // Chamar a função do pai
-    handleApplyCalculation();
-  };
+  // UI não será alterada significativamente, apenas adição do campo de justificativa
+  // e ajuste nos botões/loading states.
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -257,8 +420,11 @@ export default function CalculationModal({
         <DialogHeader>
           <DialogTitle>Calcular Meta Automaticamente</DialogTitle>
           <DialogDescription>
-            Defina o método de cálculo para {calculateData?.criterioNome} no
-            setor {calculateData?.setorNome}.
+            Defina o método de cálculo para {calculateData?.criterioNome}
+            {calculateData?.setorNome && calculateData.setorNome !== 'N/A'
+              ? ` no setor ${calculateData.setorNome}`
+              : ' (Geral)'}
+            .
           </DialogDescription>
         </DialogHeader>
 
@@ -271,6 +437,7 @@ export default function CalculationModal({
           </div>
         ) : (
           <div className='space-y-4 py-4'>
+            {/* Método de Cálculo */}
             <div className='space-y-2'>
               <Label>Método de Cálculo</Label>
               <RadioGroup
@@ -278,6 +445,7 @@ export default function CalculationModal({
                 onValueChange={setCalculationMethod}
                 className='grid grid-cols-1 gap-2'
               >
+                {/* ... Seus RadioGroupItems (media3, media6, ultimo, melhor3) ... */}
                 <div className='flex items-center space-x-2 rounded-md border p-2'>
                   <RadioGroupItem value='media3' id='media3' />
                   <Label htmlFor='media3' className='flex-1 cursor-pointer'>
@@ -287,7 +455,6 @@ export default function CalculationModal({
                     </div>
                   </Label>
                 </div>
-
                 <div className='flex items-center space-x-2 rounded-md border p-2'>
                   <RadioGroupItem value='media6' id='media6' />
                   <Label htmlFor='media6' className='flex-1 cursor-pointer'>
@@ -297,7 +464,6 @@ export default function CalculationModal({
                     </div>
                   </Label>
                 </div>
-
                 <div className='flex items-center space-x-2 rounded-md border p-2'>
                   <RadioGroupItem value='ultimo' id='ultimo' />
                   <Label htmlFor='ultimo' className='flex-1 cursor-pointer'>
@@ -307,7 +473,6 @@ export default function CalculationModal({
                     </div>
                   </Label>
                 </div>
-
                 <div className='flex items-center space-x-2 rounded-md border p-2'>
                   <RadioGroupItem value='melhor3' id='melhor3' />
                   <Label htmlFor='melhor3' className='flex-1 cursor-pointer'>
@@ -322,6 +487,7 @@ export default function CalculationModal({
               </RadioGroup>
             </div>
 
+            {/* Ajuste */}
             <div className='grid grid-cols-4 items-center gap-4'>
               <Label htmlFor='adjustment' className='text-right'>
                 Ajuste (%)
@@ -341,6 +507,7 @@ export default function CalculationModal({
               </div>
             </div>
 
+            {/* Arredondamento */}
             <div className='space-y-2'>
               <Label>Opções de Arredondamento</Label>
               <div className='grid grid-cols-2 gap-4'>
@@ -353,9 +520,11 @@ export default function CalculationModal({
                     onValueChange={setRoundingMethod}
                   >
                     <SelectTrigger id='roundingMethod'>
-                      <SelectValue placeholder='Método de arredondamento' />
+                      <SelectValue placeholder='Método' />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value='none'>Sem arredondar</SelectItem>{' '}
+                      {/* <<< OPÇÃO PARA NÃO ARREDONDAR */}
                       <SelectItem value='nearest'>Mais próximo</SelectItem>
                       <SelectItem value='up'>Para cima</SelectItem>
                       <SelectItem value='down'>Para baixo</SelectItem>
@@ -373,11 +542,15 @@ export default function CalculationModal({
                     max='5'
                     value={decimalPlaces}
                     onChange={(e) => setDecimalPlaces(e.target.value)}
+                    disabled={
+                      roundingMethod === 'none' || roundingMethod === ''
+                    }
                   />
                 </div>
               </div>
             </div>
 
+            {/* Salvar como Padrão */}
             <div className='flex items-center space-x-2 pt-2'>
               <Switch
                 id='saveAsDefault'
@@ -385,58 +558,93 @@ export default function CalculationModal({
                 onCheckedChange={setSaveAsDefault}
               />
               <Label htmlFor='saveAsDefault'>
-                Salvar como configuração padrão para este critério
+                Salvar como configuração padrão
               </Label>
             </div>
 
-            <div className='pt-2'>
-              <Button
-                variant='outline'
-                onClick={onPreviewCalculation}
-                className='w-full'
-                disabled={isCalculating}
-              >
-                {isCalculating ? (
-                  <>
-                    <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                    Calculando...
-                  </>
-                ) : (
-                  'Visualizar Cálculo'
-                )}
-              </Button>
-            </div>
-
-            {calculatedValue !== null && (
-              <div className='mt-4 p-3 bg-muted/20 rounded-md'>
-                <div className='text-sm font-medium mb-1'>Valor calculado:</div>
-                <div className='flex justify-between items-center'>
-                  <div className='text-2xl font-bold'>
-                    {calculatedValue.toLocaleString('pt-BR')}
-                  </div>
-                  <div className='text-xs text-muted-foreground'>
-                    {calculationMethod === 'media3' && 'Média de 3 meses'}
-                    {calculationMethod === 'media6' && 'Média de 6 meses'}
-                    {calculationMethod === 'ultimo' && 'Último mês'}
-                    {calculationMethod === 'melhor3' && 'Melhor de 3 meses'}
-                    {calculationAdjustment !== '0' &&
-                      ` com ajuste de ${calculationAdjustment}%`}
-                  </div>
-                </div>
+            {/* Botão de Preview foi removido - Preview é automático */}
+            {/* Exibição do Valor de Preview (vindo da API) */}
+            {isCalculatingPreview && (
+              <div className='flex justify-center items-center py-4 mt-4'>
+                <Loader2 className='h-6 w-6 animate-spin text-primary' />
+                <span className='ml-2 text-sm text-primary'>
+                  Calculando preview...
+                </span>
               </div>
             )}
+            {typeof calculatedValuePreview === 'number' &&
+              !isCalculatingPreview && (
+                <div className='mt-4 p-3 bg-primary/10 rounded-md border border-primary/30'>
+                  <div className='text-sm font-medium mb-1 text-primary'>
+                    Valor de Pré-visualização (API):
+                  </div>
+                  <div className='text-2xl font-bold text-primary'>
+                    {calculatedValuePreview.toLocaleString('pt-BR', {
+                      minimumFractionDigits:
+                        parseInt(decimalPlaces, 10) >= 0 &&
+                        roundingMethod !== 'none' &&
+                        roundingMethod !== ''
+                          ? parseInt(decimalPlaces, 10)
+                          : 0,
+                      maximumFractionDigits:
+                        parseInt(decimalPlaces, 10) >= 0 &&
+                        roundingMethod !== 'none' &&
+                        roundingMethod !== ''
+                          ? parseInt(decimalPlaces, 10)
+                          : 2,
+                    })}
+                  </div>
+                </div>
+              )}
+
+            {/* Campo de Justificativa */}
+            <div className='space-y-2 pt-4'>
+              <Label htmlFor='justification'>
+                Justificativa (Obrigatória para Aplicar)
+              </Label>
+              <Textarea
+                id='justification'
+                placeholder='Explique o motivo para esta meta ou para as configurações de cálculo escolhidas...'
+                value={justification}
+                onChange={(e) => setJustification(e.target.value)}
+                rows={3}
+                className={
+                  !justification.trim() && isApplying ? 'border-red-500' : ''
+                }
+              />
+              {!justification.trim() && isApplying && (
+                <p className='text-xs text-red-600'>
+                  Justificativa é obrigatória.
+                </p>
+              )}
+            </div>
           </div>
         )}
 
         <DialogFooter>
-          <Button variant='outline' onClick={() => onOpenChange(false)}>
+          <Button
+            variant='outline'
+            onClick={() => onOpenChange(false)}
+            disabled={isApplying || isCalculatingPreview}
+          >
             Cancelar
           </Button>
           <Button
-            onClick={onApplyCalculation}
-            disabled={calculatedValue === null || isCalculating}
+            onClick={onInternalApplyCalculation}
+            disabled={
+              typeof calculatedValuePreview !== 'number' || // Precisa de um preview válido
+              isCalculatingPreview || // Não aplicar se o preview estiver calculando
+              isApplying // Não aplicar se já estiver aplicando
+            }
           >
-            Aplicar Meta
+            {isApplying ? (
+              <>
+                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                Aplicando...
+              </>
+            ) : (
+              'Aplicar Meta'
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

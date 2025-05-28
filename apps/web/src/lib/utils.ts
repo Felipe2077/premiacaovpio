@@ -49,3 +49,20 @@ export const formatDate = (
     return String(isoString); // Retorna string original se falhar
   }
 };
+
+// src/lib/utils.ts
+export const formatDateToYearMonth = (
+  dateInput: Date | string | number
+): string => {
+  const date = new Date(dateInput);
+  if (isNaN(date.getTime())) {
+    console.error('formatDateToYearMonth: Data inválida fornecida', dateInput);
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    return `${year}-${month}`; // Fallback
+  }
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  return `${year}-${month}`;
+};

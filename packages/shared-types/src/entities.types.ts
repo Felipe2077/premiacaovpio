@@ -1,3 +1,4 @@
+//packages/shared-types/src/entities.types.ts
 export interface Setor {
   id: number;
   nome: string;

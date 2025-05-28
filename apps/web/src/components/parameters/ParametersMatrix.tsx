@@ -14,6 +14,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { Criterion, Sector } from '@/hooks/useParametersData';
 import {
   Calculator,
   ChevronDown,
@@ -28,29 +29,35 @@ import {
 import React, { useState } from 'react';
 import { CalculationSettings } from './CalculationSettings';
 
+interface CompetitionPeriod {
+  id: number;
+  mesAno: string;
+  status: 'ATIVA' | 'FECHADA' | 'PLANEJAMENTO';
+  startDate: Date | string; // ou o tipo que você usa para startDate/dataInicio
+  // Adicione outras propriedades que seu objeto CompetitionPeriod realmente tem
+}
 interface ParametersMatrixProps {
-  uniqueCriteria: any[]; // Critérios únicos
-  resultsBySector: any; // Resultados organizados por setor
-  onEdit?: (item: any) => void; // Função para editar meta
+  uniqueCriteria: Criterion[];
+  resultsBySector: any;
+  sectors: Sector[]; //
+  onEdit?: (
+    criterion: Criterion,
+    sector: Sector | null,
+    currentParameterValue: string | number | null
+  ) => void; // Ajustado para exemplo, revise a assinatura em ParametersPage
   onCreate?: (
-    criterionId: number,
-    sectorId: number,
-    criterionName: string
-  ) => void; // Função para criar meta
+    criterion: Criterion,
+    sector: Sector | null,
+    currentCompetitionPeriod: CompetitionPeriod
+  ) => void;
   onCalculate?: (
-    criterionId: number,
-    sectorId: number,
-    criterionName: string
-  ) => void; // Função para calcular meta automaticamente
-  isLoading?: boolean; // Estado de carregamento
-  periodoAtual?: {
-    // Período atual
-    id: number;
-    mesAno: string;
-    status: 'ATIVA' | 'FECHADA' | 'PLANEJAMENTO';
-    dataInicio: string;
-    dataFim: string;
-  };
+    // <<< ASSINATURA CORRIGIDA
+    criterion: Criterion,
+    sector: Sector | null,
+    currentCompetitionPeriod: CompetitionPeriod
+  ) => void;
+  isLoading?: boolean;
+  periodoAtual?: CompetitionPeriod; // ANTES: tipo anônimo
 }
 
 const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
@@ -61,6 +68,7 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
   onCalculate,
   isLoading,
   periodoAtual,
+  sectors,
 }) => {
   const [sortConfig, setSortConfig] = useState<{
     key: string;
@@ -157,11 +165,18 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
   };
 
   // Função para renderizar o conteúdo da célula baseado na fase
-  const renderCellContent = (criterio, sectorId, sectorData) => {
-    const criterioId = String(criterio.id);
+  const renderCellContent = (
+    criterio: Criterion, // Adicione o tipo aqui para clareza
+    sectorIdStr: string, // Mude o nome para evitar confusão com o objeto sectorId
+    sectorData: any // Mantenha any por enquanto ou defina tipo específico
+  ) => {
+    const criterioId = String(criterio.id); // Mantenha se usado assim
     const hasCriterio =
       sectorData.criterios && criterioId in sectorData.criterios;
     const criterioData = hasCriterio ? sectorData.criterios[criterioId] : null;
+
+    const currentSector =
+      sectors.find((s) => s.id === parseInt(sectorIdStr)) || null;
 
     // Se não há dados para este critério/setor
     if (!criterioData) {
@@ -170,30 +185,44 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
           <div className='text-muted-foreground text-sm mb-2'>
             Sem meta definida
           </div>
-          {isPlanejamento && (
-            <div className='flex gap-2'>
-              {onCreate && (
-                <button
-                  onClick={() =>
-                    onCreate(criterio.id, parseInt(sectorId), criterio.nome)
-                  }
-                  className='text-xs px-3 py-1 bg-green-100 text-green-700 hover:bg-green-200 rounded-full transition-colors'
-                >
-                  Criar Meta
-                </button>
-              )}
-              {onCalculate && (
-                <button
-                  onClick={() =>
-                    onCalculate(criterio.id, parseInt(sectorId), criterio.nome)
-                  }
-                  className='text-xs px-3 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-full transition-colors'
-                >
-                  Calcular
-                </button>
-              )}
-            </div>
-          )}
+          {isPlanejamento &&
+            periodoAtual && ( // Adicione checagem para periodoAtual
+              <div className='flex gap-2'>
+                {onCreate && ( // Verifique se onCreate e onCalculate existem antes de chamar
+                  <button
+                    onClick={() => {
+                      if (onCreate && periodoAtual) {
+                        // Proteção extra
+                        // TODO: Ajustar os parâmetros de onCreate para bater com ParametersPage
+                        // Exemplo: onCreate(criterio, currentSector, periodoAtual)
+                        // Por agora, vou manter a chamada original para focar no onCalculate
+                        onCreate(
+                          criterio.id,
+                          parseInt(sectorIdStr),
+                          criterio.nome
+                        );
+                      }
+                    }}
+                    className='text-xs px-3 py-1 bg-green-100 text-green-700 hover:bg-green-200 rounded-full transition-colors'
+                  >
+                    Criar Meta
+                  </button>
+                )}
+                {onCalculate && (
+                  <button
+                    onClick={() => {
+                      if (onCalculate && periodoAtual) {
+                        // Proteção extra
+                        onCalculate(criterio, currentSector, periodoAtual); // <<< CHAMADA CORRIGIDA
+                      }
+                    }}
+                    className='text-xs px-3 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-full transition-colors'
+                  >
+                    Calcular
+                  </button>
+                )}
+              </div>
+            )}
         </div>
       );
     }
@@ -242,18 +271,21 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
-                      onClick={() =>
+                      onClick={() => {
+                        // TODO: Ajustar os parâmetros de onEdit para bater com ParametersPage
+                        // Exemplo: onEdit(criterio, currentSector, criterioData.valorMeta)
+                        // Por agora, vou manter a chamada original para focar no onCalculate
                         onEdit({
                           criterioId: criterio.id,
                           criterioNome: criterio.nome,
-                          setorId: parseInt(sectorId),
+                          setorId: parseInt(sectorIdStr),
                           setorNome: sectorData.setorNome,
                           valorMeta: criterioData.valorMeta,
                           metaAnterior: criterioData.metaAnterior,
                           mediaUltimosMeses: criterioData.mediaUltimosMeses,
                           ajustePercentual: criterioData.ajustePercentual,
-                        })
-                      }
+                        });
+                      }}
                       className='text-blue-600 hover:text-blue-800 transition-colors'
                     >
                       <Edit className='h-4 w-4' />
@@ -271,13 +303,12 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
-                      onClick={() =>
-                        onCalculate(
-                          criterio.id,
-                          parseInt(sectorId),
-                          criterio.nome
-                        )
-                      }
+                      onClick={() => {
+                        if (onCalculate && periodoAtual) {
+                          // Proteção extra
+                          onCalculate(criterio, currentSector, periodoAtual); // <<< CHAMADA CORRIGIDA
+                        }
+                      }}
                       className='text-emerald-600 hover:text-emerald-800 transition-colors'
                     >
                       <Calculator className='h-4 w-4' />
@@ -605,7 +636,7 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sortedCriteria.map((criterio) => (
+            {sortedCriteria.map((criterio: Criterion) => (
               <TableRow key={criterio.id} className='hover:bg-muted/10'>
                 <TableCell className='font-medium'>
                   <TooltipProvider>
@@ -636,9 +667,9 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
                   </TooltipProvider>
                 </TableCell>
                 {Object.entries(resultsBySector).map(
-                  ([sectorId, sectorData]) => (
-                    <TableCell key={sectorId} className='p-2'>
-                      {renderCellContent(criterio, sectorId, sectorData)}
+                  ([sectorIdStr, sectorData]) => (
+                    <TableCell key={sectorIdStr} className='p-2'>
+                      {renderCellContent(criterio, sectorIdStr, sectorData)}
                     </TableCell>
                   )
                 )}

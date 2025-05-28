@@ -25,7 +25,28 @@ export class ParameterService {
   private performanceDataRepo: Repository<PerformanceDataEntity>;
   private auditLogService: AuditLogService;
   private criterionCalculationSettingsService: CriterionCalculationSettingsService;
-
+  private applyRounding(
+    value: number,
+    method: string | undefined, // 'nearest', 'up', 'down'
+    decimalPlaces: number | undefined
+  ): number {
+    if (
+      method === undefined ||
+      decimalPlaces === undefined ||
+      decimalPlaces < 0
+    ) {
+      return value; // Retorna o valor original se não houver arredondamento
+    }
+    const factor = Math.pow(10, decimalPlaces);
+    if (method === 'up') {
+      return Math.ceil(value * factor) / factor;
+    }
+    if (method === 'down') {
+      return Math.floor(value * factor) / factor;
+    }
+    // Padrão é 'nearest' (arredondamento padrão do JS para o número de casas)
+    return Math.round(value * factor) / factor;
+  }
   constructor() {
     this.parameterRepo = AppDataSource.getRepository(ParameterValueEntity);
     this.periodRepo = AppDataSource.getRepository(CompetitionPeriodEntity);
@@ -141,115 +162,365 @@ export class ParameterService {
   }
 
   async calculateParameter(
-    data: CalculateParameterDto,
+    data: CalculateParameterDto, // ESPERA-SE QUE ESTE DTO AGORA TENHA: previewOnly: boolean, justificativa?: string, e talvez ipAddress?: string
     actingUser: UserEntity
-  ): Promise<{ value: number; metadata: ParameterMetadata }> {
-    console.log(`[ParameterService] Processando cálculo de meta:`, data);
+  ): Promise<
+    ParameterValueEntity | { value: number; metadata: ParameterMetadata }
+  > {
+    // (ASSUMINDO que CalculateParameterDto foi atualizado com:
+    //  previewOnly: boolean;
+    //  justificativa?: string;
+    //  sectorId?: number | null; (já parece ser usado em getHistoricalPerformanceData)
+    //  e opcionalmente ipAddress?: string para auditoria)
 
-    // Validar dados de entrada
+    console.log(
+      `[ParameterService] Processando cálculo de meta (previewOnly: ${data.previewOnly}):`,
+      data
+    );
+
+    // 1. Validações Iniciais (comuns para preview e aplicar)
     if (
       !data.criterionId ||
       !data.competitionPeriodId ||
-      !data.calculationMethod ||
-      data.finalValue === undefined
+      !data.calculationMethod
+      // data.finalValue é necessário para preview, mas não para aplicar (pois será recalculado)
     ) {
       throw new Error(
-        'Campos obrigatórios (criterionId, competitionPeriodId, calculationMethod, finalValue) estão faltando.'
+        'Campos obrigatórios (criterionId, competitionPeriodId, calculationMethod) estão faltando.'
       );
     }
+    if (data.previewOnly && data.finalValue === undefined) {
+      throw new Error('Campo finalValue é obrigatório para preview.');
+    }
 
-    // Buscar o critério
-    const criterion = await this.criterionRepo.findOneBy({
+    const criterion = await this.criterionRepo.findOneByOrFail({
       id: data.criterionId,
     });
-    if (!criterion) {
-      throw new Error(`Critério com ID ${data.criterionId} não encontrado.`);
-    }
-
-    // Buscar o período
-    const competitionPeriod = await this.periodRepo.findOneBy({
+    const competitionPeriod = await this.periodRepo.findOneByOrFail({
       id: data.competitionPeriodId,
     });
-    if (!competitionPeriod) {
+    const sector =
+      data.sectorId !== undefined
+        ? await this.sectorRepo.findOneBy({ id: data.sectorId ?? undefined })
+        : null; // Trata null para sectorId
+
+    // 2. Lógica de PREVIEW
+    if (data.previewOnly) {
+      const historicalDataForPreview = await this.getHistoricalPerformanceData(
+        data.criterionId,
+        data.sectorId, // sectorId pode ser null ou undefined
+        competitionPeriod
+      );
+
+      let baseValueForPreview = 0;
+      try {
+        switch (data.calculationMethod) {
+          case 'media3':
+            baseValueForPreview = this.calculateAverage(
+              historicalDataForPreview,
+              3
+            );
+            break;
+          case 'media6':
+            baseValueForPreview = this.calculateAverage(
+              historicalDataForPreview,
+              6
+            );
+            break;
+          case 'ultimo':
+            baseValueForPreview = this.getLastValue(historicalDataForPreview);
+            break;
+          case 'melhor3':
+            baseValueForPreview = this.getBestValue(
+              historicalDataForPreview,
+              3,
+              criterion.sentido_melhor
+            );
+            break;
+          default:
+            baseValueForPreview = data.finalValue!; // Para preview, usamos o finalValue se método não conhecido
+        }
+      } catch (error: any) {
+        console.warn(
+          `[ParameterService Preview] Erro ao calcular baseValue para preview, usando finalValue: ${error.message}`
+        );
+        baseValueForPreview = data.finalValue!;
+      }
+
+      const metadataForPreview: ParameterMetadata = {
+        calculationMethod: data.calculationMethod,
+        adjustmentPercentage: data.adjustmentPercentage,
+        baseValue: baseValueForPreview,
+        wasRounded: data.wasRounded,
+        roundingMethod: data.roundingMethod,
+        roundingDecimalPlaces: data.roundingDecimalPlaces,
+      };
+      // Salvar configurações como padrão se solicitado (mesmo em preview)
+      if (data.saveAsDefault) {
+        try {
+          await this.criterionCalculationSettingsService.saveSettings({
+            criterionId: data.criterionId,
+            calculationMethod: data.calculationMethod,
+            adjustmentPercentage: data.adjustmentPercentage,
+            requiresRounding: data.wasRounded,
+            roundingMethod: data.roundingMethod,
+            roundingDecimalPlaces: data.roundingDecimalPlaces,
+          });
+          console.log(
+            `[ParameterService Preview] Configurações de cálculo salvas como padrão para critério ID: ${data.criterionId}`
+          );
+        } catch (error) {
+          console.error(
+            `[ParameterService Preview] Erro ao salvar configurações de cálculo:`,
+            error
+          );
+        }
+      }
+      return { value: data.finalValue!, metadata: metadataForPreview };
+    }
+
+    // 3. Lógica de APLICAR E SALVAR META (previewOnly: false)
+    // 3.1. Validação de Status do Período
+    if (competitionPeriod.status !== 'PLANEJAMENTO') {
       throw new Error(
-        `Período de competição com ID ${data.competitionPeriodId} não encontrado.`
+        `Metas só podem ser definidas/alteradas para períodos em PLANEJAMENTO. Período ${competitionPeriod.mesAno} (status: ${competitionPeriod.status}) não pode receber novas metas calculadas.`
+      );
+    }
+    if (!data.justificativa) {
+      throw new Error(
+        'Justificativa é obrigatória para aplicar uma meta calculada.'
       );
     }
 
-    // Buscar dados históricos de desempenho para calcular o valor base
-    const historicalData = await this.getHistoricalPerformanceData(
-      data.criterionId,
-      data.sectorId,
-      competitionPeriod
-    );
+    let savedParameterValueEntity!: ParameterValueEntity;
+    let wasExistingParameterValue = false;
 
-    // Calcular valor base conforme o método selecionado (para metadados)
-    let baseValue = 0;
-    try {
-      switch (data.calculationMethod) {
-        case 'media3':
-          baseValue = this.calculateAverage(historicalData, 3);
-          break;
-        case 'media6':
-          baseValue = this.calculateAverage(historicalData, 6);
-          break;
-        case 'ultimo':
-          baseValue = this.getLastValue(historicalData);
-          break;
-        case 'melhor3':
-          baseValue = this.getBestValue(
-            historicalData,
-            3,
-            criterion.sentido_melhor
-          );
-          break;
-        default:
-          console.warn(
-            `[ParameterService] Método de cálculo não reconhecido: ${data.calculationMethod}, usando valor fornecido.`
-          );
-          baseValue = data.finalValue;
-      }
-    } catch (error) {
-      console.error(`[ParameterService] Erro ao calcular valor base:`, error);
-      // Se houver erro no cálculo, usamos o valor final fornecido
-      baseValue = data.finalValue;
-    }
+    // INÍCIO DA TRANSAÇÃO
+    await AppDataSource.manager.transaction(
+      async (transactionalEntityManager) => {
+        const parameterRepoTx =
+          transactionalEntityManager.getRepository(ParameterValueEntity);
+        const performanceDataRepoTx = transactionalEntityManager.getRepository(
+          PerformanceDataEntity
+        ); // Para atualizar targetValue
 
-    // Salvar configurações como padrão se solicitado
-    if (data.saveAsDefault) {
-      try {
-        await this.criterionCalculationSettingsService.saveSettings({
-          criterionId: data.criterionId,
+        // 3.2. RECALCULAR o valor final da meta no backend
+        const historicalDataForApply = await this.getHistoricalPerformanceData(
+          data.criterionId,
+          data.sectorId,
+          competitionPeriod
+        );
+
+        let recalculatedBaseValue = 0;
+        try {
+          switch (data.calculationMethod) {
+            case 'media3':
+              recalculatedBaseValue = this.calculateAverage(
+                historicalDataForApply,
+                3
+              );
+              break;
+            case 'media6':
+              recalculatedBaseValue = this.calculateAverage(
+                historicalDataForApply,
+                6
+              );
+              break;
+            case 'ultimo':
+              recalculatedBaseValue = this.getLastValue(historicalDataForApply);
+              break;
+            case 'melhor3':
+              recalculatedBaseValue = this.getBestValue(
+                historicalDataForApply,
+                3,
+                criterion.sentido_melhor
+              );
+              break;
+            default:
+              throw new Error(
+                `Método de cálculo '${data.calculationMethod}' não reconhecido para aplicação de meta.`
+              );
+          }
+        } catch (error: any) {
+          console.error(
+            `[ParameterService Apply] Erro ao recalcular valor base: ${error.message}`
+          );
+          throw new Error(
+            `Erro ao recalcular valor base para aplicação: ${error.message}`
+          );
+        }
+
+        let valueAfterAdjustment =
+          recalculatedBaseValue * (1 + (data.adjustmentPercentage || 0) / 100);
+        let finalRecalculatedValue = this.applyRounding(
+          valueAfterAdjustment,
+          data.roundingMethod,
+          data.roundingDecimalPlaces
+        );
+
+        // 3.3. Montar os Metadados para salvar
+        const metadataToSave: ParameterMetadata = {
           calculationMethod: data.calculationMethod,
           adjustmentPercentage: data.adjustmentPercentage,
-          requiresRounding: data.wasRounded,
+          baseValue: recalculatedBaseValue,
+          wasRounded: data.wasRounded, // Ou determinar com base no recálculo se o arredondamento foi efetivamente aplicado
           roundingMethod: data.roundingMethod,
           roundingDecimalPlaces: data.roundingDecimalPlaces,
+          // Poderia adicionar aqui o valor original do frontend (data.finalValue) para comparação, se desejado
+          // frontendOriginalFinalValue: data.finalValue
+        };
+
+        // 3.4. Encontrar ou Preparar ParameterValueEntity (Lógica de UPSERT ou CreateOrUpdate)
+        //     Para metas calculadas, geralmente vamos ATUALIZAR a meta existente para o critério/setor/período,
+        //     ou CRIAR se não existir. O versionamento já é tratado pelo updateParameter se for o caso.
+        //     Vamos assumir que para este fluxo, queremos encontrar uma meta ATIVA (dataFimEfetivo IS NULL)
+        //     para o mesmo critério, setor e período. Se existir, ATUALIZAMOS ela. Se não, CRIAMOS.
+
+        const whereExisting: FindOptionsWhere<ParameterValueEntity> = {
+          criterionId: data.criterionId,
+          competitionPeriodId: data.competitionPeriodId,
+          dataFimEfetivo: IsNull(), // Meta ativa
+          sectorId:
+            data.sectorId === undefined || data.sectorId === null
+              ? IsNull()
+              : data.sectorId,
+        };
+        let existingParameter = await parameterRepoTx.findOne({
+          where: whereExisting,
         });
-        console.log(
-          `[ParameterService] Configurações de cálculo salvas como padrão para critério ID: ${data.criterionId}`
-        );
-      } catch (error) {
-        console.error(
-          `[ParameterService] Erro ao salvar configurações de cálculo:`,
-          error
-        );
-        // Não interromper o fluxo se houver erro ao salvar configurações
+
+        const parameterName = `META_${criterion.nome.toUpperCase().replace(/\s+/g, '_')}${
+          data.sectorId
+            ? `_SETOR${data.sectorId}`
+            : sector && sector.nome
+              ? `_${sector.nome.toUpperCase().replace(/\s+/g, '_')}`
+              : '_GERAL'
+        }_${competitionPeriod.mesAno.replace('-', '')}`;
+
+        if (existingParameter) {
+          wasExistingParameterValue = true;
+          console.log(
+            `[ParameterService Apply] Atualizando meta existente ID: ${existingParameter.id}`
+          );
+          existingParameter.valor = String(finalRecalculatedValue);
+          existingParameter.justificativa = `${data.justificativa} (Recalculada via assistente em ${new Date().toISOString()})`;
+          existingParameter.metadata = metadataToSave;
+          existingParameter.createdByUserId = actingUser.id; // Quem fez a última modificação
+          // Data de início e fim não são alteradas aqui, a menos que seja uma regra de negócio específica
+          savedParameterValueEntity =
+            await parameterRepoTx.save(existingParameter);
+        } else {
+          wasExistingParameterValue = false;
+          console.log(`[ParameterService Apply] Criando nova meta.`);
+          const newParameterToCreate = parameterRepoTx.create({
+            nomeParametro: parameterName,
+            valor: String(finalRecalculatedValue),
+            dataInicioEfetivo: this.formatDate(competitionPeriod.dataInicio), // Início do período
+            dataFimEfetivo: null, // Ativa
+            criterionId: data.criterionId,
+            sectorId: data.sectorId,
+            competitionPeriodId: data.competitionPeriodId,
+            justificativa: data.justificativa,
+            createdByUserId: actingUser.id,
+            metadata: metadataToSave,
+          });
+          savedParameterValueEntity =
+            await parameterRepoTx.save(newParameterToCreate);
+        }
+
+        // 3.5. Atualizar targetValue em performance_data e criterion_scores
+        //     Esta lógica já existe no seu método `updateParameter`, podemos reutilizar ou adaptar.
+        //     Importante: Fazer isso DENTRO da transação.
+        const numericFinalValue = parseFloat(String(finalRecalculatedValue));
+        if (!isNaN(numericFinalValue)) {
+          const commonUpdateCriteria = {
+            criterionId: data.criterionId,
+            sectorId: data.sectorId, // Lidar com null/undefined aqui
+            competitionPeriodId: data.competitionPeriodId,
+          };
+          const updatePayload = { targetValue: numericFinalValue };
+
+          const pdUpdateResult = await transactionalEntityManager.update(
+            PerformanceDataEntity,
+            commonUpdateCriteria,
+            updatePayload
+          );
+          console.log(
+            `[ParameterService Apply] Atualizados ${pdUpdateResult.affected} registros em performance_data com novo targetValue: ${numericFinalValue}`
+          );
+
+          // Se você tiver uma entidade CriterionScoreEntity mapeada, use-a. Senão, string literal.
+          // const csUpdateResult = await transactionalEntityManager.update('criterion_scores', commonUpdateCriteria, updatePayload);
+          // console.log(`[ParameterService Apply] Atualizados ${csUpdateResult.affected} registros em criterion_scores com novo targetValue: ${numericFinalValue}`);
+        } else {
+          console.warn(
+            `[ParameterService Apply] Valor recalculado "${finalRecalculatedValue}" não é numérico. Tabelas dependentes não atualizadas.`
+          );
+        }
+
+        // 3.6. Salvar Configurações de Cálculo como Padrão (se solicitado)
+        if (data.saveAsDefault) {
+          try {
+            await this.criterionCalculationSettingsService.saveSettings(
+              {
+                // Este serviço deve usar o entityManager da transação se fizer operações de escrita
+                criterionId: data.criterionId,
+                calculationMethod: data.calculationMethod,
+                adjustmentPercentage: data.adjustmentPercentage,
+                requiresRounding: data.wasRounded,
+                roundingMethod: data.roundingMethod,
+                roundingDecimalPlaces: data.roundingDecimalPlaces,
+              } /*, transactionalEntityManager */
+            ); // Passar o entityManager se o saveSettings precisar dele
+            console.log(
+              `[ParameterService Apply] Configurações de cálculo salvas como padrão para critério ID: ${data.criterionId}`
+            );
+          } catch (error) {
+            console.error(
+              `[ParameterService Apply] Erro ao salvar configurações de cálculo padrão:`,
+              error
+            );
+            // Decidir se isso deve abortar a transação. Provavelmente não.
+          }
+        }
+
+        // 3.7. REGISTRAR AUDITORIA (DENTRO DA TRANSAÇÃO)
+        //    O AuditLogService também precisaria aceitar um entityManager para participar da transação
+        try {
+          await this.auditLogService.createLog(
+            {
+              // Passar transactionalEntityManager se o createLog for adaptado
+              userId: actingUser.id,
+              userName: actingUser.nome, // Supondo que UserEntity tem 'nome'
+              actionType: wasExistingParameterValue
+                ? 'META_CALCULADA_ATUALIZADA'
+                : 'META_CALCULADA_CRIADA',
+              entityType: 'ParameterValueEntity',
+              entityId: savedParameterValueEntity.id.toString(),
+              details: {
+                inputValue: data, // DTO original
+                recalculatedValue: finalRecalculatedValue,
+                savedMetadata: metadataToSave,
+              },
+              justification: data.justificativa,
+              competitionPeriodId: data.competitionPeriodId,
+              // ipAddress: data.ipAddress, // Se o DTO for atualizado para incluir isso
+            } /*, transactionalEntityManager */
+          );
+        } catch (auditError: any) {
+          console.error(
+            '[ParameterService Apply] Falha crítica ao registrar auditoria:',
+            auditError
+          );
+          // Se a auditoria for mandatória, relançar o erro para abortar a transação
+          throw new Error(
+            `Falha ao registrar auditoria, abortando operação: ${auditError.message}`
+          );
+        }
       }
-    }
+    ); // FIM DA TRANSAÇÃO
 
-    // Preparar metadados
-    const metadata: ParameterMetadata = {
-      calculationMethod: data.calculationMethod,
-      adjustmentPercentage: data.adjustmentPercentage,
-      baseValue,
-      wasRounded: data.wasRounded,
-      roundingMethod: data.roundingMethod,
-      roundingDecimalPlaces: data.roundingDecimalPlaces,
-    };
-
-    // Usar o valor final já arredondado enviado pelo frontend
-    return { value: data.finalValue, metadata };
+    return savedParameterValueEntity; // Retorna a entidade salva/atualizada
   }
 
   // Métodos auxiliares para cálculo

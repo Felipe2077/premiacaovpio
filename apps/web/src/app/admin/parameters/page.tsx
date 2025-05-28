@@ -23,418 +23,349 @@ import {
 } from '@/components/ui/select';
 import { useParametersData } from '@/hooks/useParametersData';
 import { Loader2, RefreshCw } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
+// Interface para o objeto de período (ajuste conforme sua definição real)
+interface CompetitionPeriod {
+  id: number;
+  mesAno: string;
+  status: string;
+  startDate: Date | string; // Data de início ou referência do período
+  // Adicione outras propriedades se necessário
+}
+
+// Interface para o objeto de critério (ajuste conforme sua definição real)
+interface Criterion {
+  id: number;
+  nome: string;
+  // Adicione outras propriedades se necessário
+}
+
+// Interface para o objeto de setor (ajuste conforme sua definição real)
+interface Sector {
+  id: number;
+  nome: string;
+  // Adicione outras propriedades se necessário
+}
+
 export default function ParametersPage() {
-  // Estados para gerenciar a seleção de período e modais
   const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editData, setEditData] = useState<any>(null);
   const [createData, setCreateData] = useState<any>(null);
   const [newMetaValue, setNewMetaValue] = useState<string>('');
-  // Estados adicionais
-  const [calculateModalOpen, setCalculateModalOpen] = useState(false);
-  const [calculationMethod, setCalculationMethod] = useState<string>('media3');
-  const [calculationAdjustment, setCalculationAdjustment] =
-    useState<string>('0');
-  const [calculatedValue, setCalculatedValue] = useState<number | null>(null);
+
+  // --- Estados para o CalculationModal ---
   const [calculationModalOpen, setCalculationModalOpen] = useState(false);
-  const [calculateData, setCalculateData] = useState<{
+  const [calculateData, setCalculateData] = useState<null | {
     criterioId: number;
     criterioNome: string;
     setorId: number | null;
     setorNome: string;
-  } | null>(null);
-  const [roundingMethod, setRoundingMethod] = useState<string>('nearest');
-  const [decimalPlaces, setDecimalPlaces] = useState<string>('0');
+    competitionPeriodId: number;
+    competitionPeriodDate: Date | string | number; // Data de referência do período
+  }>(null);
+  const [calculationMethod, setCalculationMethod] = useState<string>('media3');
+  const [calculationAdjustment, setCalculationAdjustment] =
+    useState<string>('0');
+  const [roundingMethod, setRoundingMethod] = useState<string>('none');
+  const [decimalPlaces, setDecimalPlaces] = useState<string>('2');
   const [saveAsDefault, setSaveAsDefault] = useState<boolean>(false);
-  const [isLoadingSettings, setIsLoadingSettings] = useState<boolean>(false);
-  const [isCalculating, setIsCalculating] = useState<boolean>(false);
 
-  // Obter dados do hook
+  const [isLoadingSettings, setIsLoadingSettings] = useState<boolean>(false);
+  const [calculatedValuePreview, setCalculatedValuePreview] = useState<
+    number | null
+  >(null);
+  const [isCalculatingPreview, setIsCalculatingPreview] =
+    useState<boolean>(false);
+  const [isApplying, setIsApplying] = useState<boolean>(false);
+
   const {
-    periods,
-    uniqueCriteria,
+    periods, // Supondo que periods é CompetitionPeriod[]
+    uniqueCriteria, // Supondo que uniqueCriteria é Criterion[]
     resultsBySector,
+    sectors, // Supondo que sectors é Sector[]
     isLoading,
     fetchResults,
     fetchAllData,
     getPeriodById,
-    refetchResults,
-    parameters,
-    isLoadingParameters,
-    createParameter,
-    updateParameter,
-    calculateParameterValue,
     fetchCriterionCalculationSettings,
   } = useParametersData();
 
-  // Função para abrir o modal de cálculo
-  const handleOpenCalculationModal = (
-    criterionId: number,
-    sectorId: number | null,
-    criterionName: string
-  ) => {
-    // Verificar se está na fase de planejamento
-    const isPlanejamentoActive = selectedPeriod?.status === 'PLANEJAMENTO';
+  // Obter o período selecionado com base no ID
+  // selectedPeriod terá o tipo CompetitionPeriod | null
+  const selectedPeriod: CompetitionPeriod | null = selectedPeriodId
+    ? (getPeriodById(selectedPeriodId) as CompetitionPeriod | null) // Cast se getPeriodById retorna any
+    : null;
 
-    // Só permitir cálculo em fase de planejamento
-    if (!isPlanejamentoActive) {
-      toast.error('Metas só podem ser calculadas na fase de planejamento');
+  // Função para abrir o modal de cálculo
+  // *** ASSINATURA CORRIGIDA E USO DOS PARÂMETROS ***
+  const handleOpenCalculationModal = (
+    criterion: Criterion, // Objeto do critério
+    sector: Sector | null, // Objeto do setor ou null
+    currentCompetitionPeriod: CompetitionPeriod // Objeto do período da competição
+  ) => {
+    if (!currentCompetitionPeriod) {
+      toast.error('Período da competição não fornecido para cálculo.');
+      return;
+    }
+    if (currentCompetitionPeriod.status !== 'PLANEJAMENTO') {
+      toast.error('Metas só podem ser calculadas na fase de PLANEJAMENTO.');
       return;
     }
 
-    // Encontrar o nome do setor
-    const sectorName =
-      sectorId === null
-        ? 'Geral'
-        : Object.values(resultsBySector).find(
-            (s: any) => s.setorId === sectorId || s.id === sectorId
-          )?.setorNome || `Setor ${sectorId}`;
-
     setCalculateData({
-      criterioId: criterionId,
-      criterioNome: criterionName,
-      setorId: sectorId,
-      setorNome: sectorName,
+      criterioId: criterion.id,
+      criterioNome: criterion.nome,
+      setorId: sector ? sector.id : null,
+      setorNome: sector ? sector.nome : 'Geral',
+      // Usa o objeto currentCompetitionPeriod passado como parâmetro
+      competitionPeriodId: currentCompetitionPeriod.id,
+      competitionPeriodDate: currentCompetitionPeriod.dataInicio, // Assumindo que seu objeto Period tem startDate
     });
 
-    // Resetar estados
-    setCalculatedValue(null);
-
-    // Carregar configurações padrão para este critério
-    loadDefaultSettings(criterionId);
-
-    // Abrir o modal
+    setCalculatedValuePreview(null);
+    loadDefaultSettings(criterion.id);
     setCalculationModalOpen(true);
   };
 
-  // Adicionar esta função se não existir
-  const refetchParameters = async () => {
-    if (selectedPeriod?.mesAno) {
-      await fetchResults(selectedPeriod.mesAno);
-    }
-  };
-  // Função para carregar configurações padrão
-  // Função para carregar configurações padrão
   const loadDefaultSettings = async (criterionId: number) => {
     setIsLoadingSettings(true);
     try {
       const settings = await fetchCriterionCalculationSettings(criterionId);
-
-      // Aplicar configurações carregadas
       if (settings) {
         setCalculationMethod(settings.calculationMethod || 'media3');
         setCalculationAdjustment(
           settings.adjustmentPercentage?.toString() || '0'
         );
-        setRoundingMethod(settings.roundingMethod || 'nearest');
-        setDecimalPlaces(settings.roundingDecimalPlaces?.toString() || '0');
+        setRoundingMethod(settings.roundingMethod || 'none');
+        setDecimalPlaces(settings.roundingDecimalPlaces?.toString() || '2');
+      } else {
+        setCalculationMethod('media3');
+        setCalculationAdjustment('0');
+        setRoundingMethod('none');
+        setDecimalPlaces('2');
       }
     } catch (error) {
       console.error('Erro ao carregar configurações de cálculo:', error);
       toast.error('Não foi possível carregar as configurações padrão.');
-
-      // Manter valores padrão em caso de erro
       setCalculationMethod('media3');
       setCalculationAdjustment('0');
-      setRoundingMethod('nearest');
-      setDecimalPlaces('0');
+      setRoundingMethod('none');
+      setDecimalPlaces('2');
     } finally {
       setIsLoadingSettings(false);
     }
   };
 
-  // Efeito para selecionar o período ativo por padrão quando os períodos são carregados
   useEffect(() => {
     if (periods.length > 0 && !selectedPeriodId) {
-      // Tentar encontrar um período ativo
-      const activePeriod = periods.find((p) => p.status === 'ATIVA');
-
+      const activePeriod = periods.find(
+        (p: CompetitionPeriod) =>
+          p.status === 'ATIVA' || p.status === 'PLANEJAMENTO'
+      );
       if (activePeriod) {
         setSelectedPeriodId(activePeriod.id);
-        console.log('Período ativo selecionado automaticamente:', activePeriod);
-      } else {
-        // Se não houver período ativo, selecionar o primeiro da lista
+      } else if (periods.length > 0) {
         setSelectedPeriodId(periods[0].id);
-        console.log('Primeiro período selecionado:', periods[0]);
       }
     }
   }, [periods, selectedPeriodId]);
 
-  // Obter o período selecionado com base no ID
-  const selectedPeriod = selectedPeriodId
-    ? getPeriodById(selectedPeriodId)
-    : null;
-
-  // Efeito para carregar os resultados quando o período selecionado mudar
   useEffect(() => {
     if (selectedPeriod?.mesAno) {
-      console.log('Carregando resultados para período:', selectedPeriod.mesAno);
       fetchResults(selectedPeriod.mesAno);
     }
   }, [selectedPeriod, fetchResults]);
 
-  // Manipuladores de eventos
   const handlePeriodChange = (value: string) => {
     const periodId = parseInt(value);
     setSelectedPeriodId(periodId);
-    console.log('Período alterado para:', periodId);
   };
 
   const handleRefresh = async () => {
     if (selectedPeriod?.mesAno) {
-      console.log('Atualizando dados para período:', selectedPeriod.mesAno);
       await fetchAllData(selectedPeriod.mesAno);
       toast.success('Dados atualizados com sucesso!');
     }
   };
 
-  const handleEditMeta = (item: any) => {
-    console.log('Editar meta:', item);
-    setEditData(item);
-    setNewMetaValue(item.valorMeta?.toString() || '');
+  const handleEditMeta = (
+    criterion: Criterion, // Espera objeto critério
+    sector: Sector | null, // Espera objeto setor ou null
+    currentParameterValue: string | number | null // Valor atual da meta para preencher
+  ) => {
+    setEditData({
+      criterionId: criterion.id,
+      criterioNome: criterion.nome,
+      setorId: sector ? sector.id : null,
+      setorNome: sector ? sector.nome : 'Geral',
+    });
+    setNewMetaValue(currentParameterValue?.toString() || '');
     setEditModalOpen(true);
   };
 
   const handleCreateMeta = (
-    criterionId: number,
-    sectorId: number,
-    criterionName: string
+    criterion: Criterion,
+    sector: Sector | null,
+    currentCompetitionPeriod: CompetitionPeriod
   ) => {
-    console.log('Criar meta:', { criterionId, sectorId, criterionName });
     setCreateData({
-      criterioId: criterionId,
-      criterioNome: criterionName,
-      setorId: sectorId,
-      setorNome:
-        Object.values(resultsBySector).find((s: any) => s.setorId === sectorId)
-          ?.setorNome || '',
+      criterioId: criterion.id,
+      criterioNome: criterion.nome,
+      setorId: sector ? sector.id : null,
+      setorNome: sector ? sector.nome : 'Geral',
+      competitionPeriodId: currentCompetitionPeriod.id,
     });
     setNewMetaValue('');
     setCreateModalOpen(true);
   };
 
   const handleSaveEdit = async () => {
-    if (!editData || !newMetaValue) return;
-
-    try {
-      // Aqui você implementaria a chamada à API para salvar a meta editada
-      console.log('Salvando meta editada:', {
-        ...editData,
-        valorMeta: parseFloat(newMetaValue),
-      });
-
-      // Simulação de uma chamada à API
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // Recarregar os resultados após a edição
-      if (selectedPeriod?.mesAno) {
-        await refetchResults(selectedPeriod.mesAno);
-      }
-
-      toast.success('Meta atualizada com sucesso!');
-      setEditModalOpen(false);
-    } catch (error) {
-      console.error('Erro ao salvar meta:', error);
-      toast.error('Erro ao atualizar meta. Tente novamente.');
-    }
+    if (!editData || newMetaValue === '') return; // Permitir 0 como valor
+    // Chamar API para salvar meta editada
+    console.log('Salvando meta editada:', {
+      ...editData,
+      valorMeta: parseFloat(newMetaValue),
+    });
+    // await updateParameter(...);
+    toast.success('Meta atualizada com sucesso! (Simulado)');
+    if (selectedPeriod?.mesAno) await fetchResults(selectedPeriod.mesAno);
+    setEditModalOpen(false);
   };
 
   const handleSaveCreate = async () => {
-    if (!createData || !newMetaValue) return;
-
-    try {
-      // Aqui você implementaria a chamada à API para criar a meta
-      console.log('Criando nova meta:', {
-        ...createData,
-        valorMeta: parseFloat(newMetaValue),
-      });
-
-      // Simulação de uma chamada à API
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // Recarregar os resultados após a criação
-      if (selectedPeriod?.mesAno) {
-        await refetchResults(selectedPeriod.mesAno);
-      }
-
-      toast.success('Meta criada com sucesso!');
-      setCreateModalOpen(false);
-    } catch (error) {
-      console.error('Erro ao criar meta:', error);
-      toast.error('Erro ao criar meta. Tente novamente.');
-    }
+    if (!createData || newMetaValue === '') return;
+    // Chamar API para criar nova meta
+    console.log('Criando nova meta:', {
+      ...createData,
+      valorMeta: parseFloat(newMetaValue),
+    });
+    // await createParameter(...);
+    toast.success('Meta criada com sucesso! (Simulado)');
+    if (selectedPeriod?.mesAno) await fetchResults(selectedPeriod.mesAno);
+    setCreateModalOpen(false);
   };
 
-  // Log para debug
-  console.log('Dados para renderização:', {
-    totalPeriods: periods.length,
-    selectedPeriodId,
-    selectedPeriod,
-    uniqueCriteriaCount: uniqueCriteria?.length || 0,
-    resultsBySectorCount: resultsBySector
-      ? Object.keys(resultsBySector).length
-      : 0,
-    isLoading,
-  });
-
-  // Função para visualizar o cálculo
-  const handlePreviewCalculation = async () => {
-    if (!calculateData || !selectedPeriod) return;
-
-    setIsCalculating(true);
+  const handleApiCalculation = useCallback(async (payload: any) => {
+    // Envolvida com useCallback
     try {
-      // Preparar dados para a API
-      const calculateDto = {
-        criterionId: calculateData.criterioId,
-        sectorId: calculateData.setorId,
-        competitionPeriodId: selectedPeriod.id,
-        calculationMethod,
-        adjustmentPercentage: parseFloat(calculationAdjustment) || 0,
-        wasRounded: true,
-        roundingMethod,
-        roundingDecimalPlaces: parseInt(decimalPlaces, 10) || 0,
-        finalValue: calculatedValue,
-        previewOnly: true, // Indicar que é apenas uma prévia
-        saveAsDefault: false, // Não salvar como padrão na prévia
-        justificativa: `Prévia de cálculo usando ${calculationMethod} com ajuste de ${calculationAdjustment}%.`,
-      };
-
-      // Chamar a API para calcular a prévia
       const response = await fetch('/api/parameters/calculate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(calculateDto),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
-
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData = await response
+          .json()
+          .catch(() => ({ message: `Erro ${response.status}` }));
         throw new Error(
-          errorData.error || `Erro ${response.status}: ${response.statusText}`
+          errorData.message || `Erro ${response.status}: ${response.statusText}`
         );
       }
-
-      const result = await response.json();
-
-      // Atualizar o valor calculado
-      setCalculatedValue(result.value);
+      return await response.json();
     } catch (error) {
-      console.error('Erro ao calcular prévia:', error);
+      console.error('Erro na chamada API de cálculo:', error);
       toast.error(
         error instanceof Error
           ? error.message
-          : 'Erro ao calcular prévia. Verifique os dados e tente novamente.'
+          : 'Erro desconhecido ao calcular.'
       );
-    } finally {
-      setIsCalculating(false);
-    }
-  };
-
-  // Função para aplicar o cálculo
-  const handleApplyCalculation = async () => {
-    if (!calculateData || calculatedValue === null || !selectedPeriod) return;
-
-    try {
-      // Preparar dados para a API
-      const calculateDto = {
-        criterionId: calculateData.criterioId,
-        sectorId: calculateData.setorId,
-        competitionPeriodId: selectedPeriod.id,
-        calculationMethod,
-        adjustmentPercentage: parseFloat(calculationAdjustment) || 0,
-        wasRounded: true,
-        roundingMethod,
-        roundingDecimalPlaces: parseInt(decimalPlaces, 10) || 0,
-        finalValue: calculatedValue, // Adicionar o valor calculado
-        previewOnly: false, // Indicar que deve salvar o resultado
-        saveAsDefault, // Salvar como padrão se solicitado
-        justificativa: `Meta calculada automaticamente usando ${calculationMethod} com ajuste de ${calculationAdjustment}%.`,
-      };
-
-      // Chamar a API para calcular e salvar
-      const response = await fetch('/api/parameters/calculate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(calculateDto),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.error || `Erro ${response.status}: ${response.statusText}`
-        );
-      }
-
-      const result = await response.json();
-
-      // Fechar o modal e exibir mensagem de sucesso
-      setCalculationModalOpen(false);
-      toast.success('Meta calculada e aplicada com sucesso!');
-
-      // Atualizar a lista de parâmetros
-      if (selectedPeriod?.mesAno) {
-        await fetchResults(selectedPeriod.mesAno);
-      }
-    } catch (error) {
-      console.error('Erro ao aplicar cálculo:', error);
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : 'Erro ao aplicar o cálculo. Verifique os dados e tente novamente.'
-      );
-    }
-  };
-  // Função para buscar dados históricos (implementação real)
-  const fetchHistoricalData = async (
-    criterionId: number,
-    sectorId: number | null
-  ) => {
-    try {
-      // Verificar se temos um período selecionado
-      if (!selectedPeriod?.id) {
-        throw new Error('Nenhum período selecionado');
-      }
-
-      // Fazer a requisição para a API
-      const response = await fetch(
-        `/api/criteria/${criterionId}/historical-data?sectorId=${sectorId}&periodId=${selectedPeriod.id}`
-      );
-
-      if (!response.ok) {
-        throw new Error(`Erro ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Erro ao buscar dados históricos:', error);
       throw error;
     }
-  };
+  }, []);
 
-  // Função simulada para obter dados históricos
-  // Em um cenário real, você substituiria isso por uma chamada à API
-  const getHistoricalData = async (criterioId: number, setorId: number) => {
-    // Simulando uma chamada à API com dados fictícios
-    await new Promise((resolve) => setTimeout(resolve, 300));
+  const handlePreviewCalculation = useCallback(
+    async (payload: any) => {
+      setIsCalculatingPreview(true);
+      setCalculatedValuePreview(null);
+      try {
+        const result = await handleApiCalculation(payload);
+        setCalculatedValuePreview(result.value);
+        toast.info('Pré-visualização calculada.');
+      } catch (error) {
+        /* já tratado em handleApiCalculation */
+      } finally {
+        setIsCalculatingPreview(false);
+      }
+    },
+    [handleApiCalculation]
+  );
 
-    // Dados fictícios para demonstração
-    return [
-      { periodo: 'Abr/2023', valor: 450 },
-      { periodo: 'Mar/2023', valor: 462 },
-      { periodo: 'Fev/2023', valor: 470 },
-      { periodo: 'Jan/2023', valor: 455 },
-      { periodo: 'Dez/2022', valor: 448 },
-      { periodo: 'Nov/2022', valor: 460 },
-    ];
-  };
+  const handleApplyCalculationCallback = useCallback(
+    async (payload: any) => {
+      setIsApplying(true);
+      try {
+        await handleApiCalculation(payload);
+        setCalculationModalOpen(false);
+        toast.success('Meta calculada e aplicada com sucesso!');
+        if (selectedPeriod?.mesAno) {
+          // Verifica se selectedPeriod existe
+          await fetchResults(selectedPeriod.mesAno);
+        }
+      } catch (error) {
+        /* já tratado em handleApiCalculation */
+      } finally {
+        setIsApplying(false);
+      }
+    },
+    [
+      handleApiCalculation,
+      selectedPeriod,
+      fetchResults,
+      setIsApplying,
+      setCalculationModalOpen,
+    ]
+  );
+
+  const fetchHistoricalData = useCallback(
+    async (
+      criterionId: number,
+      sectorId: number | null,
+      currentPeriodYYYYMM: string,
+      count: number = 6
+    ): Promise<any[]> => {
+      let apiUrl = `/api/results/historical?criterionId=${criterionId}&currentPeriod=${currentPeriodYYYYMM}&count=${count}`;
+      if (sectorId !== null && sectorId !== undefined) {
+        apiUrl += `&sectorId=${sectorId}`;
+      }
+      console.log(
+        '[ParametersPage] Fetching historical data from URL:',
+        apiUrl
+      );
+      console.log('[ParametersPage]', currentPeriodYYYYMM);
+
+      try {
+        const response = await fetch(apiUrl);
+        if (!response.ok) {
+          const errorBody = await response.text();
+          throw new Error(
+            `Erro ${response.status}: ${response.statusText} - ${errorBody}`
+          );
+        }
+        const result = await response.json();
+        if (result.success && result.data && result.data.history) {
+          return result.data.history.map((item: any) => ({
+            periodo: item.period,
+            valorRealizado:
+              item.realizedValue !== null
+                ? parseFloat(item.realizedValue)
+                : null,
+            status:
+              item.realizedValue !== null ? 'FECHADO' : 'ABERTO_OU_SEM_DADOS',
+          }));
+        }
+        return [];
+      } catch (error) {
+        console.error('[ParametersPage] Erro em fetchHistoricalData:', error);
+        toast.error('Falha ao buscar dados históricos.');
+        throw error;
+      }
+    },
+    []
+  );
 
   return (
     <div className='container mx-auto py-6 space-y-6'>
@@ -445,25 +376,23 @@ export default function ParametersPage() {
             Gerencie as metas e parâmetros para cada setor e critério.
           </p>
         </div>
-
         <div className='flex items-center gap-2'>
           <Select
             value={selectedPeriodId?.toString() || ''}
             onValueChange={handlePeriodChange}
             disabled={isLoading || periods.length === 0}
           >
-            <SelectTrigger className='w-[180px]'>
+            <SelectTrigger className='w-[220px]'>
               <SelectValue placeholder='Selecione um período' />
             </SelectTrigger>
             <SelectContent>
-              {periods.map((period) => (
+              {periods.map((period: CompetitionPeriod) => (
                 <SelectItem key={period.id} value={period.id.toString()}>
                   {period.mesAno} - {period.status}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-
           <Button
             variant='outline'
             size='icon'
@@ -486,9 +415,7 @@ export default function ParametersPage() {
       ) : !selectedPeriod ? (
         <Card>
           <CardContent className='flex justify-center items-center h-64'>
-            <p className='text-muted-foreground'>
-              Selecione um período para visualizar os parâmetros.
-            </p>
+            <p className='text-muted-foreground'>Selecione um período.</p>
           </CardContent>
         </Card>
       ) : (
@@ -496,20 +423,24 @@ export default function ParametersPage() {
           <CardHeader>
             <CardTitle>
               Matriz de Parâmetros - {selectedPeriod.mesAno}
-              <span className='ml-2 text-sm font-normal text-muted-foreground'>
-                ({selectedPeriod.status})
+              <span
+                className={`ml-2 text-sm font-normal px-2 py-0.5 rounded-full ${selectedPeriod.status === 'PLANEJAMENTO' ? 'bg-blue-100 text-blue-700' : selectedPeriod.status === 'ATIVA' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}
+              >
+                {selectedPeriod.status}
               </span>
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {/* *** AQUI É ONDE VOCÊ PRECISA AJUSTAR A CHAMADA `onCalculate` *** */}
             <ParametersMatrix
-              uniqueCriteria={uniqueCriteria}
+              uniqueCriteria={uniqueCriteria} // Deve ser Criterion[]
               resultsBySector={resultsBySector}
-              onEdit={handleEditMeta}
-              onCreate={handleCreateMeta}
-              onCalculate={handleOpenCalculationModal}
+              sectors={sectors as Sector[]} // Passando sectors, que deve ser Sector[]
+              onEdit={handleEditMeta} // Ajustar os params que onEdit espera também
+              onCreate={handleCreateMeta} // Ajustar os params que onCreate espera também
+              onCalculate={handleOpenCalculationModal} // ESTA É A PROP CORRETA
               isLoading={isLoading}
-              periodoAtual={selectedPeriod}
+              periodoAtual={selectedPeriod as CompetitionPeriod} // Passa o objeto do período selecionado
             />
           </CardContent>
         </Card>
@@ -582,29 +513,32 @@ export default function ParametersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {/* Modal de Cálculo Automático */}
 
-      <CalculationModal
-        open={calculationModalOpen}
-        onOpenChange={setCalculationModalOpen}
-        calculateData={calculateData}
-        calculationMethod={calculationMethod}
-        setCalculationMethod={setCalculationMethod}
-        calculationAdjustment={calculationAdjustment}
-        setCalculationAdjustment={setCalculationAdjustment}
-        roundingMethod={roundingMethod}
-        setRoundingMethod={setRoundingMethod}
-        decimalPlaces={decimalPlaces}
-        setDecimalPlaces={setDecimalPlaces}
-        saveAsDefault={saveAsDefault}
-        setSaveAsDefault={setSaveAsDefault}
-        handlePreviewCalculation={handlePreviewCalculation}
-        calculatedValue={calculatedValue}
-        handleApplyCalculation={handleApplyCalculation}
-        isLoadingSettings={isLoadingSettings}
-        isCalculating={isCalculating}
-        fetchHistoricalData={fetchHistoricalData} // Adicionar esta prop
-      />
+      {/* Modal de Cálculo Automático */}
+      {calculationModalOpen && calculateData && (
+        <CalculationModal
+          open={calculationModalOpen}
+          onOpenChange={setCalculationModalOpen}
+          calculateData={calculateData}
+          calculationMethod={calculationMethod}
+          setCalculationMethod={setCalculationMethod}
+          calculationAdjustment={calculationAdjustment}
+          setCalculationAdjustment={setCalculationAdjustment}
+          roundingMethod={roundingMethod}
+          setRoundingMethod={setRoundingMethod}
+          decimalPlaces={decimalPlaces}
+          setDecimalPlaces={setDecimalPlaces}
+          saveAsDefault={saveAsDefault}
+          setSaveAsDefault={setSaveAsDefault}
+          handlePreviewCalculation={handlePreviewCalculation}
+          calculatedValuePreview={calculatedValuePreview}
+          handleApplyCalculation={handleApplyCalculationCallback}
+          isLoadingSettings={isLoadingSettings}
+          isCalculatingPreview={isCalculatingPreview}
+          isApplying={isApplying}
+          fetchHistoricalData={fetchHistoricalData}
+        />
+      )}
     </div>
   );
 }

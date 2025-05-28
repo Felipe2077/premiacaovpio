@@ -42,9 +42,11 @@ export interface CalculateParameterDto {
   roundingMethod?: 'nearest' | 'up' | 'down';
   roundingDecimalPlaces?: number;
   // Valor final já arredondado pelo frontend
-  finalValue: number;
+  finalValue?: number;
   saveAsDefault?: boolean;
   justificativa: string;
+  previewOnly: boolean;
+  ipAddress?: string; // Opcional, para auditoria
 }
 
 // Novo DTO para configurações de critério
