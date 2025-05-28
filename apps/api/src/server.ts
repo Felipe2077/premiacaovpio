@@ -356,28 +356,37 @@ const start = async () => {
     });
 
     // --- NOVA ROTA PARA CRITÉRIOS ATIVOS ---
+    // --- NOVA ROTA PARA CRITÉRIOS ATIVOS ---
     fastify.get('/api/criteria/active', async (request, reply) => {
       fastify.log.info('Recebida requisição GET /api/criteria/active');
       try {
-        // Pega o repositório DENTRO do handler
         const criterionRepo = AppDataSource.getRepository(CriterionEntity);
 
         const activeCriteria = await criterionRepo.find({
           where: { ativo: true },
-          // Seleciona apenas os campos que o frontend precisa (otimização)
-          select: ['id', 'nome', 'index'],
-          order: { id: 'ASC' }, // Ordena para consistência
+          select: [
+            'id',
+            'nome',
+            'index',
+            'descricao', // Adicionado
+            'unidade_medida', // Adicionado
+            'sentido_melhor', // Adicionado
+            'ativo', // Adicionado (ou mantenha se não precisar)
+            'casasDecimaisPadrao', // <<< ADICIONADO - use o nome da propriedade na CriterionEntity
+          ],
+          order: { index: 'ASC', id: 'ASC' }, // Sugestão: ordenar por index primeiro, depois por id
         });
 
         if (!activeCriteria || activeCriteria.length === 0) {
           fastify.log.warn('Nenhum critério ativo encontrado no banco.');
-          return reply.send([]); // Retorna array vazio
+          return reply.send([]);
         }
 
         fastify.log.info(
           `Retornando ${activeCriteria.length} critérios ativos.`
         );
-        return reply.send(activeCriteria); // Envia a lista como JSON
+
+        return reply.send(activeCriteria);
       } catch (error: any) {
         fastify.log.error('Erro ao buscar critérios ativos:', error);
         const errorMessage =

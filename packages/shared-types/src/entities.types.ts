@@ -13,6 +13,7 @@ export interface Criterio {
   unidade_medida?: string; // Ex: '%', 'KM/L', 'R$'
   sentido_melhor?: 'MAIOR' | 'MENOR'; // Indica se um valor maior é melhor ou pior
   ativo: boolean;
+  casasDecimaisPadrao?: number;
 }
 
 // Para parâmetros (metas, pesos, fatores de ajuste) - estrutura inicial

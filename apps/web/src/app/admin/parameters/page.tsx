@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useParametersData } from '@/hooks/useParametersData';
+import { Criterio as Criterion } from '@sistema-premiacao/shared-types';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -32,13 +33,6 @@ interface CompetitionPeriod {
   mesAno: string;
   status: string;
   startDate: Date | string; // Data de início ou referência do período
-  // Adicione outras propriedades se necessário
-}
-
-// Interface para o objeto de critério (ajuste conforme sua definição real)
-interface Criterion {
-  id: number;
-  nome: string;
   // Adicione outras propriedades se necessário
 }
 
@@ -134,27 +128,50 @@ export default function ParametersPage() {
   const loadDefaultSettings = async (criterionId: number) => {
     setIsLoadingSettings(true);
     try {
+      const criterioAtual = uniqueCriteria.find((c) => c.id === criterionId);
+      console.log(
+        '[ParametersPage] loadDefaultSettings - criterioAtual:',
+        criterioAtual
+      ); // Log o objeto do critério
+
+      const casasDecimaisDoCriterio =
+        criterioAtual?.casasDecimaisPadrao?.toString();
       const settings = await fetchCriterionCalculationSettings(criterionId);
+      console.log(
+        '[ParametersPage] loadDefaultSettings - settings recebidas:',
+        settings
+      );
+
       if (settings) {
         setCalculationMethod(settings.calculationMethod || 'media3');
         setCalculationAdjustment(
           settings.adjustmentPercentage?.toString() || '0'
         );
         setRoundingMethod(settings.roundingMethod || 'none');
-        setDecimalPlaces(settings.roundingDecimalPlaces?.toString() || '2');
+        setDecimalPlaces(
+          settings.roundingDecimalPlaces?.toString() ||
+            casasDecimaisDoCriterio ||
+            '2'
+        );
       } else {
         setCalculationMethod('media3');
         setCalculationAdjustment('0');
         setRoundingMethod('none');
-        setDecimalPlaces('2');
+        setDecimalPlaces(casasDecimaisDoCriterio || '2');
       }
     } catch (error) {
       console.error('Erro ao carregar configurações de cálculo:', error);
       toast.error('Não foi possível carregar as configurações padrão.');
+      const criterioAtualOnError = uniqueCriteria.find(
+        (c) => c.id === criterionId
+      ); // Tenta pegar mesmo em erro
+      const casasDecimaisOnError =
+        criterioAtualOnError?.casasDecimaisPadrao?.toString();
+
       setCalculationMethod('media3');
       setCalculationAdjustment('0');
       setRoundingMethod('none');
-      setDecimalPlaces('2');
+      setDecimalPlaces(casasDecimaisOnError || '2'); // Usa o padrão do critério se possível, senão '2'
     } finally {
       setIsLoadingSettings(false);
     }
@@ -353,6 +370,9 @@ export default function ParametersPage() {
               item.realizedValue !== null
                 ? parseFloat(item.realizedValue)
                 : null,
+            // <<< ADICIONE ESTA LINHA
+            valorMeta:
+              item.targetValue !== null ? parseFloat(item.targetValue) : null,
             status:
               item.realizedValue !== null ? 'FECHADO' : 'ABERTO_OU_SEM_DADOS',
           }));

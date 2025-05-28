@@ -1,3 +1,4 @@
+//apps/api/src/entity/criterion.entity.ts
 import {
   Column,
   CreateDateColumn,
@@ -28,6 +29,15 @@ export class CriterionEntity {
 
   @Column({ type: 'boolean', default: true })
   ativo!: boolean;
+
+  // VVV ADICIONE ESTAS LINHAS ABAIXO VVV
+  @Column({
+    type: 'integer',
+    name: 'casas_decimais_padrao',
+    nullable: false,
+    default: 0,
+  })
+  casasDecimaisPadrao!: number;
 
   @CreateDateColumn({ type: 'timestamp with time zone' })
   createdAt!: Date;

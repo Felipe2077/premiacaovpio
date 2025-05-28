@@ -1,4 +1,5 @@
 // hooks/useParametersData.ts
+import { Criterio as Criterion } from '@sistema-premiacao/shared-types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -8,15 +9,6 @@ export interface Period {
   status: 'ATIVA' | 'FECHADA' | 'PLANEJAMENTO';
   dataInicio: string;
   dataFim: string;
-}
-
-export interface Criterion {
-  id: number;
-  nome: string;
-  descricao: string;
-  ativo: boolean;
-  sentido_melhor: 'MAIOR' | 'MENOR';
-  index: number;
 }
 
 export interface Sector {
@@ -239,7 +231,11 @@ export function useParametersData(selectedPeriod?: string) {
         throw new Error('Falha ao buscar critérios');
       }
       const data = await response.json();
-      console.log('Critérios recebidos:', data);
+      console.log(
+        '[useParametersData] Critérios recebidos da API (primeiro item):',
+        data.length > 0 ? data[0] : 'Nenhum critério'
+      );
+
       setCriteria(data);
       return data;
     } catch (error) {
@@ -531,6 +527,10 @@ export function useParametersData(selectedPeriod?: string) {
         nome: criterion.nome,
         sentido_melhor: criterion.sentido_melhor,
         index: criterion.index,
+        descricao: criterion.descricao,
+        ativo: criterion.ativo,
+        // unidade_medida: criterion.unidade_medida, // Se fizesse parte da interface local
+        casasDecimaisPadrao: criterion.casasDecimaisPadrao, // <<< ADICIONE ESTA LINHA
       });
     });
 
@@ -556,10 +556,12 @@ export function useParametersData(selectedPeriod?: string) {
         return a.id - b.id;
       }
     );
-
-    console.log('uniqueCriteria processado:', {
-      total: uniqueCriteriaArray.length,
-    });
+    if (uniqueCriteriaArray.length > 0) {
+      console.log(
+        '[useParametersData] uniqueCriteria processado memo (primeiro item):',
+        uniqueCriteriaArray[0]
+      );
+    }
 
     return uniqueCriteriaArray;
   }, [results, criteria]);

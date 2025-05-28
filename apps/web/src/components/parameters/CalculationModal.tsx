@@ -93,21 +93,6 @@ interface CalculationModalProps {
   ) => Promise<any[]>;
 }
 
-// // Sua função formatDateToYearMonth (movida para dentro do arquivo para fácil referência)
-// const formatDateToYearMonth = (dateInput: Date | string | number): string => {
-//   const date = new Date(dateInput);
-//   if (isNaN(date.getTime())) {
-//     console.error('formatDateToYearMonth: Data inválida fornecida', dateInput);
-//     const now = new Date();
-//     const year = now.getFullYear();
-//     const month = (now.getMonth() + 1).toString().padStart(2, '0');
-//     return `${year}-${month}`; // Fallback
-//   }
-//   const year = date.getFullYear();
-//   const month = (date.getMonth() + 1).toString().padStart(2, '0');
-//   return `${year}-${month}`;
-// };
-
 const formatDateToYearMonth = (dateInput: Date | string | number): string => {
   // Mantenha seus logs se quiser testar, ou remova-os depois
   console.log('[formatDateToYearMonth] dateInput recebido:', dateInput);
@@ -160,6 +145,7 @@ export default function CalculationModal({
     number | null
   >(null); // Valor calculado localmente no modal
   const [justification, setJustification] = useState(''); // <<< NOVO ESTADO PARA JUSTIFICATIVA
+  const numDecimalPlacesForDisplay = parseInt(decimalPlaces, 10);
 
   const parametersData = useParametersData();
 
@@ -173,6 +159,11 @@ export default function CalculationModal({
           item.valorRealizado !== null && !isNaN(Number(item.valorRealizado))
       ) // Simplificado, o modal já recebe dados transformados
       .slice(0, count);
+    console.log(
+      `[calculateAverage] count: ${count}, validData para média:`,
+      JSON.parse(JSON.stringify(validData))
+    );
+
     if (validData.length === 0) return null;
     const sum = validData.reduce(
       (acc, item) => acc + Number(item.valorRealizado),
@@ -186,6 +177,11 @@ export default function CalculationModal({
       (item) =>
         item.valorRealizado !== null && !isNaN(Number(item.valorRealizado))
     );
+    console.log(
+      '[getLastValue] validData para último valor:',
+      JSON.parse(JSON.stringify(validData))
+    );
+
     return validData.length > 0 ? Number(validData[0].valorRealizado) : null;
   };
 
@@ -316,8 +312,22 @@ export default function CalculationModal({
 
   // Efeito para recalcular o valor local E CHAMAR O PREVIEW quando os parâmetros ou dados históricos mudarem
   useEffect(() => {
+    console.log(
+      '[PreviewEffect] Disparado. Método de Cálculo:',
+      calculationMethod
+    );
+    console.log(
+      '[PreviewEffect] Dados Históricos disponíveis:',
+      JSON.parse(JSON.stringify(historicalData))
+    ); // Logar uma cópia para ver o valor atual
+
     if (open && calculateData && historicalData.length > 0) {
       const localValue = calculateFinalValueLocalHandler();
+      console.log(
+        '[PreviewEffect] Valor calculado localmente (calculateFinalValueLocalHandler):',
+        localValue
+      );
+
       setCalculatedValueLocal(localValue); // Atualiza o valor calculado localmente
 
       // Se o valor local for válido, chama o handlePreviewCalculation (que fará a chamada à API de preview)
@@ -344,7 +354,17 @@ export default function CalculationModal({
           saveAsDefault: saveAsDefault,
           previewOnly: true as const,
         };
+        console.log(
+          '[PreviewEffect] Chamando handlePreviewCalculation com valor local:',
+          localValue
+        );
+
         handlePreviewCalculation(payloadPreview);
+      } else {
+        console.log(
+          '[PreviewEffect] Preview não chamado. localValue:',
+          localValue
+        );
       }
     } else if (
       open &&
@@ -352,6 +372,10 @@ export default function CalculationModal({
       historicalData.length === 0 &&
       !isLoadingSettings
     ) {
+      console.log(
+        '[PreviewEffect] Sem dados históricos para calcular, limpando valor local.'
+      );
+
       // Se não há dados históricos (e não está carregando settings), o valor local deve ser null
       // e o preview não deve ser chamado ou deve ser "limpo"
       setCalculatedValueLocal(null);
@@ -531,22 +555,6 @@ export default function CalculationModal({
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
-                  <Label htmlFor='decimalPlaces' className='text-sm'>
-                    Casas decimais
-                  </Label>
-                  <Input
-                    id='decimalPlaces'
-                    type='number'
-                    min='0'
-                    max='5'
-                    value={decimalPlaces}
-                    onChange={(e) => setDecimalPlaces(e.target.value)}
-                    disabled={
-                      roundingMethod === 'none' || roundingMethod === ''
-                    }
-                  />
-                </div>
               </div>
             </div>
 
@@ -580,18 +588,8 @@ export default function CalculationModal({
                   </div>
                   <div className='text-2xl font-bold text-primary'>
                     {calculatedValuePreview.toLocaleString('pt-BR', {
-                      minimumFractionDigits:
-                        parseInt(decimalPlaces, 10) >= 0 &&
-                        roundingMethod !== 'none' &&
-                        roundingMethod !== ''
-                          ? parseInt(decimalPlaces, 10)
-                          : 0,
-                      maximumFractionDigits:
-                        parseInt(decimalPlaces, 10) >= 0 &&
-                        roundingMethod !== 'none' &&
-                        roundingMethod !== ''
-                          ? parseInt(decimalPlaces, 10)
-                          : 2,
+                      minimumFractionDigits: numDecimalPlacesForDisplay,
+                      maximumFractionDigits: numDecimalPlacesForDisplay,
                     })}
                   </div>
                 </div>
