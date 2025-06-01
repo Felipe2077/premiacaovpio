@@ -21,6 +21,13 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea'; // <<< ADICIONADO PARA JUSTIFICATIVA
 import { useParametersData } from '@/hooks/useParametersData';
+import {
+  applyAdjustment,
+  applyRounding,
+  calculateAverage,
+  getBestValue,
+  getLastValue,
+} from '@/utils/calculationUtils';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -95,10 +102,7 @@ interface CalculationModalProps {
 
 const formatDateToYearMonth = (dateInput: Date | string | number): string => {
   // Mantenha seus logs se quiser testar, ou remova-os depois
-  console.log('[formatDateToYearMonth] dateInput recebido:', dateInput);
   const date = new Date(dateInput);
-  // Não precisa mais deste log ou ele mostrará a data com fuso local, o que é esperado
-  // console.log('[formatDateToYearMonth] Objeto Date criado:', date);
 
   if (isNaN(date.getTime())) {
     console.error('formatDateToYearMonth: Data inválida fornecida', dateInput);
@@ -114,7 +118,6 @@ const formatDateToYearMonth = (dateInput: Date | string | number): string => {
   const month = (date.getUTCMonth() + 1).toString().padStart(2, '0'); // getUTCMonth() também é 0-indexado
 
   const formatted = `${year}-${month}`;
-  console.log('[formatDateToYearMonth] Retornando (com UTC):', formatted); // Log do resultado
   return formatted;
 };
 
@@ -149,87 +152,6 @@ export default function CalculationModal({
 
   const parametersData = useParametersData();
 
-  // Funções de cálculo (calculateAverage, getLastValue, getBestValue, applyAdjustment, applyRounding)
-  // permanecem as mesmas que você forneceu, mas atenção à estrutura de 'historicalData'
-  // que virá da API (ex: { periodo, valorRealizado, status })
-  const calculateAverage = (data: any[], count: number) => {
-    const validData = data
-      .filter(
-        (item) =>
-          item.valorRealizado !== null && !isNaN(Number(item.valorRealizado))
-      ) // Simplificado, o modal já recebe dados transformados
-      .slice(0, count);
-    console.log(
-      `[calculateAverage] count: ${count}, validData para média:`,
-      JSON.parse(JSON.stringify(validData))
-    );
-
-    if (validData.length === 0) return null;
-    const sum = validData.reduce(
-      (acc, item) => acc + Number(item.valorRealizado),
-      0
-    );
-    return sum / validData.length;
-  };
-
-  const getLastValue = (data: any[]) => {
-    const validData = data.filter(
-      (item) =>
-        item.valorRealizado !== null && !isNaN(Number(item.valorRealizado))
-    );
-    console.log(
-      '[getLastValue] validData para último valor:',
-      JSON.parse(JSON.stringify(validData))
-    );
-
-    return validData.length > 0 ? Number(validData[0].valorRealizado) : null;
-  };
-
-  const getBestValue = (
-    data: any[],
-    count: number,
-    betterDirection: string | undefined
-  ) => {
-    const validData = data
-      .filter(
-        (item) =>
-          item.valorRealizado !== null && !isNaN(Number(item.valorRealizado))
-      )
-      .slice(0, count);
-    if (validData.length === 0) return null;
-    const values = validData.map((item) => Number(item.valorRealizado));
-    if (betterDirection === 'MAIOR') return Math.max(...values);
-    return Math.min(...values);
-  };
-
-  const applyAdjustment = (value: number, adjustmentPercentageStr: string) => {
-    const adjustment = parseFloat(adjustmentPercentageStr);
-    if (isNaN(adjustment)) return value;
-    return value * (1 + adjustment / 100);
-  };
-
-  const applyRounding = (
-    value: number,
-    roundingMethodValue: string,
-    decimalPlacesStr: string
-  ) => {
-    if (roundingMethodValue === 'none' || roundingMethodValue === '')
-      return value; // Trata "Sem arredondar"
-    const places = parseInt(decimalPlacesStr, 10);
-    if (isNaN(places) || places < 0) return value;
-    const multiplier = Math.pow(10, places);
-    switch (roundingMethodValue) {
-      case 'nearest':
-        return Math.round(value * multiplier) / multiplier;
-      case 'up':
-        return Math.ceil(value * multiplier) / multiplier;
-      case 'down':
-        return Math.floor(value * multiplier) / multiplier;
-      default:
-        return value;
-    }
-  };
-
   // Recalcula o valor localmente
   const calculateFinalValueLocalHandler = (): number | null => {
     if (!historicalData || historicalData.length === 0 || !calculateData) {
@@ -262,7 +184,6 @@ export default function CalculationModal({
 
   // Efeito para carregar dados históricos quando o modal for aberto ou calculateData mudar
   useEffect(() => {
-    console.log('[CalculationModal] calculateData recebido:', calculateData);
     const loadData = async () => {
       if (open && calculateData && calculateData.competitionPeriodDate) {
         setHistoricalData([]); // Limpa dados anteriores
@@ -270,16 +191,8 @@ export default function CalculationModal({
         setJustification(''); // Limpa justificativa
 
         try {
-          console.log(
-            '[CalculationModal] Valor de calculateData.competitionPeriodDate ANTES de formatDateToYearMonth:',
-            calculateData.competitionPeriodDate
-          );
           const currentPeriodForAPI = formatDateToYearMonth(
             calculateData.competitionPeriodDate
-          );
-          console.log(
-            '[CalculationModal] VALOR SENDO PASSADO para fetchHistoricalData como currentPeriodYYYYMM:',
-            currentPeriodForAPI
           );
           const dataFromApi = await fetchHistoricalData(
             calculateData.criterioId,
@@ -287,10 +200,7 @@ export default function CalculationModal({
             currentPeriodForAPI,
             6 // Buscar 6 meses de histórico
           );
-          console.log(
-            '[CalculationModal] Dados históricos carregados (API):',
-            dataFromApi
-          );
+
           setHistoricalData(dataFromApi);
           // O cálculo do preview será acionado pelo próximo useEffect ao mudar historicalData ou parâmetros
         } catch (error) {
@@ -312,21 +222,8 @@ export default function CalculationModal({
 
   // Efeito para recalcular o valor local E CHAMAR O PREVIEW quando os parâmetros ou dados históricos mudarem
   useEffect(() => {
-    console.log(
-      '[PreviewEffect] Disparado. Método de Cálculo:',
-      calculationMethod
-    );
-    console.log(
-      '[PreviewEffect] Dados Históricos disponíveis:',
-      JSON.parse(JSON.stringify(historicalData))
-    ); // Logar uma cópia para ver o valor atual
-
     if (open && calculateData && historicalData.length > 0) {
       const localValue = calculateFinalValueLocalHandler();
-      console.log(
-        '[PreviewEffect] Valor calculado localmente (calculateFinalValueLocalHandler):',
-        localValue
-      );
 
       setCalculatedValueLocal(localValue); // Atualiza o valor calculado localmente
 
@@ -354,17 +251,9 @@ export default function CalculationModal({
           saveAsDefault: saveAsDefault,
           previewOnly: true as const,
         };
-        console.log(
-          '[PreviewEffect] Chamando handlePreviewCalculation com valor local:',
-          localValue
-        );
 
         handlePreviewCalculation(payloadPreview);
       } else {
-        console.log(
-          '[PreviewEffect] Preview não chamado. localValue:',
-          localValue
-        );
       }
     } else if (
       open &&
@@ -372,10 +261,6 @@ export default function CalculationModal({
       historicalData.length === 0 &&
       !isLoadingSettings
     ) {
-      console.log(
-        '[PreviewEffect] Sem dados históricos para calcular, limpando valor local.'
-      );
-
       // Se não há dados históricos (e não está carregando settings), o valor local deve ser null
       // e o preview não deve ser chamado ou deve ser "limpo"
       setCalculatedValueLocal(null);

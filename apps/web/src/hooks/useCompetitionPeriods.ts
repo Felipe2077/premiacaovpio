@@ -23,8 +23,6 @@ export function useCompetitionPeriods() {
   useEffect(() => {
     // Só roda se os períodos foram carregados
     if (competitionPeriods.length > 0) {
-      console.log('Períodos carregados, definindo período inicial...');
-
       // Tenta pegar do localStorage
       let initialPeriodToSet = '';
       if (typeof window !== 'undefined') {
@@ -38,7 +36,6 @@ export function useCompetitionPeriods() {
           competitionPeriods.find((p) => p.mesAno === savedPeriod)
         ) {
           initialPeriodToSet = savedPeriod;
-          console.log('Usando período do localStorage:', initialPeriodToSet);
         }
       }
 
@@ -65,13 +62,11 @@ export function useCompetitionPeriods() {
 
         if (defaultPeriod) {
           initialPeriodToSet = defaultPeriod.mesAno;
-          console.log('Usando período default:', initialPeriodToSet);
         }
       }
 
       // Define o período selecionado
       if (initialPeriodToSet && initialPeriodToSet !== selectedPeriodMesAno) {
-        console.log('Definindo período inicial para:', initialPeriodToSet);
         setSelectedPeriodMesAno(initialPeriodToSet);
 
         // Salva no localStorage

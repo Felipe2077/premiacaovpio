@@ -37,12 +37,6 @@ export default function PointsTable({
   error,
 }: PointsTableProps) {
   // Adicionar logs para depuração
-  console.log('📊 PointsTable - Props recebidas:');
-  console.log('📊 resultsBySector:', resultsBySector);
-  console.log('📊 uniqueCriteria:', uniqueCriteria);
-  console.log('📊 activeCriteria:', activeCriteria);
-  console.log('📊 isLoading:', isLoading);
-  console.log('📊 error:', error);
 
   // Verificar se temos dados válidos
   const hasValidData = useMemo(() => {
@@ -58,8 +52,6 @@ export default function PointsTable({
         Object.keys(sector.criteriaResults).length > 0
     );
   }, [resultsBySector, uniqueCriteria]);
-
-  console.log('📊 hasValidData:', hasValidData);
 
   // --- Função de Estilo COMPLETA ---
   const getPointsCellStyle = (
@@ -200,7 +192,6 @@ export default function PointsTable({
             {Object.entries(resultsBySector).map(([sectorId, sectorData]) => {
               // Verificar se sectorData e criteriaResults existem
               if (!sectorData || !sectorData.criteriaResults) {
-                console.log('📊 Setor sem criteriaResults:', sectorId);
                 return null; // Pular este setor
               }
 

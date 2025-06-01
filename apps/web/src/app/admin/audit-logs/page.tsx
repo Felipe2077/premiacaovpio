@@ -45,15 +45,12 @@ import { AlertCircle } from 'lucide-react'; // Ícones necessários
 // --- Função Fetch --- (Assumindo correta)
 const fetchAuditLogs = async (): Promise<AuditLogEntity[]> => {
   const url = 'http://localhost:3001/api/audit-logs';
-  console.log(`Workspace: Chamando ${url}`);
   try {
     const res = await fetch(url);
-    console.log(`Workspace: Status para ${url}: ${res.status}`);
     if (!res.ok) {
       throw new Error(`Erro ${res.status} ao buscar logs`);
     }
     const data = await res.json();
-    console.log(`Workspace OK Parsed para ${url}: ${data?.length} items`);
     return Array.isArray(data) ? data : [];
   } catch (error) {
     console.error(`Workspace EXCEPTION para ${url}:`, error);

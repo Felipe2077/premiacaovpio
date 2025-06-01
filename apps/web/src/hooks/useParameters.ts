@@ -102,8 +102,6 @@ const updateParameterAPI = async ({
   id,
   data,
 }: UpdateParameterPayload): Promise<ParameterValueAPI> => {
-  console.log(`Enviando atualização para parâmetro ID ${id} com dados:`, data);
-
   const response = await fetch(`${API_BASE_URL}/parameters/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -123,7 +121,6 @@ const updateParameterAPI = async ({
   }
 
   const responseData = await response.json();
-  console.log(`Parâmetro ID ${id} atualizado com sucesso:`, responseData);
 
   return responseData;
 };
@@ -184,8 +181,6 @@ const fetchParameterHistory = async (
 const calculateParameterValue = async (
   calculateData: CalculateParameterDto
 ): Promise<{ value: number; metadata: any }> => {
-  console.log('Enviando solicitação de cálculo:', calculateData);
-
   const response = await fetch(`${API_BASE_URL}/parameters/calculate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -210,10 +205,6 @@ const calculateParameterValue = async (
 const fetchCriterionCalculationSettings = async (
   criterionId: number
 ): Promise<CriterionCalculationSettingsDto> => {
-  console.log(
-    `Buscando configurações de cálculo para critério ID: ${criterionId}`
-  );
-
   const response = await fetch(
     `${API_BASE_URL}/criteria/${criterionId}/calculation-settings`
   );
@@ -274,10 +265,9 @@ export const useParameters = (
     mutationFn: createParameter,
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: queryKey });
-      console.log('Parâmetro criado:', data); /* toast... */
     },
     onError: (error: Error) => {
-      console.error('Erro ao criar parâmetro:', error.message); /* toast... */
+      console.error('Erro ao criar parâmetro:', error.message);
     },
   });
   const updateParameterMutation = useMutation<
@@ -287,12 +277,7 @@ export const useParameters = (
     unknown
   >({
     mutationFn: updateParameterAPI,
-    onSuccess: (data) => {
-      /* ... invalidateQueries ... */ console.log(
-        'Parâmetro atualizado:',
-        data
-      ); /* toast... */
-    },
+    onSuccess: (data) => {},
     onError: (error: Error) => {
       console.error(
         'Erro ao atualizar parâmetro:',
@@ -307,12 +292,7 @@ export const useParameters = (
     unknown
   >({
     mutationFn: deleteParameterAPI,
-    onSuccess: (data) => {
-      /* ... invalidateQueries ... */ console.log(
-        'Parâmetro deletado:',
-        data
-      ); /* toast... */
-    },
+    onSuccess: (data) => {},
     onError: (error: Error) => {
       console.error('Erro ao deletar parâmetro:', error.message); /* toast... */
     },

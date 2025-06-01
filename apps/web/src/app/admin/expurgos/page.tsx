@@ -56,10 +56,8 @@ import { toast } from 'sonner';
 
 const fetchExpurgos = async (): Promise<ExpurgoEventEntity[]> => {
   const url = 'http://localhost:3001/api/expurgos';
-  console.log(`Workspace: Chamando ${url}`);
   try {
     const res = await fetch(url);
-    console.log(`Workspace: Status para ${url}: ${res.status}`);
     if (!res.ok) {
       const errorBody = await res.text().catch(() => `Erro ${res.status}`);
       console.error(`Workspace failed for ${url}:`, errorBody);
@@ -67,14 +65,11 @@ const fetchExpurgos = async (): Promise<ExpurgoEventEntity[]> => {
     }
     const text = await res.text();
     if (!text) {
-      console.log(`Workspace: Resposta OK para ${url} mas corpo vazio.`);
       return [];
     }
     const data = JSON.parse(text);
-    console.log(`Workspace OK Parsed para ${url}:`, data);
     return Array.isArray(data) ? data : [];
   } catch (error) {
-    console.error(`Workspace EXCEPTION para ${url}:`, error);
     if (error instanceof Error) throw error;
     throw new Error('Erro desconhecido durante fetch ou parse de expurgos.');
   }
@@ -84,10 +79,8 @@ const fetchActiveCriteriaSimple = async (): Promise<
   Pick<Criterio, 'id' | 'nome' | 'index'>[]
 > => {
   const url = 'http://localhost:3001/api/criteria/active';
-  console.log(`Workspace: Chamando ${url}`);
   try {
     const res = await fetch(url);
-    console.log(`Workspace: Status para ${url}: ${res.status}`);
     if (!res.ok) {
       const errorBody = await res.text().catch(() => `Erro ${res.status}`);
       console.error(`Workspace failed for ${url}:`, errorBody);
@@ -95,11 +88,9 @@ const fetchActiveCriteriaSimple = async (): Promise<
     }
     const text = await res.text();
     if (!text) {
-      console.log(`Workspace: Resposta OK para ${url} mas corpo vazio.`);
       return [];
     }
     const data = JSON.parse(text);
-    console.log(`Workspace OK Parsed para ${url}:`, data);
     // Adicionar validação mínima se quiser
     if (
       !Array.isArray(data) ||
@@ -128,10 +119,8 @@ const fetchActiveSectorsSimple = async (): Promise<
   Pick<Setor, 'id' | 'nome'>[]
 > => {
   const url = 'http://localhost:3001/api/sectors/active';
-  console.log(`Workspace: Chamando ${url}`);
   try {
     const res = await fetch(url);
-    console.log(`Workspace: Status para ${url}: ${res.status}`);
     if (!res.ok) {
       const errorBody = await res.text().catch(() => `Erro ${res.status}`);
       console.error(`Workspace failed for ${url}:`, errorBody);
@@ -139,11 +128,9 @@ const fetchActiveSectorsSimple = async (): Promise<
     }
     const text = await res.text();
     if (!text) {
-      console.log(`Workspace: Resposta OK para ${url} mas corpo vazio.`);
       return [];
     }
     const data = JSON.parse(text);
-    console.log(`Workspace OK Parsed para ${url}:`, data);
     // Adicionar validação mínima se quiser
     if (
       !Array.isArray(data) ||
@@ -201,7 +188,6 @@ export default function ExpurgosPage() {
   // Handler Fake COMPLETO
   const handleRegisterExpurgo = (event: React.FormEvent) => {
     event.preventDefault();
-    console.log('Simulando registrar expurgo...');
     toast.info('Registro de Expurgo enviado! (Simulação MVP)');
     setIsExpurgoModalOpen(false);
   };
@@ -209,7 +195,7 @@ export default function ExpurgosPage() {
   // Filtra critérios elegíveis
   const eligibleCriteria = activeCriteria?.filter((c) =>
     [3, 4, 11].includes(c.id)
-  ); // CONFIRA OS IDs!
+  );
 
   const getStatusBadgeVariant = (
     status: ExpurgoEventEntity['status']

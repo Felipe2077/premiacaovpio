@@ -16,10 +16,8 @@ import {
 } from '@/components/ui/tooltip';
 import { Criterion, Sector } from '@/hooks/useParametersData';
 import {
-  Calculator,
   ChevronDown,
   ChevronUp,
-  Edit,
   History,
   Info,
   Minus,
@@ -27,7 +25,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import React, { useState } from 'react';
-import { CalculationSettings } from './CalculationSettings';
+import { PlanningCellCard } from './PlanningCellCard';
 
 interface CompetitionPeriod {
   id: number;
@@ -58,6 +56,12 @@ interface ParametersMatrixProps {
   ) => void;
   isLoading?: boolean;
   periodoAtual?: CompetitionPeriod; // ANTES: tipo anônimo
+  fetchHistoricalData: (
+    criterionId: number,
+    sectorId: number | null,
+    currentPeriodYYYYMM: string,
+    count: number
+  ) => Promise<any[]>;
 }
 
 const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
@@ -69,6 +73,7 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
   isLoading,
   periodoAtual,
   sectors,
+  fetchHistoricalData,
 }) => {
   const [sortConfig, setSortConfig] = useState<{
     key: string;
@@ -166,182 +171,73 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
 
   // Função para renderizar o conteúdo da célula baseado na fase
   const renderCellContent = (
-    criterio: Criterion, // Adicione o tipo aqui para clareza
-    sectorIdStr: string, // Mude o nome para evitar confusão com o objeto sectorId
-    sectorData: any // Mantenha any por enquanto ou defina tipo específico
+    // O 'criterio' aqui é o objeto de uniqueCriteria, que já deve ter casasDecimaisPadrao, sentido_melhor, etc.
+    criterio: FullCriterionType, // Use o tipo completo do critério que vem do hook
+    sectorIdStr: string,
+    sectorData: any // Contém criterioData (dados da API /api/results/by-period)
   ) => {
-    const criterioId = String(criterio.id); // Mantenha se usado assim
-    const hasCriterio =
-      sectorData.criterios && criterioId in sectorData.criterios;
-    const criterioData = hasCriterio ? sectorData.criterios[criterioId] : null;
+    const criterioIdMatrix = String(criterio.id); // Renomeado para evitar conflito de nome
+    const hasCriterioDataFromApi =
+      sectorData.criterios && criterioIdMatrix in sectorData.criterios;
+    // const criterioDataFromApi = hasCriterioDataFromApi ? sectorData.criterios[criterioIdMatrix] : null;
+    // ^^^ Este criterioDataFromApi contém o valorMeta da REGRA ANTIGA e o valorRealizado atual (que deve ser null para planejamento)
 
     const currentSector =
       sectors.find((s) => s.id === parseInt(sectorIdStr)) || null;
 
-    // Se não há dados para este critério/setor
-    if (!criterioData) {
+    if (isPlanejamento && periodoAtual) {
+      // Apenas para fase de planejamento e se periodoAtual existir
+      // Prepara as props para os botões de ação que serão passados para PlanningCellCard
+      const handleEdit = () => {
+        if (onEdit && currentSector) {
+          // O que editar? A meta oficial (que pode nem existir ainda) ou a proposta?
+          // Por ora, vamos assumir que onEdit abre um modal para definir/editar a meta oficial do período de planejamento.
+          // O valor inicial poderia ser a metaPropostaCalculada pelo card, ou vazio.
+          // criterioDataFromApi?.valorMeta seria o valor da regra antiga.
+          onEdit(criterio, currentSector, null); // Passa null como valor atual para o editor de meta manual
+        }
+      };
+
+      const handleOpenModal = () => {
+        if (onCalculate && currentSector && periodoAtual) {
+          onCalculate(criterio, currentSector, periodoAtual);
+        }
+      };
+
+      return (
+        <PlanningCellCard
+          criterion={criterio}
+          sector={currentSector}
+          periodoAtual={periodoAtual}
+          fetchHistoricalData={fetchHistoricalData}
+          onEdit={handleEdit} // Passa a função para o botão de editar dentro do card
+          onCalculate={handleOpenModal} // Passa a função para o botão de calcular dentro do card
+        />
+      );
+    } else if (
+      !hasCriterioDataFromApi &&
+      isPlanejamento &&
+      periodoAtual &&
+      onCreate &&
+      currentSector
+    ) {
+      // Se é planejamento, mas NÃO HÁ NENHUMA LINHA DE DADOS (criterioDataFromApi é null)
+      // Mantemos o botão para criar a meta inicial.
       return (
         <div className='flex flex-col items-center justify-center p-3 h-full min-h-[100px] bg-muted/5 rounded-md'>
           <div className='text-muted-foreground text-sm mb-2'>
             Sem meta definida
           </div>
-          {isPlanejamento &&
-            periodoAtual && ( // Adicione checagem para periodoAtual
-              <div className='flex gap-2'>
-                {onCreate && ( // Verifique se onCreate e onCalculate existem antes de chamar
-                  <button
-                    onClick={() => {
-                      if (onCreate && periodoAtual) {
-                        // Proteção extra
-                        // TODO: Ajustar os parâmetros de onCreate para bater com ParametersPage
-                        // Exemplo: onCreate(criterio, currentSector, periodoAtual)
-                        // Por agora, vou manter a chamada original para focar no onCalculate
-                        onCreate(
-                          criterio.id,
-                          parseInt(sectorIdStr),
-                          criterio.nome
-                        );
-                      }
-                    }}
-                    className='text-xs px-3 py-1 bg-green-100 text-green-700 hover:bg-green-200 rounded-full transition-colors'
-                  >
-                    Criar Meta
-                  </button>
-                )}
-                {onCalculate && (
-                  <button
-                    onClick={() => {
-                      if (onCalculate && periodoAtual) {
-                        // Proteção extra
-                        onCalculate(criterio, currentSector, periodoAtual); // <<< CHAMADA CORRIGIDA
-                      }
-                    }}
-                    className='text-xs px-3 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-full transition-colors'
-                  >
-                    Calcular
-                  </button>
-                )}
-              </div>
+          <div className='flex gap-2'>
+            {onCreate && (
+              <button
+                onClick={() => onCreate(criterio, currentSector, periodoAtual)}
+                className='text-xs px-3 py-1 bg-green-100 text-green-700 hover:bg-green-200 rounded-full'
+              >
+                Definir Meta
+              </button>
             )}
-        </div>
-      );
-    }
-
-    // Fase de Planejamento
-    if (isPlanejamento) {
-      // Extrair informações de cálculo (assumindo que esses dados estão disponíveis ou serão adicionados)
-      const mediaUltimosMeses = criterioData.mediaUltimosMeses;
-      const ajustePercentual = criterioData.ajustePercentual;
-      const temCalculoDetalhado =
-        mediaUltimosMeses !== undefined && ajustePercentual !== undefined;
-
-      // Obter configurações de cálculo para este critério
-      const settings = CalculationSettings[criterio.id];
-
-      return (
-        <div className='p-3 bg-blue-50 rounded-md border border-blue-100 transition-all hover:shadow-sm'>
-          <div className='text-center'>
-            <div className='text-lg font-semibold'>
-              {criterioData.valorMeta !== null
-                ? criterioData.valorMeta.toLocaleString('pt-BR')
-                : '-'}
-            </div>
-            <div className='text-xs text-gray-500 mt-1'>Meta Proposta</div>
-          </div>
-
-          {/* Seção aprimorada com informações detalhadas */}
-          <div className='mt-3 pt-2 border-t border-blue-100'>
-            <div className='text-xs text-gray-600 flex justify-between'>
-              <span>Meta Anterior:</span>
-              <span className='font-medium'>
-                {criterioData.metaAnterior !== undefined
-                  ? criterioData.metaAnterior?.toLocaleString('pt-BR')
-                  : '-'}
-              </span>
-            </div>
-
-            {/* Usar o componente separado para exibir configurações de cálculo */}
-            <CalculationSettings criterionId={criterio.id} />
-          </div>
-
-          {/* Botões de ação */}
-          <div className='flex justify-between mt-3 pt-2'>
-            {onEdit && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => {
-                        // TODO: Ajustar os parâmetros de onEdit para bater com ParametersPage
-                        // Exemplo: onEdit(criterio, currentSector, criterioData.valorMeta)
-                        // Por agora, vou manter a chamada original para focar no onCalculate
-                        onEdit({
-                          criterioId: criterio.id,
-                          criterioNome: criterio.nome,
-                          setorId: parseInt(sectorIdStr),
-                          setorNome: sectorData.setorNome,
-                          valorMeta: criterioData.valorMeta,
-                          metaAnterior: criterioData.metaAnterior,
-                          mediaUltimosMeses: criterioData.mediaUltimosMeses,
-                          ajustePercentual: criterioData.ajustePercentual,
-                        });
-                      }}
-                      className='text-blue-600 hover:text-blue-800 transition-colors'
-                    >
-                      <Edit className='h-4 w-4' />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Editar Meta</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-
-            {onCalculate && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => {
-                        if (onCalculate && periodoAtual) {
-                          // Proteção extra
-                          onCalculate(criterio, currentSector, periodoAtual); // <<< CHAMADA CORRIGIDA
-                        }
-                      }}
-                      className='text-emerald-600 hover:text-emerald-800 transition-colors'
-                    >
-                      <Calculator className='h-4 w-4' />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Calcular Meta Automaticamente</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => {
-                      // Implementar visualização de histórico
-                      console.log('Ver histórico', {
-                        criterioId: criterio.id,
-                        setorId: parseInt(sectorId),
-                      });
-                    }}
-                    className='text-gray-500 hover:text-gray-700 transition-colors'
-                  >
-                    <History className='h-4 w-4' />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Ver Histórico</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            {/* Opcionalmente, o botão de calcular (abrir modal) pode estar aqui também */}
           </div>
         </div>
       );
@@ -428,16 +324,7 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button
-                    onClick={() => {
-                      // Implementar visualização de histórico
-                      console.log('Ver histórico', {
-                        criterioId: criterio.id,
-                        setorId: parseInt(sectorId),
-                      });
-                    }}
-                    className='text-gray-500 hover:text-gray-700 transition-colors'
-                  >
+                  <button className='text-gray-500 hover:text-gray-700 transition-colors'>
                     <History className='h-4 w-4' />
                   </button>
                 </TooltipTrigger>
@@ -515,16 +402,7 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button
-                    onClick={() => {
-                      // Implementar visualização de histórico
-                      console.log('Ver histórico', {
-                        criterioId: criterio.id,
-                        setorId: parseInt(sectorId),
-                      });
-                    }}
-                    className='text-gray-500 hover:text-gray-700 transition-colors'
-                  >
+                  <button className='text-gray-500 hover:text-gray-700 transition-colors'>
                     <History className='h-4 w-4' />
                   </button>
                 </TooltipTrigger>
@@ -562,15 +440,7 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <button
-                  onClick={() => {
-                    console.log('Ver histórico', {
-                      criterioId: criterio.id,
-                      setorId: parseInt(sectorId),
-                    });
-                  }}
-                  className='text-gray-500 hover:text-gray-700 transition-colors'
-                >
+                <button className='text-gray-500 hover:text-gray-700 transition-colors'>
                   <History className='h-4 w-4' />
                 </button>
               </TooltipTrigger>

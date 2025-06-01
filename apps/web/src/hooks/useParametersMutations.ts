@@ -60,7 +60,6 @@ const createParameter = async (
 ): Promise<Parameter> => {
   const API_BASE_URL =
     process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-  console.log('Criando meta:', data);
   const res = await fetch(`${API_BASE_URL}/api/parameters`, {
     method: 'POST',
     headers: {
@@ -75,7 +74,6 @@ const createParameter = async (
   }
 
   const responseData = await res.json();
-  console.log('Meta criada:', responseData);
   return responseData;
 };
 
@@ -84,7 +82,6 @@ const updateParameter = async (
 ): Promise<Parameter> => {
   const API_BASE_URL =
     process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-  console.log('Atualizando meta:', data);
 
   // Verificar se todos os campos obrigatórios estão presentes
   if (
@@ -119,8 +116,6 @@ const updateParameter = async (
 
   // Usar o endpoint PUT /api/parameters/:id
   const url = `${API_BASE_URL}/api/parameters/${data.id}`;
-  console.log('URL para atualização:', url);
-  console.log('Corpo da requisição:', requestBody);
 
   const res = await fetch(url, {
     method: 'PUT',
@@ -143,7 +138,6 @@ const updateParameter = async (
   }
 
   const responseData = await res.json();
-  console.log('Meta atualizada:', responseData);
   return responseData;
 };
 
@@ -152,7 +146,6 @@ const deleteParameter = async (
 ): Promise<Parameter> => {
   const API_BASE_URL =
     process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-  console.log('Deletando meta:', data);
   const res = await fetch(`${API_BASE_URL}/api/parameters/${data.id}`, {
     method: 'DELETE',
     headers: {
@@ -167,7 +160,6 @@ const deleteParameter = async (
   }
 
   const responseData = await res.json();
-  console.log('Meta deletada:', responseData);
   return responseData;
 };
 

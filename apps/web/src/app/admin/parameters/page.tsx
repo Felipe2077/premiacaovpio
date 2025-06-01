@@ -129,18 +129,10 @@ export default function ParametersPage() {
     setIsLoadingSettings(true);
     try {
       const criterioAtual = uniqueCriteria.find((c) => c.id === criterionId);
-      console.log(
-        '[ParametersPage] loadDefaultSettings - criterioAtual:',
-        criterioAtual
-      ); // Log o objeto do critério
 
       const casasDecimaisDoCriterio =
         criterioAtual?.casasDecimaisPadrao?.toString();
       const settings = await fetchCriterionCalculationSettings(criterionId);
-      console.log(
-        '[ParametersPage] loadDefaultSettings - settings recebidas:',
-        settings
-      );
 
       if (settings) {
         setCalculationMethod(settings.calculationMethod || 'media3');
@@ -243,10 +235,7 @@ export default function ParametersPage() {
   const handleSaveEdit = async () => {
     if (!editData || newMetaValue === '') return; // Permitir 0 como valor
     // Chamar API para salvar meta editada
-    console.log('Salvando meta editada:', {
-      ...editData,
-      valorMeta: parseFloat(newMetaValue),
-    });
+
     // await updateParameter(...);
     toast.success('Meta atualizada com sucesso! (Simulado)');
     if (selectedPeriod?.mesAno) await fetchResults(selectedPeriod.mesAno);
@@ -256,10 +245,7 @@ export default function ParametersPage() {
   const handleSaveCreate = async () => {
     if (!createData || newMetaValue === '') return;
     // Chamar API para criar nova meta
-    console.log('Criando nova meta:', {
-      ...createData,
-      valorMeta: parseFloat(newMetaValue),
-    });
+
     // await createParameter(...);
     toast.success('Meta criada com sucesso! (Simulado)');
     if (selectedPeriod?.mesAno) await fetchResults(selectedPeriod.mesAno);
@@ -348,11 +334,6 @@ export default function ParametersPage() {
       if (sectorId !== null && sectorId !== undefined) {
         apiUrl += `&sectorId=${sectorId}`;
       }
-      console.log(
-        '[ParametersPage] Fetching historical data from URL:',
-        apiUrl
-      );
-      console.log('[ParametersPage]', currentPeriodYYYYMM);
 
       try {
         const response = await fetch(apiUrl);
@@ -461,6 +442,7 @@ export default function ParametersPage() {
               onCalculate={handleOpenCalculationModal} // ESTA É A PROP CORRETA
               isLoading={isLoading}
               periodoAtual={selectedPeriod as CompetitionPeriod} // Passa o objeto do período selecionado
+              fetchHistoricalData={fetchHistoricalData}
             />
           </CardContent>
         </Card>

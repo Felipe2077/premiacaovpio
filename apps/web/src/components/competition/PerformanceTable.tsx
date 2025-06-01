@@ -36,12 +36,6 @@ export default function PerformanceTable({
   error,
 }: PerformanceTableProps) {
   // Adicionar logs para depuração
-  console.log('📈 PerformanceTable - Props recebidas:');
-  console.log('📈 resultsBySector:', resultsBySector);
-  console.log('📈 uniqueCriteria:', uniqueCriteria);
-  console.log('📈 activeCriteria:', activeCriteria);
-  console.log('📈 isLoading:', isLoading);
-  console.log('📈 error:', error);
 
   // Verificar se temos dados válidos
   const hasValidData = useMemo(() => {
@@ -57,8 +51,6 @@ export default function PerformanceTable({
         Object.keys(sector.criteriaResults).length > 0
     );
   }, [resultsBySector, uniqueCriteria]);
-
-  console.log('📈 hasValidData:', hasValidData);
 
   // Função para calcular o estilo da barra de progresso
   const getProgressStyle = (
@@ -180,7 +172,6 @@ export default function PerformanceTable({
           {Object.entries(resultsBySector).map(([sectorId, sectorData]) => {
             // Verificar se sectorData e criteriaResults existem
             if (!sectorData || !sectorData.criteriaResults) {
-              console.log('📈 Setor sem criteriaResults:', sectorId);
               return null; // Pular este setor
             }
 

@@ -10,8 +10,6 @@ interface EntradaRanking {
 }
 
 export function useCompetitionData() {
-  console.log('🔍 useCompetitionData hook iniciado');
-
   // Usar o hook existente useParametersData
   const {
     periods,
@@ -21,10 +19,6 @@ export function useCompetitionData() {
     error,
     activePeriod,
   } = useParametersData();
-
-  console.log('🔍 Dados recebidos de useParametersData:');
-  console.log('🔍 originalResultsBySector:', originalResultsBySector);
-  console.log('🔍 originalCriteria:', originalCriteria);
 
   // Transformar os critérios para o formato esperado pelos componentes
   const uniqueCriteria = useMemo(() => {
@@ -96,7 +90,6 @@ export function useCompetitionData() {
       }
     );
 
-    console.log('🔍 Resultados transformados:', transformedResults);
     return transformedResults;
   }, [originalResultsBySector]);
 
@@ -117,12 +110,6 @@ export function useCompetitionData() {
           0
         );
 
-        console.log(
-          '🔍 Pontuação calculada para setor:',
-          sectorData.setorNome,
-          totalPoints
-        );
-
         return {
           SETOR: sectorData.setorNome,
           PONTUACAO: totalPoints,
@@ -136,22 +123,11 @@ export function useCompetitionData() {
       entry.RANK = index + 1;
     });
 
-    console.log('🔍 Ranking calculado:', rankingEntries);
     return rankingEntries;
   }, [originalResultsBySector]);
 
   // Usar os mesmos critérios como critérios ativos
   const activeCriteria = uniqueCriteria;
-
-  console.log('🔍 Estado final do hook:');
-  console.log('🔍 isLoading:', isLoading);
-  console.log('🔍 error:', error);
-  console.log('🔍 rankingData.length:', rankingData?.length || 0);
-  console.log('🔍 uniqueCriteria.length:', uniqueCriteria?.length || 0);
-  console.log(
-    '🔍 resultsBySector keys:',
-    Object.keys(resultsBySector || {}).length
-  );
 
   return {
     rankingData,

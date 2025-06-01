@@ -45,17 +45,11 @@ export function useParametersData(selectedPeriod?: string) {
   // Adicionar função para buscar configurações de cálculo
   const fetchCriterionCalculationSettings = async (criterionId: number) => {
     try {
-      console.log(`Buscando configurações para critério ID: ${criterionId}`);
-
       const response = await fetch(
         `/api/criteria/${criterionId}/calculation-settings`
       );
 
       if (response.status === 404) {
-        console.log(
-          `Configurações não encontradas para critério ID: ${criterionId}, usando valores padrão`
-        );
-        // Retornar configurações padrão para critério não encontrado
         return {
           criterionId,
           calculationMethod: 'media3',
@@ -79,11 +73,9 @@ export function useParametersData(selectedPeriod?: string) {
       }
 
       const data = await response.json();
-      console.log('Configurações carregadas:', data);
 
       // Se não houver configurações, o backend retorna defaultSettings
       if (data.defaultSettings) {
-        console.log('Usando configurações padrão fornecidas pelo backend');
         return data.defaultSettings;
       }
 
@@ -92,7 +84,6 @@ export function useParametersData(selectedPeriod?: string) {
       console.error('Erro ao carregar configurações de cálculo:', error);
 
       // Retornar configurações padrão em caso de erro
-      console.log('Usando configurações padrão devido a erro');
       return {
         criterionId,
         calculationMethod: 'media3',
@@ -105,7 +96,6 @@ export function useParametersData(selectedPeriod?: string) {
   };
   // Função para buscar períodos
   const fetchPeriods = useCallback(async () => {
-    console.log('Buscando períodos da API...');
     setIsLoadingPeriods(true);
     try {
       const timestamp = new Date().getTime();
@@ -116,7 +106,6 @@ export function useParametersData(selectedPeriod?: string) {
         throw new Error('Falha ao buscar períodos');
       }
       const data = await response.json();
-      console.log('Períodos recebidos:', data);
       setPeriods(data);
       return data;
     } catch (error) {
@@ -130,7 +119,6 @@ export function useParametersData(selectedPeriod?: string) {
 
   // Função para buscar resultados
   const fetchResults = useCallback(async (period: string) => {
-    console.log(`Buscando resultados para o período ${period}...`);
     setIsLoadingResults(true);
     setError(null);
     try {
@@ -146,22 +134,6 @@ export function useParametersData(selectedPeriod?: string) {
         throw new Error('Falha ao buscar resultados');
       }
       const data = await response.json();
-      console.log(`Resultados recebidos para o período ${period}:`, data);
-
-      // Verificar a estrutura dos dados
-      if (data && data.length > 0) {
-        console.log('Estrutura de um resultado:', {
-          setorId: data[0].setorId,
-          setorNome: data[0].setorNome,
-          criterioId: data[0].criterioId,
-          criterioNome: data[0].criterioNome,
-          periodo: data[0].periodo,
-          valorRealizado: data[0].valorRealizado,
-          valorMeta: data[0].valorMeta,
-          percentualAtingimento: data[0].percentualAtingimento,
-          pontos: data[0].pontos,
-        });
-      }
 
       setResults(data);
       return data;
@@ -184,10 +156,7 @@ export function useParametersData(selectedPeriod?: string) {
 
         if (fallbackResponse.ok) {
           const fallbackData = await fallbackResponse.json();
-          console.log(
-            `Resultados recebidos do endpoint fallback by-date:`,
-            fallbackData
-          );
+
           setResults(fallbackData);
           return fallbackData;
         }
@@ -199,10 +168,7 @@ export function useParametersData(selectedPeriod?: string) {
 
         if (fallbackResponse.ok) {
           const fallbackData = await fallbackResponse.json();
-          console.log(
-            `Resultados recebidos do endpoint fallback genérico:`,
-            fallbackData
-          );
+
           setResults(fallbackData);
           return fallbackData;
         }
@@ -219,7 +185,6 @@ export function useParametersData(selectedPeriod?: string) {
 
   // Função para buscar critérios
   const fetchCriteria = useCallback(async () => {
-    console.log('Buscando critérios...');
     setIsLoadingCriteria(true);
     try {
       const timestamp = new Date().getTime();
@@ -231,10 +196,6 @@ export function useParametersData(selectedPeriod?: string) {
         throw new Error('Falha ao buscar critérios');
       }
       const data = await response.json();
-      console.log(
-        '[useParametersData] Critérios recebidos da API (primeiro item):',
-        data.length > 0 ? data[0] : 'Nenhum critério'
-      );
 
       setCriteria(data);
       return data;
@@ -249,7 +210,6 @@ export function useParametersData(selectedPeriod?: string) {
 
   // Função para buscar setores
   const fetchSectors = useCallback(async () => {
-    console.log('Buscando setores...');
     setIsLoadingSectors(true);
     try {
       const timestamp = new Date().getTime();
@@ -261,7 +221,6 @@ export function useParametersData(selectedPeriod?: string) {
         throw new Error('Falha ao buscar setores');
       }
       const data = await response.json();
-      console.log('Setores recebidos:', data);
       setSectors(data);
       return data;
     } catch (error) {
@@ -305,7 +264,6 @@ export function useParametersData(selectedPeriod?: string) {
 
         // Buscar resultados se houver um período alvo
         if (targetPeriod) {
-          console.log(`Buscando resultados para período alvo: ${targetPeriod}`);
           await fetchResults(targetPeriod);
         } else {
           console.warn('Nenhum período encontrado para buscar resultados');
@@ -341,7 +299,6 @@ export function useParametersData(selectedPeriod?: string) {
         return [];
       }
 
-      console.log(`Forçando refetch para período: ${periodToFetch}`);
       try {
         // Limpar o cache do navegador para esta URL
         try {
@@ -418,21 +375,11 @@ export function useParametersData(selectedPeriod?: string) {
 
   // NOVO: Processar resultados por setor
   const resultsBySector = useMemo(() => {
-    console.log('Processando resultsBySector...');
     if (!results || results.length === 0) {
-      console.log('Sem resultados para processar em resultsBySector');
       return {};
     }
 
     const bySector = {};
-
-    // Log para verificar a estrutura dos resultados
-    if (results.length > 0) {
-      console.log(
-        'Estrutura do primeiro resultado para resultsBySector:',
-        results[0]
-      );
-    }
 
     results.forEach((result) => {
       const sectorId = String(result.setorId);
@@ -456,28 +403,12 @@ export function useParametersData(selectedPeriod?: string) {
       };
     });
 
-    console.log('resultsBySector processado:', {
-      setores: Object.keys(bySector).length,
-      primeiroSetor:
-        Object.keys(bySector).length > 0
-          ? {
-              id: Object.keys(bySector)[0],
-              nome: bySector[Object.keys(bySector)[0]].setorNome,
-              criterios: Object.keys(
-                bySector[Object.keys(bySector)[0]].criterios
-              ).length,
-            }
-          : 'nenhum',
-    });
-
     return bySector;
   }, [results]);
 
   // NOVO: Processar resultados por critério
   const resultsByCriterio = useMemo(() => {
-    console.log('Processando resultsByCriterio...');
     if (!results || results.length === 0) {
-      console.log('Sem resultados para processar em resultsByCriterio');
       return {};
     }
 
@@ -503,18 +434,12 @@ export function useParametersData(selectedPeriod?: string) {
       };
     });
 
-    console.log('resultsByCriterio processado:', {
-      criterios: Object.keys(byCriterio).length,
-    });
-
     return byCriterio;
   }, [results]);
 
   // NOVO: Extrair critérios únicos dos resultados
   const uniqueCriteria = useMemo(() => {
-    console.log('Processando uniqueCriteria...');
     if (!criteria || criteria.length === 0) {
-      console.log('Sem critérios para processar');
       return [];
     }
 
@@ -557,10 +482,6 @@ export function useParametersData(selectedPeriod?: string) {
       }
     );
     if (uniqueCriteriaArray.length > 0) {
-      console.log(
-        '[useParametersData] uniqueCriteria processado memo (primeiro item):',
-        uniqueCriteriaArray[0]
-      );
     }
 
     return uniqueCriteriaArray;
