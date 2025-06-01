@@ -15,6 +15,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Criterion, Sector } from '@/hooks/useParametersData';
+import { EntradaResultadoDetalhado } from '@sistema-premiacao/shared-types';
 import {
   ChevronDown,
   ChevronUp,
@@ -171,34 +172,53 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
 
   // Função para renderizar o conteúdo da célula baseado na fase
   const renderCellContent = (
-    // O 'criterio' aqui é o objeto de uniqueCriteria, que já deve ter casasDecimaisPadrao, sentido_melhor, etc.
-    criterio: FullCriterionType, // Use o tipo completo do critério que vem do hook
+    criterio: FullCriterionType,
     sectorIdStr: string,
-    sectorData: any // Contém criterioData (dados da API /api/results/by-period)
+    sectorData: any
   ) => {
-    const criterioIdMatrix = String(criterio.id); // Renomeado para evitar conflito de nome
-    const hasCriterioDataFromApi =
-      sectorData.criterios && criterioIdMatrix in sectorData.criterios;
-    // const criterioDataFromApi = hasCriterioDataFromApi ? sectorData.criterios[criterioIdMatrix] : null;
-    // ^^^ Este criterioDataFromApi contém o valorMeta da REGRA ANTIGA e o valorRealizado atual (que deve ser null para planejamento)
-
+    const criterioIdMatrix = String(criterio.id);
     const currentSector =
       sectors.find((s) => s.id === parseInt(sectorIdStr)) || null;
 
+    const cellApiData: EntradaResultadoDetalhado | null = // Esta é a variável correta
+      sectorData.criterios && criterioIdMatrix in sectorData.criterios
+        ? sectorData.criterios[criterioIdMatrix]
+        : null;
+
     if (isPlanejamento && periodoAtual) {
-      // Apenas para fase de planejamento e se periodoAtual existir
-      // Prepara as props para os botões de ação que serão passados para PlanningCellCard
-      const handleEdit = () => {
-        if (onEdit && currentSector) {
-          // O que editar? A meta oficial (que pode nem existir ainda) ou a proposta?
-          // Por ora, vamos assumir que onEdit abre um modal para definir/editar a meta oficial do período de planejamento.
-          // O valor inicial poderia ser a metaPropostaCalculada pelo card, ou vazio.
-          // criterioDataFromApi?.valorMeta seria o valor da regra antiga.
-          onEdit(criterio, currentSector, null); // Passa null como valor atual para o editor de meta manual
+      if (!cellApiData) {
+        // Caso não haja NENHUMA entrada para este critério/setor no período de planejamento
+        // (ex: se a API não retornar uma linha para ele, nem mesmo com nulos)
+        // Aqui você pode manter o botão "Definir Meta" se fizer sentido
+        return (
+          <div className='flex flex-col items-center justify-center p-3 h-full min-h-[100px] bg-muted/5 rounded-md'>
+            <div className='text-muted-foreground text-sm mb-2'>
+              Meta a definir
+            </div>
+            {onCreate && currentSector && periodoAtual && (
+              <button
+                onClick={() => onCreate(criterio, currentSector, periodoAtual)}
+                className='text-xs px-3 py-1 bg-green-100 text-green-700 hover:bg-green-200 rounded-full'
+              >
+                Definir Meta
+              </button>
+            )}
+          </div>
+        );
+      }
+
+      // Prepara as funções de callback para os botões dentro do card
+      const handleEditInCard = () => {
+        if (onEdit && currentSector && cellApiData) {
+          // Adicionado check cellApiData aqui também
+          onEdit(
+            criterio,
+            currentSector,
+            cellApiData.metaPropostaPadrao || null
+          );
         }
       };
-
-      const handleOpenModal = () => {
+      const handleCalculateInCard = () => {
         if (onCalculate && currentSector && periodoAtual) {
           onCalculate(criterio, currentSector, periodoAtual);
         }
@@ -207,46 +227,24 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
       return (
         <PlanningCellCard
           criterion={criterio}
-          sector={currentSector}
-          periodoAtual={periodoAtual}
-          fetchHistoricalData={fetchHistoricalData}
-          onEdit={handleEdit} // Passa a função para o botão de editar dentro do card
-          onCalculate={handleOpenModal} // Passa a função para o botão de calcular dentro do card
+          cellData={cellApiData}
+          onEdit={handleEditInCard}
+          onCalculate={handleCalculateInCard}
         />
       );
-    } else if (
-      !hasCriterioDataFromApi &&
-      isPlanejamento &&
-      periodoAtual &&
-      onCreate &&
-      currentSector
-    ) {
-      // Se é planejamento, mas NÃO HÁ NENHUMA LINHA DE DADOS (criterioDataFromApi é null)
-      // Mantemos o botão para criar a meta inicial.
+    }
+    // --- CORREÇÕES PARA FASE ATIVA E FECHADA ---
+    // Primeiro, verifique se cellApiData existe. Se não, não há o que mostrar.
+    if (!cellApiData) {
       return (
-        <div className='flex flex-col items-center justify-center p-3 h-full min-h-[100px] bg-muted/5 rounded-md'>
-          <div className='text-muted-foreground text-sm mb-2'>
-            Sem meta definida
-          </div>
-          <div className='flex gap-2'>
-            {onCreate && (
-              <button
-                onClick={() => onCreate(criterio, currentSector, periodoAtual)}
-                className='text-xs px-3 py-1 bg-green-100 text-green-700 hover:bg-green-200 rounded-full'
-              >
-                Definir Meta
-              </button>
-            )}
-            {/* Opcionalmente, o botão de calcular (abrir modal) pode estar aqui também */}
-          </div>
+        <div className='p-3 text-xs text-gray-400 min-h-[100px] flex justify-center items-center'>
+          -
         </div>
       );
     }
-
     // Fase Ativa (Premiação em Andamento)
     if (isAtiva) {
-      // Calcular cor com base no atingimento
-      const atingimento = criterioData.percentualAtingimento || 0;
+      const atingimento = cellApiData.percentualAtingimento || 0;
       const statusColor =
         atingimento >= 1
           ? 'bg-green-50 border-green-200'
@@ -255,7 +253,7 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
             : 'bg-red-50 border-red-200';
 
       // Determinar ícone de tendência (simulado, adicione lógica real conforme necessário)
-      const tendencia = criterioData.tendencia || 0;
+      const tendencia = cellApiData.tendencia || 0;
       const trendIcon =
         tendencia > 0 ? (
           <TrendingUp className='h-3 w-3 text-green-600' />
@@ -274,16 +272,16 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
             <div className='flex justify-between text-sm'>
               <span className='text-gray-600'>Meta:</span>
               <span className='font-semibold'>
-                {criterioData.valorMeta !== null
-                  ? criterioData.valorMeta.toLocaleString('pt-BR')
+                {cellApiData.valorMeta !== null
+                  ? cellApiData.valorMeta.toLocaleString('pt-BR')
                   : '-'}
               </span>
             </div>
             <div className='flex justify-between text-sm'>
               <span className='text-gray-600'>Realizado:</span>
               <span>
-                {criterioData.valorRealizado !== null
-                  ? criterioData.valorRealizado.toLocaleString('pt-BR')
+                {cellApiData.valorRealizado !== null
+                  ? cellApiData.valorRealizado.toLocaleString('pt-BR')
                   : '-'}
               </span>
             </div>
@@ -303,8 +301,8 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
                         : 'text-red-600 font-semibold'
                   }
                 >
-                  {criterioData.percentualAtingimento !== null
-                    ? `${(criterioData.percentualAtingimento * 100).toFixed(1)}%`
+                  {cellApiData.percentualAtingimento !== null
+                    ? `${(cellApiData.percentualAtingimento * 100).toFixed(1)}%`
                     : '-'}
                 </span>
                 {trendIcon}
@@ -314,7 +312,7 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
             <div className='flex justify-between text-sm mt-1'>
               <span className='text-gray-600'>Pontos:</span>
               <span className='font-semibold'>
-                {criterioData.pontos !== null ? criterioData.pontos : '-'}
+                {cellApiData.pontos !== null ? cellApiData.pontos : '-'}
               </span>
             </div>
           </div>
@@ -341,7 +339,7 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
     // Fase Fechada (Período Encerrado)
     if (isFechada) {
       // Calcular cor com base no atingimento
-      const atingimento = criterioData.percentualAtingimento || 0;
+      const atingimento = cellApiData.percentualAtingimento || 0;
       const statusColor =
         atingimento >= 1
           ? 'bg-green-50 border-green-200'
@@ -357,16 +355,16 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
             <div className='flex justify-between text-sm'>
               <span className='text-gray-600'>Meta Final:</span>
               <span className='font-semibold'>
-                {criterioData.valorMeta !== null
-                  ? criterioData.valorMeta.toLocaleString('pt-BR')
+                {cellApiData.valorMeta !== null
+                  ? cellApiData.valorMeta.toLocaleString('pt-BR')
                   : '-'}
               </span>
             </div>
             <div className='flex justify-between text-sm'>
               <span className='text-gray-600'>Realizado:</span>
               <span>
-                {criterioData.valorRealizado !== null
-                  ? criterioData.valorRealizado.toLocaleString('pt-BR')
+                {cellApiData.valorRealizado !== null
+                  ? cellApiData.valorRealizado.toLocaleString('pt-BR')
                   : '-'}
               </span>
             </div>
@@ -384,8 +382,8 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
                       : 'text-red-600 font-semibold'
                 }
               >
-                {criterioData.percentualAtingimento !== null
-                  ? `${(criterioData.percentualAtingimento * 100).toFixed(1)}%`
+                {cellApiData.percentualAtingimento !== null
+                  ? `${(cellApiData.percentualAtingimento * 100).toFixed(1)}%`
                   : '-'}
               </span>
             </div>
@@ -393,7 +391,7 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
             <div className='flex justify-between text-sm mt-1'>
               <span className='text-gray-600'>Pontos:</span>
               <span className='font-semibold'>
-                {criterioData.pontos !== null ? criterioData.pontos : '-'}
+                {cellApiData.pontos !== null ? cellApiData.pontos : '-'}
               </span>
             </div>
           </div>
@@ -423,15 +421,15 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
           <div className='flex justify-between text-sm'>
             <span>Meta:</span>
             <span className='font-semibold'>
-              {criterioData.valorMeta !== null
-                ? criterioData.valorMeta.toLocaleString('pt-BR')
+              {cellApiData.valorMeta !== null
+                ? cellApiData.valorMeta.toLocaleString('pt-BR')
                 : '-'}
             </span>
           </div>
-          {criterioData.valorRealizado !== null && (
+          {cellApiData.valorRealizado !== null && (
             <div className='flex justify-between text-sm'>
               <span>Realizado:</span>
-              <span>{criterioData.valorRealizado.toLocaleString('pt-BR')}</span>
+              <span>{cellApiData.valorRealizado.toLocaleString('pt-BR')}</span>
             </div>
           )}
         </div>

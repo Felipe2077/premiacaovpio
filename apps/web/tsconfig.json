@@ -20,7 +20,10 @@
     ],
     "paths": {
       "@/*": ["./src/*"],
-      "@sistema-premiacao/shared-types": ["../../packages/shared-types/src"]
+      "@sistema-premiacao/shared-types": ["../../packages/shared-types/src"],
+      "@sistema-premiacao/shared-calculation-utils": [
+        "../../packages/shared-calculation-utils/src"
+      ]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

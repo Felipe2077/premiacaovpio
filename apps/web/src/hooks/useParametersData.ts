@@ -27,6 +27,11 @@ export interface ResultData {
   valorMeta: number | null;
   percentualAtingimento: number | null;
   pontos: number | null;
+
+  metaPropostaPadrao: number | null;
+  metaAnteriorValor: number | null;
+  metaAnteriorPeriodo: number | null;
+  regrasAplicadasPadrao: number | null;
 }
 
 const API_BASE_URL = 'http://localhost:3001';
@@ -400,6 +405,10 @@ export function useParametersData(selectedPeriod?: string) {
         valorMeta: result.valorMeta,
         percentualAtingimento: result.percentualAtingimento,
         pontos: result.pontos,
+        metaPropostaPadrao: result.metaPropostaPadrao,
+        metaAnteriorValor: result.metaAnteriorValor,
+        metaAnteriorPeriodo: result.metaAnteriorPeriodo,
+        regrasAplicadasPadrao: result.regrasAplicadasPadrao,
       };
     });
 

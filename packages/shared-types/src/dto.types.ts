@@ -5,7 +5,14 @@ export interface EntradaRanking {
   SETOR: string; // Nome do setor
   PONTUACAO: number; // Pontuação final (lembrar: maior = pior)
 }
-
+export interface RegrasAplicadasPadrao {
+  // Novo tipo para clareza
+  calculationMethod: string;
+  calculationMethodLabel: string;
+  adjustmentPercentage: number;
+  roundingMethod: string;
+  roundingDecimalPlaces: number;
+}
 // Para a Tabela Detalhada (usado na API e Frontend)
 export interface EntradaResultadoDetalhado {
   setorId: number;
@@ -15,8 +22,13 @@ export interface EntradaResultadoDetalhado {
   periodo: string; // Ex: '2025-04'
   valorRealizado: number | null;
   valorMeta: number | string | null; // Meta pode ter vindo como string do parâmetro
-  percentualAtingimento?: number | null; // Ou diferença, a definir
-  pontos: number | null; // Pontuação específica do critério
+  percentualAtingimento?: number | null;
+  pontos: number | null;
+  // --- Novos Campos (Opcionais) ---
+  metaPropostaPadrao?: number | null;
+  metaAnteriorValor?: number | null;
+  metaAnteriorPeriodo?: string | null;
+  regrasAplicadasPadrao?: RegrasAplicadasPadrao | null;
 }
 
 interface RelatedUser {

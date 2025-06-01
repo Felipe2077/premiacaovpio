@@ -20,6 +20,8 @@ export default function HomePage() {
     error, // Estado de erro combinado
   } = useCompetitionData();
 
+  console.log(useCompetitionData());
+
   function getDataAtual() {
     const hoje = new Date();
     const dia = String(hoje.getDate()).padStart(2, '0');

@@ -129,41 +129,52 @@ export default function ParametersPage() {
     setIsLoadingSettings(true);
     try {
       const criterioAtual = uniqueCriteria.find((c) => c.id === criterionId);
+      // Define as casas decimais COM BASE APENAS NO PADRÃO DO CRITÉRIO
+      // Fallback para '0' se casasDecimaisPadrao não estiver definido no critério
+      const casasDecimaisParaEsteCriterio =
+        criterioAtual?.casasDecimaisPadrao?.toString() || '0';
+      setDecimalPlaces(casasDecimaisParaEsteCriterio);
+      console.log(
+        `[ParametersPage] loadDefaultSettings - decimalPlaces DEFINIDO (pelo critério) COMO: ${casasDecimaisParaEsteCriterio}`
+      );
 
-      const casasDecimaisDoCriterio =
-        criterioAtual?.casasDecimaisPadrao?.toString();
       const settings = await fetchCriterionCalculationSettings(criterionId);
+      console.log(
+        '[ParametersPage] loadDefaultSettings - settings recebidas da API:',
+        settings
+      );
 
       if (settings) {
         setCalculationMethod(settings.calculationMethod || 'media3');
         setCalculationAdjustment(
           settings.adjustmentPercentage?.toString() || '0'
         );
+        // O método de arredondamento ainda pode vir das settings salvas ou default 'none'
         setRoundingMethod(settings.roundingMethod || 'none');
-        setDecimalPlaces(
-          settings.roundingDecimalPlaces?.toString() ||
-            casasDecimaisDoCriterio ||
-            '2'
-        );
       } else {
+        // Nenhuma configuração salva encontrada
         setCalculationMethod('media3');
         setCalculationAdjustment('0');
-        setRoundingMethod('none');
-        setDecimalPlaces(casasDecimaisDoCriterio || '2');
+        setRoundingMethod('none'); // Default 'none'
       }
     } catch (error) {
       console.error('Erro ao carregar configurações de cálculo:', error);
       toast.error('Não foi possível carregar as configurações padrão.');
+
+      // Fallback em caso de erro
       const criterioAtualOnError = uniqueCriteria.find(
         (c) => c.id === criterionId
-      ); // Tenta pegar mesmo em erro
+      );
       const casasDecimaisOnError =
-        criterioAtualOnError?.casasDecimaisPadrao?.toString();
+        criterioAtualOnError?.casasDecimaisPadrao?.toString() || '0';
+      setDecimalPlaces(casasDecimaisOnError);
+      console.log(
+        `[ParametersPage] loadDefaultSettings (ERRO) - decimalPlaces DEFINIDO (pelo critério) COMO: ${casasDecimaisOnError}`
+      );
 
       setCalculationMethod('media3');
       setCalculationAdjustment('0');
       setRoundingMethod('none');
-      setDecimalPlaces(casasDecimaisOnError || '2'); // Usa o padrão do critério se possível, senão '2'
     } finally {
       setIsLoadingSettings(false);
     }

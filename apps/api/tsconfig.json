@@ -9,7 +9,10 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@sistema-premiacao/shared-types": ["../../packages/shared-types/src"]
+      "@sistema-premiacao/shared-types": ["../../packages/shared-types/src"],
+      "@sistema-premiacao/shared-calculation-utils": [
+        "../../packages/shared-calculation-utils/src"
+      ]
     }
   },
   "include": ["src/**/*"], // Inclui todos os arquivos TS da pasta src

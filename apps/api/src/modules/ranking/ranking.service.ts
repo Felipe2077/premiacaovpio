@@ -1,4 +1,4 @@
-// apps/api/src/modules/ranking/ranking.service.ts (VERSÃO MELHORADA)
+// apps/api/src/modules/ranking/ranking.service.ts
 import { AppDataSource } from '@/database/data-source';
 import { CompetitionPeriodEntity } from '@/entity/competition-period.entity';
 import { CriterionEntity } from '@/entity/criterion.entity';
@@ -16,6 +16,11 @@ import {
   MoreThanOrEqual,
   Repository,
 } from 'typeorm';
+import { CriterionCalculationSettingsService } from '../parameters/criterion-calculation-settings.service'; // Pode ser necessário pelo PlanningCellDataService
+import {
+  PlanningCellDataService,
+  PlanningCellOutput,
+} from '../planning/planning-cell-data.service';
 
 // Interface auxiliar interna - NOMES EM PORTUGUÊS
 interface ResultadoPorCriterio {
@@ -32,19 +37,67 @@ interface ResultadoPorCriterio {
 interface AcumuladorScoreSetor {
   nome: string;
   totalScore: number;
+  // Adicionado para desempate se necessário
+  setorId?: number;
 }
 
 export class RankingService {
-  private sectorRepo = AppDataSource.getRepository(SectorEntity);
-  private criterionRepo = AppDataSource.getRepository(CriterionEntity);
-  private parameterRepo = AppDataSource.getRepository(ParameterValueEntity);
-  private performanceRepo = AppDataSource.getRepository(PerformanceDataEntity);
-
-  private periodRepo: Repository<CompetitionPeriodEntity>; // Repositório para buscar o período
+  private sectorRepo: Repository<SectorEntity>;
+  private criterionRepo: Repository<CriterionEntity>;
+  private parameterRepo: Repository<ParameterValueEntity>;
+  private performanceRepo: Repository<PerformanceDataEntity>;
+  private periodRepo: Repository<CompetitionPeriodEntity>;
+  private planningCellDataService: PlanningCellDataService;
+  private criterionSettingsService: CriterionCalculationSettingsService;
 
   constructor() {
-    this.periodRepo = AppDataSource.getRepository(CompetitionPeriodEntity); // Inicializar
-    console.log('[RankingService] Instanciado e repositórios configurados.');
+    this.sectorRepo = AppDataSource.getRepository(SectorEntity);
+    this.criterionRepo = AppDataSource.getRepository(CriterionEntity);
+    this.parameterRepo = AppDataSource.getRepository(ParameterValueEntity);
+    this.performanceRepo = AppDataSource.getRepository(PerformanceDataEntity);
+    this.periodRepo = AppDataSource.getRepository(CompetitionPeriodEntity);
+    this.planningCellDataService = new PlanningCellDataService();
+    console.log(
+      '[RankingService] Instanciado e repositórios configurados, incluindo PlanningCellDataService.'
+    );
+  }
+
+  // Método auxiliar para obter o período de competição válido
+  private async getValidCompetitionPeriod(
+    periodMesAno?: string
+  ): Promise<CompetitionPeriodEntity> {
+    let competitionPeriod;
+    if (periodMesAno) {
+      competitionPeriod = await this.periodRepo.findOne({
+        where: { mesAno: periodMesAno },
+      });
+      if (!competitionPeriod) {
+        console.error(
+          `[RankingService] ERRO: Vigência não encontrada para o período ${periodMesAno}`
+        );
+        throw new Error(
+          `Vigência não encontrada para o período ${periodMesAno}`
+        );
+      }
+    } else {
+      competitionPeriod =
+        (await this.periodRepo.findOne({ where: { status: 'ATIVA' } })) ||
+        (await this.periodRepo.findOne({
+          where: { status: 'PLANEJAMENTO' },
+          order: { dataInicio: 'DESC' },
+        })) ||
+        (await this.periodRepo.findOne({ order: { dataInicio: 'DESC' } }));
+      if (!competitionPeriod) {
+        console.error(
+          `[RankingService] ERRO: Nenhuma vigência encontrada no sistema`
+        );
+        throw new Error('Nenhuma vigência encontrada no sistema');
+      }
+    }
+    console.log(
+      `[RankingService] Vigência selecionada: ID ${competitionPeriod.id}, Mês/Ano ${competitionPeriod.mesAno}, Status ${competitionPeriod.status}`
+    );
+    return competitionPeriod;
   }
 
   // --- MÉTODO PRIVADO: Lógica Central de Cálculo ---
@@ -56,90 +109,10 @@ export class RankingService {
       `[RankingService] INÍCIO calculateAllResults - período: ${period || 'não especificado'}`
     );
 
-    // Determinar a vigência a ser usada
-    let competitionPeriod;
-
-    if (period) {
-      // Se um período foi especificado, buscar a vigência correspondente
-      console.log(
-        `[RankingService] Buscando vigência para período específico: ${period}`
-      );
-      competitionPeriod = await this.periodRepo.findOne({
-        where: { mesAno: period },
-      });
-
-      console.log(
-        `[RankingService] Resultado da busca por vigência específica:`,
-        competitionPeriod
-      );
-
-      if (!competitionPeriod) {
-        console.error(
-          `[RankingService] ERRO: Vigência não encontrada para o período ${period}`
-        );
-        throw new Error(`Vigência não encontrada para o período ${period}`);
-      }
-    } else {
-      // Se nenhum período foi especificado, buscar a vigência ATIVA
-      console.log(`[RankingService] Buscando vigência ATIVA`);
-      competitionPeriod = await this.periodRepo.findOne({
-        where: { status: 'ATIVA' },
-      });
-
-      console.log(
-        `[RankingService] Resultado da busca por vigência ATIVA:`,
-        competitionPeriod
-      );
-
-      // Se não houver vigência ATIVA, tentar a mais recente em PLANEJAMENTO
-      if (!competitionPeriod) {
-        console.log(
-          `[RankingService] Vigência ATIVA não encontrada, buscando PLANEJAMENTO`
-        );
-        competitionPeriod = await this.periodRepo.findOne({
-          where: { status: 'PLANEJAMENTO' },
-          order: { dataInicio: 'DESC' },
-        });
-
-        console.log(
-          `[RankingService] Resultado da busca por vigência PLANEJAMENTO:`,
-          competitionPeriod
-        );
-      }
-
-      // Se ainda não encontrou, buscar a mais recente de qualquer tipo
-      if (!competitionPeriod) {
-        console.log(
-          `[RankingService] Nenhuma vigência encontrada por status, buscando a mais recente`
-        );
-        competitionPeriod = await this.periodRepo.findOne({
-          order: { dataInicio: 'DESC' },
-        });
-
-        console.log(
-          `[RankingService] Resultado da busca pela vigência mais recente:`,
-          competitionPeriod
-        );
-      }
-
-      if (!competitionPeriod) {
-        console.error(
-          `[RankingService] ERRO: Nenhuma vigência encontrada no sistema`
-        );
-        throw new Error('Nenhuma vigência encontrada no sistema');
-      }
-    }
-
-    console.log(`[RankingService] Vigência selecionada:`, {
-      id: competitionPeriod.id,
-      mesAno: competitionPeriod.mesAno,
-      status: competitionPeriod.status,
-      dataInicio: competitionPeriod.dataInicio,
-      dataFim: competitionPeriod.dataFim,
-    });
+    // Usar o método auxiliar para obter o período de competição
+    const competitionPeriod = await this.getValidCompetitionPeriod(period);
 
     // Usar a data fim da vigência como data alvo para buscar parâmetros e dados de desempenho
-    //const targetDate = competitionPeriod.dataFim;
     const targetDate = '2025-05-30';
     console.log(
       `[RankingService] ATENÇÃO: Usando data fixa para cálculos: ${targetDate} (em vez da data fim da vigência)`
@@ -148,7 +121,10 @@ export class RankingService {
 
     // 1. Buscar Dados Base
     console.log(`[RankingService] Buscando setores ativos...`);
-    const activeSectors = await this.sectorRepo.findBy({ ativo: true });
+    const activeSectors = await this.sectorRepo.find({
+      where: { ativo: true },
+      order: { nome: 'ASC' },
+    });
     console.log(
       `[RankingService] Setores ativos encontrados: ${activeSectors.length}`
     );
@@ -160,7 +136,10 @@ export class RankingService {
     }
 
     console.log(`[RankingService] Buscando critérios ativos...`);
-    const activeCriteria = await this.criterionRepo.findBy({ ativo: true });
+    const activeCriteria = await this.criterionRepo.find({
+      where: { ativo: true },
+      order: { index: 'ASC', id: 'ASC' },
+    });
     console.log(
       `[RankingService] Critérios ativos encontrados: ${activeCriteria.length}`
     );
@@ -178,564 +157,650 @@ export class RankingService {
       return { ranking: [], details: [] };
     }
 
-    // 2. Buscar Dados do Período
-    console.log(
-      `[RankingService] Buscando dados de desempenho para data: ${targetDate}`
-    );
-    const performanceData = await this.performanceRepo.find({
-      where: { metricDate: targetDate },
-    });
-    console.log(
-      `[RankingService] Dados de desempenho encontrados: ${performanceData.length}`
-    );
-
-    // Verificar se há dados de desempenho
-    if (performanceData.length === 0) {
-      console.warn(
-        `[RankingService] AVISO: Nenhum dado de desempenho encontrado para a data ${targetDate}`
-      );
-
-      // Buscar alguns dados de desempenho para diagnóstico
-      console.log(
-        `[RankingService] Buscando amostras de dados de desempenho para diagnóstico...`
-      );
-      const sampleData = await this.performanceRepo.find({
-        take: 5,
-        order: { metricDate: 'DESC' },
-      });
-
-      if (sampleData.length > 0) {
-        console.log(
-          `[RankingService] Amostras de dados de desempenho disponíveis:`
-        );
-        sampleData.forEach((perf) => {
-          console.log(
-            `  - Data: ${perf.metricDate}, Setor: ${perf.sectorId}, Critério: ${perf.criterionId}, Valor: ${perf.valor}`
-          );
-        });
-
-        // IMPORTANTE: Verificar se existem dados para a data fixa que funcionava antes
-        console.log(
-          `[RankingService] Verificando se existem dados para a data fixa 2025-05-30...`
-        );
-        const fixedDateData = await this.performanceRepo.find({
-          where: { metricDate: '2025-05-30' },
-          take: 5,
-        });
-
-        if (fixedDateData.length > 0) {
-          console.log(
-            `[RankingService] Dados encontrados para a data fixa 2025-05-30: ${fixedDateData.length}`
-          );
-          console.log(
-            `[RankingService] Amostra de dados para 2025-05-30:`,
-            fixedDateData.slice(0, 2)
-          );
-        } else {
-          console.log(
-            `[RankingService] Nenhum dado encontrado para a data fixa 2025-05-30`
-          );
-        }
-      } else {
-        console.error(
-          `[RankingService] ERRO: Nenhum dado de desempenho encontrado na tabela!`
-        );
-      }
-    } else {
-      console.log(
-        `[RankingService] Amostra de dados de desempenho:`,
-        performanceData.slice(0, 2)
-      );
-    }
-
-    // Buscar parâmetros vigentes na data alvo
-    console.log(
-      `[RankingService] Buscando parâmetros para data: ${targetDate} e período ID: ${competitionPeriod.id}`
-    );
-    const whereParams: FindOptionsWhere<ParameterValueEntity> = {
-      dataInicioEfetivo: LessThanOrEqual(targetDate),
-      dataFimEfetivo: IsNull(),
-      competitionPeriodId: competitionPeriod.id, // Importante: filtrar por período de competição
-    };
-    const whereParamsExpired: FindOptionsWhere<ParameterValueEntity> = {
-      dataInicioEfetivo: LessThanOrEqual(targetDate),
-      dataFimEfetivo: MoreThanOrEqual(targetDate),
-      competitionPeriodId: competitionPeriod.id, // Importante: filtrar por período de competição
-    };
-
-    console.log(`[RankingService] Condições de busca para parâmetros:`, {
-      whereParams,
-      whereParamsExpired,
-    });
-
-    const currentParameters = await this.parameterRepo.find({
-      where: [whereParams, whereParamsExpired],
-      cache: false, // Desativar cache
-    });
-
-    console.log(
-      `[RankingService] Parâmetros encontrados: ${currentParameters.length}`
-    );
-
-    if (currentParameters.length === 0) {
-      console.warn(
-        `[RankingService] AVISO: Nenhum parâmetro encontrado para a data ${targetDate} e período ID ${competitionPeriod.id}`
-      );
-
-      // Buscar alguns parâmetros para diagnóstico
-      console.log(
-        `[RankingService] Buscando amostras de parâmetros para diagnóstico...`
-      );
-      const sampleParams = await this.parameterRepo.find({
-        take: 5,
-        order: { createdAt: 'DESC' },
-      });
-
-      if (sampleParams.length > 0) {
-        console.log(`[RankingService] Amostras de parâmetros disponíveis:`);
-        sampleParams.forEach((param) => {
-          console.log(
-            `  - ID: ${param.id}, Nome: ${param.nomeParametro}, Período: ${param.competitionPeriodId}, Critério: ${param.criterionId}, Setor: ${param.sectorId}, Valor: ${param.valor}`
-          );
-          console.log(
-            `    Vigência: ${param.dataInicioEfetivo} até ${param.dataFimEfetivo || 'em aberto'}`
-          );
-        });
-
-        // Verificar se existem parâmetros sem filtro de período
-        console.log(
-          `[RankingService] Verificando parâmetros sem filtro de período...`
-        );
-        const paramsWithoutPeriodFilter = await this.parameterRepo.find({
-          where: [
-            {
-              dataInicioEfetivo: LessThanOrEqual(targetDate),
-              dataFimEfetivo: IsNull(),
-            },
-            {
-              dataInicioEfetivo: LessThanOrEqual(targetDate),
-              dataFimEfetivo: MoreThanOrEqual(targetDate),
-            },
-          ],
-          take: 5,
-        });
-
-        if (paramsWithoutPeriodFilter.length > 0) {
-          console.log(
-            `[RankingService] Parâmetros encontrados sem filtro de período: ${paramsWithoutPeriodFilter.length}`
-          );
-          console.log(
-            `[RankingService] Amostra de parâmetros sem filtro de período:`,
-            paramsWithoutPeriodFilter.slice(0, 2)
-          );
-        } else {
-          console.log(
-            `[RankingService] Nenhum parâmetro encontrado mesmo sem filtro de período`
-          );
-        }
-      } else {
-        console.error(
-          `[RankingService] ERRO: Nenhum parâmetro encontrado na tabela!`
-        );
-      }
-    } else {
-      console.log(
-        `[RankingService] Amostra de parâmetros:`,
-        currentParameters.slice(0, 2)
-      );
-    }
-
-    // Ordenar parâmetros por dataInicioEfetivo (decrescente) e createdAt (decrescente)
-    console.log(`[RankingService] Ordenando parâmetros...`);
-    const sortedParameters = [...currentParameters].sort((a, b) => {
-      const dateA = new Date(a.dataInicioEfetivo);
-      const dateB = new Date(b.dataInicioEfetivo);
-
-      if (dateA.getTime() !== dateB.getTime()) {
-        return dateB.getTime() - dateA.getTime(); // Ordem decrescente por data
-      }
-
-      // Se as datas forem iguais, ordenar por createdAt
-      const createdAtA = new Date(a.createdAt);
-      const createdAtB = new Date(b.createdAt);
-
-      return createdAtB.getTime() - createdAtA.getTime(); // Ordem decrescente por createdAt
-    });
-
     // 3. Preparar Acumuladores
     console.log(
       `[RankingService] Preparando acumuladores de score por setor...`
     );
     const sectorScores: { [id: number]: AcumuladorScoreSetor } = {};
-    activeSectors.forEach((s) => {
-      sectorScores[s.id] = { nome: s.nome, totalScore: 0 };
-    });
     const allDetailedResults: EntradaResultadoDetalhado[] = [];
 
-    // 4. Calcular por Critério
-    console.log(`[RankingService] Iniciando cálculo por critério...`);
-    for (const criterion of activeCriteria) {
-      console.log(
-        `[RankingService] Calculando para critério: ${criterion.nome} (ID: ${criterion.id})`
-      );
-      const resultsForCriterion: ResultadoPorCriterio[] = [];
-
-      // Filtrar dados de desempenho para este critério
-      const criterionPerformanceData = performanceData.filter(
-        (p) => p.criterionId === criterion.id
-      );
-      console.log(
-        `[RankingService] Dados de desempenho para critério ${criterion.nome}: ${criterionPerformanceData.length}`
-      );
-
-      criterionPerformanceData.forEach((p) => {
-        console.log(
-          ` - setorId: ${p.sectorId}, criterioId: ${p.criterionId}, valor: ${p.valor}`
-        );
+    // Inicializa sectorScores APENAS se não for planejamento, pois ranking não se aplica
+    if (competitionPeriod.status !== 'PLANEJAMENTO') {
+      activeSectors.forEach((s) => {
+        sectorScores[s.id] = { nome: s.nome, totalScore: 0, setorId: s.id };
       });
+    }
 
-      for (const sector of activeSectors) {
-        console.log(
-          `[RankingService] Processando setor: ${sector.nome} (ID: ${sector.id}) para critério: ${criterion.nome}`
-        );
-
-        const perf = performanceData.find(
-          (p) => p.sectorId === sector.id && p.criterionId === criterion.id
-        );
-
-        console.log(
-          `[RankingService] Dado de desempenho encontrado para setor ${sector.nome}:`,
-          perf || 'Nenhum'
-        );
-
-        //! arredondando valor realizado para duas casas decimais antes do calculo
-        const valorRealizadoA =
-          perf?.valor != null ? parseFloat(String(perf.valor)) : null;
-        console.log(
-          `[RankingService] valor perf original: ${perf?.valor}, convertido: ${valorRealizadoA}`
-        );
-
-        const valorRealizado =
-          valorRealizadoA != null ? Number(valorRealizadoA.toFixed(2)) : null;
-        console.log(
-          `[RankingService] valor realizado final (arredondado): ${valorRealizado}`
-        );
-
-        // Buscar a meta mais recente, com fallback para meta genérica (sem setor)
-        console.log(
-          `[RankingService] Buscando meta para critério ${criterion.nome}, setor ${sector.nome}...`
-        );
-
-        let targetParam = sortedParameters.find(
-          (p) =>
-            p.criterionId === criterion.id &&
-            p.sectorId === sector.id &&
-            p.nomeParametro.startsWith('META_')
-        );
-
-        if (!targetParam) {
-          console.log(
-            `[RankingService] Meta específica não encontrada, buscando meta genérica...`
-          );
-          targetParam = sortedParameters.find(
-            (p) =>
-              p.criterionId === criterion.id &&
-              !p.sectorId &&
-              p.nomeParametro.startsWith('META_')
-          );
-        }
-
-        // Adicionar log para verificar qual meta está sendo usada
-        console.log(
-          `[RankingService] Meta usada para critério ${criterion.nome}, setor ${sector.nome}:`,
-          targetParam
-            ? {
-                id: targetParam.id,
-                nome: targetParam.nomeParametro,
-                valor: targetParam.valor,
-                dataInicioEfetivo: targetParam.dataInicioEfetivo,
-                dataFimEfetivo: targetParam.dataFimEfetivo || 'em aberto',
-                createdAt: targetParam.createdAt,
-              }
-            : 'Nenhuma meta encontrada'
-        );
-
-        const valorMeta =
-          targetParam?.valor != null
-            ? parseFloat(String(targetParam.valor))
-            : null;
-        console.log(`[RankingService] Valor da meta: ${valorMeta}`);
-
-        // Cálculo da razão
-        console.log(
-          `[RankingService] Calculando razão para critério ${criterion.nome}, setor ${sector.nome}...`
-        );
-        let razaoCalculada: number | null = null;
-
-        if (valorRealizado === 0 && valorMeta === 0) {
-          razaoCalculada = 1; // Caso especial: meta 0 e realizado 0 = OK
-          console.log(
-            `[RankingService] Caso especial: meta 0 e realizado 0, razão = 1`
-          );
-        } else if (
-          valorRealizado != null &&
-          valorMeta != null &&
-          valorMeta !== 0
-        ) {
-          razaoCalculada = valorRealizado / valorMeta;
-          console.log(
-            `[RankingService] Razão calculada: ${valorRealizado} / ${valorMeta} = ${razaoCalculada}`
-          );
-        } else if (valorRealizado != null && valorMeta === 0) {
-          razaoCalculada =
-            criterion.sentido_melhor === 'MAIOR' ? Infinity : -Infinity;
-          console.log(
-            `[RankingService] Meta é zero, razão = ${razaoCalculada}`
-          );
-        } else {
-          razaoCalculada = null;
-          console.log(
-            `[RankingService] Não foi possível calcular razão (valores nulos)`
-          );
-        }
-
-        resultsForCriterion.push({
-          setorId: sector.id,
-          setorNome: sector.nome,
-          criterioId: criterion.id,
-          criterioNome: criterion.nome,
-          valorRealizado,
-          valorMeta,
-          razaoCalculada,
-          pontos: null,
-        });
-      }
-
+    // --- LÓGICA CONDICIONAL BASEADA NO STATUS DO PERÍODO ---
+    if (competitionPeriod.status === 'PLANEJAMENTO') {
       console.log(
-        `[RankingService] Resultados calculados para critério ${criterion.nome}: ${resultsForCriterion.length}`
+        `[RankingService] Período ${competitionPeriod.mesAno} está em PLANEJAMENTO.`
       );
-      console.log(
-        `[RankingService] Ordenando resultados para critério ${criterion.nome}...`
-      );
-
-      // Ordenação
-      resultsForCriterion.sort((a, b) => {
-        const valA = a.razaoCalculada;
-        const valB = b.razaoCalculada;
-
-        if (valA === null && valB === null) return 0;
-        if (valA === null) return 1;
-        if (valB === null) return -1;
-
-        const isAInf = !isFinite(valA);
-        const isBInf = !isFinite(valB);
-
-        if (isAInf && isBInf) {
-          return valA === valB
-            ? 0
-            : criterion.sentido_melhor === 'MAIOR'
-              ? valA === Infinity
-                ? -1
-                : 1
-              : valA === -Infinity
-                ? -1
-                : 1;
-        }
-        if (isAInf) {
-          return valA === Infinity
-            ? criterion.sentido_melhor === 'MAIOR'
-              ? -1
-              : 1
-            : criterion.sentido_melhor === 'MENOR'
-              ? -1
-              : 1;
-        }
-        if (isBInf) {
-          return valB === Infinity
-            ? criterion.sentido_melhor === 'MAIOR'
-              ? 1
-              : -1
-            : criterion.sentido_melhor === 'MENOR'
-              ? 1
-              : -1;
-        }
-
-        return criterion.sentido_melhor === 'MAIOR' ? valB - valA : valA - valB;
-      });
-
-      // 4.2a Atribuir Rank considerando empates na razaoCalculada
-      console.log(
-        `[RankingService] Atribuindo ranks para critério ${criterion.nome}...`
-      );
-      let currentRank = 0;
-      let lastRazao: number | null | undefined = undefined; // Para comparar com a razaoCalculada anterior
-      let tieCount = 0; // Para ajustar o próximo rank após um empate
-
-      resultsForCriterion.forEach((result, index) => {
-        if (
-          result.razaoCalculada === null ||
-          result.razaoCalculada === undefined
-        ) {
-          result.rank = undefined; // Ou um rank de "não classificado", ex: 5 ou null
-          console.log(
-            `[RankingService] Setor ${result.setorNome}: razão nula, rank indefinido`
-          );
-        } else {
-          if (result.razaoCalculada !== lastRazao) {
-            currentRank = index + 1 - tieCount; // Ajusta o rank se houve empates anteriores
-            tieCount = 0; // Reseta contador de empates
-            console.log(
-              `[RankingService] Setor ${result.setorNome}: nova razão ${result.razaoCalculada}, rank ${currentRank}`
+      for (const criterion of activeCriteria) {
+        for (const sector of activeSectors) {
+          // O criterion já deve ter casasDecimaisPadrao e sentido_melhor carregados
+          const planningData: PlanningCellOutput =
+            await this.planningCellDataService.getPrecalculatedDataForCell(
+              criterion.id,
+              sector.id,
+              competitionPeriod
             );
-          } else {
-            tieCount++; // Incrementa contador de empates
-            console.log(
-              `[RankingService] Setor ${result.setorNome}: razão empatada ${result.razaoCalculada}, rank ${currentRank} (empate)`
-            );
-          }
-          result.rank = currentRank;
-          lastRazao = result.razaoCalculada;
-        }
-      });
-
-      console.log(
-        `[RankingService] Calculando pontos para critério ${criterion.nome}...`
-      );
-      const useInvertedScale = criterion.index === 0;
-      console.log(
-        `[RankingService] Usando escala invertida: ${useInvertedScale}`
-      );
-
-      resultsForCriterion.forEach((result) => {
-        let pontos: number | null = null;
-
-        if (criterion.id === 5) {
-          // Regra especial para critério FALTA FUNC
-          console.log(
-            `[RankingService] Aplicando regra especial para critério FALTA FUNC`
-          );
-          if (result.valorRealizado !== null && result.valorRealizado <= 10) {
-            pontos = 1;
-            console.log(
-              `[RankingService] Setor ${result.setorNome}: FALTA FUNC <= 10, pontos = 1`
-            );
-          } else {
-            // Aplica a regra normal só se valorRealizado > 10
-            console.log(
-              `[RankingService] Setor ${result.setorNome}: FALTA FUNC > 10, aplicando regra normal`
-            );
-            switch (result.rank) {
-              case 1:
-                pontos = 1.0;
-                break;
-              case 2:
-                pontos = 1.5;
-                break;
-              case 3:
-                pontos = 2.0;
-                break;
-              case 4:
-                pontos = 2.5;
-                break;
-              default:
-                pontos = null;
-            }
-            console.log(
-              `[RankingService] Setor ${result.setorNome}: rank ${result.rank}, pontos = ${pontos}`
-            );
-          }
-        } else {
-          const todosMesmaRazao = resultsForCriterion.every(
-            (r) => r.razaoCalculada === 1
-          );
-
-          console.log(
-            `[RankingService] Todos setores com mesma razão (1): ${todosMesmaRazao}`
-          );
-
-          if (todosMesmaRazao) {
-            pontos = 1.0; // Pontuação padrão (verde)
-            console.log(
-              `[RankingService] Setor ${result.setorNome}: todos mesma razão, pontos = 1`
-            );
-          } else {
-            switch (result.rank) {
-              case 1:
-                pontos = useInvertedScale ? 2.5 : 1.0;
-                break;
-              case 2:
-                pontos = useInvertedScale ? 2.0 : 1.5;
-                break;
-              case 3:
-                pontos = useInvertedScale ? 1.5 : 2.0;
-                break;
-              case 4:
-                pontos = useInvertedScale ? 1.0 : 2.5;
-                break;
-              default:
-                pontos = null;
-            }
-            console.log(
-              `[RankingService] Setor ${result.setorNome}: rank ${result.rank}, escala ${useInvertedScale ? 'invertida' : 'normal'}, pontos = ${pontos}`
-            );
-          }
-        }
-        result.pontos = pontos;
-
-        const currentSectorScore = sectorScores[result.setorId];
-        if (currentSectorScore && pontos !== null) {
-          const oldScore = currentSectorScore.totalScore;
-          currentSectorScore.totalScore += pontos;
-          console.log(
-            `[RankingService] Setor ${result.setorNome}: pontuação atualizada ${oldScore} + ${pontos} = ${currentSectorScore.totalScore}`
-          );
 
           allDetailedResults.push({
-            setorId: result.setorId,
-            setorNome: result.setorNome,
-            criterioId: result.criterioId,
-            criterioNome: result.criterioNome,
-            periodo: competitionPeriod.mesAno, // Usar o mesAno da vigência em vez de substring da data
-            valorRealizado: result.valorRealizado,
-            valorMeta: result.valorMeta,
-            percentualAtingimento: result.razaoCalculada,
-            pontos: result.pontos,
+            setorId: sector.id,
+            setorNome: sector.nome,
+            criterioId: criterion.id,
+            criterioNome: criterion.nome,
+            periodo: competitionPeriod.mesAno,
+            valorRealizado: null,
+            valorMeta: null, // Meta oficial do período de planejamento (ainda não definida/salva)
+            percentualAtingimento: null,
+            pontos: null,
+            // --- Novos Campos ---
+            metaPropostaPadrao: planningData.metaPropostaPadrao,
+            metaAnteriorValor: planningData.metaAnteriorValor,
+            metaAnteriorPeriodo: planningData.metaAnteriorPeriodo,
+            regrasAplicadasPadrao: planningData.regrasAplicadasPadrao,
           });
-        } else if (!currentSectorScore) {
-          console.error(
-            `[RankingService] ERRO: Score não encontrado para setor ID ${result.setorId}`
-          );
-        } else {
+        }
+      }
+    } else {
+      // --- LÓGICA EXISTENTE PARA PERÍODOS 'ATIVA' E 'FECHADA' ---
+      console.log(
+        `[RankingService] Período ${competitionPeriod.mesAno} (${competitionPeriod.status}). Calculando performance e ranking.`
+      );
+
+      // 2. Buscar Dados do Período
+      console.log(
+        `[RankingService] Buscando dados de desempenho para data: ${targetDate}`
+      );
+      const performanceData = await this.performanceRepo.find({
+        where: { metricDate: targetDate },
+      });
+      console.log(
+        `[RankingService] Dados de desempenho encontrados: ${performanceData.length}`
+      );
+
+      // Verificar se há dados de desempenho
+      if (performanceData.length === 0) {
+        console.warn(
+          `[RankingService] AVISO: Nenhum dado de desempenho encontrado para a data ${targetDate}`
+        );
+
+        // Buscar alguns dados de desempenho para diagnóstico
+        console.log(
+          `[RankingService] Buscando amostras de dados de desempenho para diagnóstico...`
+        );
+        const sampleData = await this.performanceRepo.find({
+          take: 5,
+          order: { metricDate: 'DESC' },
+        });
+
+        if (sampleData.length > 0) {
           console.log(
-            `[RankingService] Setor ${result.setorNome}: pontos nulos, não somados ao total`
+            `[RankingService] Amostras de dados de desempenho disponíveis:`
+          );
+          sampleData.forEach((perf) => {
+            console.log(
+              `  - Data: ${perf.metricDate}, Setor: ${perf.sectorId}, Critério: ${perf.criterionId}, Valor: ${perf.valor}`
+            );
+          });
+
+          // IMPORTANTE: Verificar se existem dados para a data fixa que funcionava antes
+          console.log(
+            `[RankingService] Verificando se existem dados para a data fixa 2025-05-30...`
+          );
+          const fixedDateData = await this.performanceRepo.find({
+            where: { metricDate: '2025-05-30' },
+            take: 5,
+          });
+
+          if (fixedDateData.length > 0) {
+            console.log(
+              `[RankingService] Dados encontrados para a data fixa 2025-05-30: ${fixedDateData.length}`
+            );
+            console.log(
+              `[RankingService] Amostra de dados para 2025-05-30:`,
+              fixedDateData.slice(0, 2)
+            );
+          } else {
+            console.log(
+              `[RankingService] Nenhum dado encontrado para a data fixa 2025-05-30`
+            );
+          }
+        } else {
+          console.error(
+            `[RankingService] ERRO: Nenhum dado de desempenho encontrado na tabela!`
           );
         }
+      } else {
+        console.log(
+          `[RankingService] Amostra de dados de desempenho:`,
+          performanceData.slice(0, 2)
+        );
+      }
+
+      // Buscar parâmetros vigentes na data alvo
+      console.log(
+        `[RankingService] Buscando parâmetros para data: ${targetDate} e período ID: ${competitionPeriod.id}`
+      );
+      const whereParams: FindOptionsWhere<ParameterValueEntity> = {
+        dataInicioEfetivo: LessThanOrEqual(targetDate),
+        dataFimEfetivo: IsNull(),
+        competitionPeriodId: competitionPeriod.id, // Importante: filtrar por período de competição
+      };
+      const whereParamsExpired: FindOptionsWhere<ParameterValueEntity> = {
+        dataInicioEfetivo: LessThanOrEqual(targetDate),
+        dataFimEfetivo: MoreThanOrEqual(targetDate),
+        competitionPeriodId: competitionPeriod.id, // Importante: filtrar por período de competição
+      };
+
+      console.log(`[RankingService] Condições de busca para parâmetros:`, {
+        whereParams,
+        whereParamsExpired,
+      });
+
+      const currentParameters = await this.parameterRepo.find({
+        where: [whereParams, whereParamsExpired],
+        cache: false, // Desativar cache
       });
 
       console.log(
-        `[RankingService] Cálculo concluído para critério ${criterion.nome}`
+        `[RankingService] Parâmetros encontrados: ${currentParameters.length}`
       );
-    } // ----- FIM CÁLCULO POR CRITÉRIO -----
+
+      if (currentParameters.length === 0) {
+        console.warn(
+          `[RankingService] AVISO: Nenhum parâmetro encontrado para a data ${targetDate} e período ID ${competitionPeriod.id}`
+        );
+
+        // Buscar alguns parâmetros para diagnóstico
+        console.log(
+          `[RankingService] Buscando amostras de parâmetros para diagnóstico...`
+        );
+        const sampleParams = await this.parameterRepo.find({
+          take: 5,
+          order: { createdAt: 'DESC' },
+        });
+
+        if (sampleParams.length > 0) {
+          console.log(`[RankingService] Amostras de parâmetros disponíveis:`);
+          sampleParams.forEach((param) => {
+            console.log(
+              `  - ID: ${param.id}, Nome: ${param.nomeParametro}, Período: ${param.competitionPeriodId}, Critério: ${param.criterionId}, Setor: ${param.sectorId}, Valor: ${param.valor}`
+            );
+            console.log(
+              `    Vigência: ${param.dataInicioEfetivo} até ${param.dataFimEfetivo || 'em aberto'}`
+            );
+          });
+
+          // Verificar se existem parâmetros sem filtro de período
+          console.log(
+            `[RankingService] Verificando parâmetros sem filtro de período...`
+          );
+          const paramsWithoutPeriodFilter = await this.parameterRepo.find({
+            where: [
+              {
+                dataInicioEfetivo: LessThanOrEqual(targetDate),
+                dataFimEfetivo: IsNull(),
+              },
+              {
+                dataInicioEfetivo: LessThanOrEqual(targetDate),
+                dataFimEfetivo: MoreThanOrEqual(targetDate),
+              },
+            ],
+            take: 5,
+          });
+
+          if (paramsWithoutPeriodFilter.length > 0) {
+            console.log(
+              `[RankingService] Parâmetros encontrados sem filtro de período: ${paramsWithoutPeriodFilter.length}`
+            );
+            console.log(
+              `[RankingService] Amostra de parâmetros sem filtro de período:`,
+              paramsWithoutPeriodFilter.slice(0, 2)
+            );
+          } else {
+            console.log(
+              `[RankingService] Nenhum parâmetro encontrado mesmo sem filtro de período`
+            );
+          }
+        } else {
+          console.error(
+            `[RankingService] ERRO: Nenhum parâmetro encontrado na tabela!`
+          );
+        }
+      } else {
+        console.log(
+          `[RankingService] Amostra de parâmetros:`,
+          currentParameters.slice(0, 2)
+        );
+      }
+
+      // Ordenar parâmetros por dataInicioEfetivo (decrescente) e createdAt (decrescente)
+      console.log(`[RankingService] Ordenando parâmetros...`);
+      const sortedParameters = [...currentParameters].sort((a, b) => {
+        const dateA = new Date(a.dataInicioEfetivo);
+        const dateB = new Date(b.dataInicioEfetivo);
+
+        if (dateA.getTime() !== dateB.getTime()) {
+          return dateB.getTime() - dateA.getTime(); // Ordem decrescente por data
+        }
+
+        // Se as datas forem iguais, ordenar por createdAt
+        const createdAtA = new Date(a.createdAt);
+        const createdAtB = new Date(b.createdAt);
+
+        return createdAtB.getTime() - createdAtA.getTime(); // Ordem decrescente por createdAt
+      });
+
+      // 4. Calcular por Critério
+      console.log(`[RankingService] Iniciando cálculo por critério...`);
+      for (const criterion of activeCriteria) {
+        console.log(
+          `[RankingService] Calculando para critério: ${criterion.nome} (ID: ${criterion.id})`
+        );
+        const resultsForCriterion: ResultadoPorCriterio[] = [];
+
+        // Filtrar dados de desempenho para este critério
+        const criterionPerformanceData = performanceData.filter(
+          (p) => p.criterionId === criterion.id
+        );
+        console.log(
+          `[RankingService] Dados de desempenho para critério ${criterion.nome}: ${criterionPerformanceData.length}`
+        );
+
+        criterionPerformanceData.forEach((p) => {
+          console.log(
+            ` - setorId: ${p.sectorId}, criterioId: ${p.criterionId}, valor: ${p.valor}`
+          );
+        });
+
+        for (const sector of activeSectors) {
+          console.log(
+            `[RankingService] Processando setor: ${sector.nome} (ID: ${sector.id}) para critério: ${criterion.nome}`
+          );
+
+          const perf = performanceData.find(
+            (p) => p.sectorId === sector.id && p.criterionId === criterion.id
+          );
+
+          console.log(
+            `[RankingService] Dado de desempenho encontrado para setor ${sector.nome}:`,
+            perf || 'Nenhum'
+          );
+
+          //! arredondando valor realizado para duas casas decimais antes do calculo
+          const valorRealizadoA =
+            perf?.valor != null ? parseFloat(String(perf.valor)) : null;
+          console.log(
+            `[RankingService] valor perf original: ${perf?.valor}, convertido: ${valorRealizadoA}`
+          );
+
+          const valorRealizado =
+            valorRealizadoA != null
+              ? Number(
+                  valorRealizadoA.toFixed(criterion.casasDecimaisPadrao ?? 2)
+                )
+              : null;
+          console.log(
+            `[RankingService] valor realizado final (arredondado): ${valorRealizado}`
+          );
+
+          // Buscar a meta mais recente, com fallback para meta genérica (sem setor)
+          console.log(
+            `[RankingService] Buscando meta para critério ${criterion.nome}, setor ${sector.nome}...`
+          );
+
+          let targetParam = sortedParameters.find(
+            (p) =>
+              p.criterionId === criterion.id &&
+              p.sectorId === sector.id &&
+              p.nomeParametro.startsWith('META_')
+          );
+
+          if (!targetParam) {
+            console.log(
+              `[RankingService] Meta específica não encontrada, buscando meta genérica...`
+            );
+            targetParam = sortedParameters.find(
+              (p) =>
+                p.criterionId === criterion.id &&
+                (p.sectorId === null || p.sectorId === undefined) &&
+                p.nomeParametro.startsWith('META_')
+            );
+          }
+
+          // Adicionar log para verificar qual meta está sendo usada
+          console.log(
+            `[RankingService] Meta usada para critério ${criterion.nome}, setor ${sector.nome}:`,
+            targetParam
+              ? {
+                  id: targetParam.id,
+                  nome: targetParam.nomeParametro,
+                  valor: targetParam.valor,
+                  dataInicioEfetivo: targetParam.dataInicioEfetivo,
+                  dataFimEfetivo: targetParam.dataFimEfetivo || 'em aberto',
+                  createdAt: targetParam.createdAt,
+                }
+              : 'Nenhuma meta encontrada'
+          );
+
+          const valorMeta =
+            targetParam?.valor != null
+              ? parseFloat(String(targetParam.valor))
+              : null;
+          console.log(`[RankingService] Valor da meta: ${valorMeta}`);
+
+          // Cálculo da razão (usando a lógica melhorada do arquivo menor)
+          console.log(
+            `[RankingService] Calculando razão para critério ${criterion.nome}, setor ${sector.nome}...`
+          );
+          let razaoCalculada: number | null = null;
+
+          if (valorRealizado === 0 && valorMeta === 0) {
+            razaoCalculada = 1; // Caso especial: meta 0 e realizado 0 = OK
+            console.log(
+              `[RankingService] Caso especial: meta 0 e realizado 0, razão = 1`
+            );
+          } else if (
+            valorRealizado != null &&
+            valorMeta != null &&
+            valorMeta !== 0
+          ) {
+            razaoCalculada = valorRealizado / valorMeta;
+            console.log(
+              `[RankingService] Razão calculada: ${valorRealizado} / ${valorMeta} = ${razaoCalculada}`
+            );
+          } else if (
+            valorRealizado != null &&
+            (valorMeta === 0 || valorMeta === null)
+          ) {
+            if (valorRealizado === 0) {
+              razaoCalculada = 1;
+            } else {
+              razaoCalculada =
+                criterion.sentido_melhor === 'MAIOR'
+                  ? Infinity
+                  : valorRealizado > 0
+                    ? Infinity
+                    : -Infinity;
+            }
+            console.log(
+              `[RankingService] Meta é zero ou nula, razão = ${razaoCalculada}`
+            );
+          } else {
+            razaoCalculada = null;
+            console.log(
+              `[RankingService] Não foi possível calcular razão (valores nulos)`
+            );
+          }
+
+          resultsForCriterion.push({
+            setorId: sector.id,
+            setorNome: sector.nome,
+            criterioId: criterion.id,
+            criterioNome: criterion.nome,
+            valorRealizado,
+            valorMeta,
+            razaoCalculada,
+            pontos: null,
+          });
+        }
+
+        console.log(
+          `[RankingService] Resultados calculados para critério ${criterion.nome}: ${resultsForCriterion.length}`
+        );
+        console.log(
+          `[RankingService] Ordenando resultados para critério ${criterion.nome}...`
+        );
+
+        // Ordenação (usando a lógica melhorada do arquivo menor)
+        if (criterion.sentido_melhor === 'MENOR') {
+          resultsForCriterion.sort(
+            (a, b) =>
+              (a.razaoCalculada ?? Infinity) - (b.razaoCalculada ?? Infinity)
+          );
+        } else {
+          resultsForCriterion.sort(
+            (a, b) =>
+              (b.razaoCalculada ?? -Infinity) - (a.razaoCalculada ?? -Infinity)
+          );
+        }
+
+        // 4.2a Atribuir Rank considerando empates na razaoCalculada
+        console.log(
+          `[RankingService] Atribuindo ranks para critério ${criterion.nome}...`
+        );
+        let currentRank = 0;
+        let lastRazaoValue: number | null | undefined = undefined; // Renomeado para evitar conflito
+        let tieCount = 0; // Para ajustar o próximo rank após um empate
+
+        resultsForCriterion.forEach((result, index) => {
+          if (
+            result.razaoCalculada === null ||
+            result.razaoCalculada === undefined
+          ) {
+            result.rank = undefined; // Ou um rank de "não classificado", ex: 5 ou null
+            console.log(
+              `[RankingService] Setor ${result.setorNome}: razão nula, rank indefinido`
+            );
+          } else {
+            if (result.razaoCalculada !== lastRazaoValue) {
+              currentRank = index + 1 - tieCount; // Ajusta o rank se houve empates anteriores
+              tieCount = 0; // Reseta contador de empates
+              console.log(
+                `[RankingService] Setor ${result.setorNome}: nova razão ${result.razaoCalculada}, rank ${currentRank}`
+              );
+            } else {
+              tieCount++; // Incrementa contador de empates
+              console.log(
+                `[RankingService] Setor ${result.setorNome}: razão empatada ${result.razaoCalculada}, rank ${currentRank} (empate)`
+              );
+            }
+            result.rank = currentRank;
+            lastRazaoValue = result.razaoCalculada;
+          }
+        });
+
+        console.log(
+          `[RankingService] Calculando pontos para critério ${criterion.nome}...`
+        );
+        const useInvertedScale = criterion.index === 0;
+        console.log(
+          `[RankingService] Usando escala invertida: ${useInvertedScale}`
+        );
+
+        resultsForCriterion.forEach((result) => {
+          let pontos: number | null = null;
+
+          if (criterion.id === 5) {
+            // Regra especial para critério FALTA FUNC
+            console.log(
+              `[RankingService] Aplicando regra especial para critério FALTA FUNC`
+            );
+            if (result.valorRealizado !== null && result.valorRealizado <= 10) {
+              pontos = 1;
+              console.log(
+                `[RankingService] Setor ${result.setorNome}: FALTA FUNC <= 10, pontos = 1`
+              );
+            } else {
+              // Aplica a regra normal só se valorRealizado > 10
+              console.log(
+                `[RankingService] Setor ${result.setorNome}: FALTA FUNC > 10, aplicando regra normal`
+              );
+              switch (result.rank) {
+                case 1:
+                  pontos = 1.0;
+                  break;
+                case 2:
+                  pontos = 1.5;
+                  break;
+                case 3:
+                  pontos = 2.0;
+                  break;
+                case 4:
+                  pontos = 2.5;
+                  break;
+                default:
+                  pontos = 2.5;
+              }
+              console.log(
+                `[RankingService] Setor ${result.setorNome}: rank ${result.rank}, pontos = ${pontos}`
+              );
+            }
+          } else {
+            const todosMesmaRazao = resultsForCriterion.every(
+              (r) => r.razaoCalculada === 1
+            );
+
+            console.log(
+              `[RankingService] Todos setores com mesma razão (1): ${todosMesmaRazao}`
+            );
+
+            if (todosMesmaRazao && result.razaoCalculada === 1) {
+              pontos = 1.0; // Pontuação padrão (verde)
+              console.log(
+                `[RankingService] Setor ${result.setorNome}: todos mesma razão, pontos = 1`
+              );
+            } else {
+              switch (result.rank) {
+                case 1:
+                  pontos = useInvertedScale ? 2.5 : 1.0;
+                  break;
+                case 2:
+                  pontos = useInvertedScale ? 2.0 : 1.5;
+                  break;
+                case 3:
+                  pontos = useInvertedScale ? 1.5 : 2.0;
+                  break;
+                case 4:
+                  pontos = useInvertedScale ? 1.0 : 2.5;
+                  break;
+                default:
+                  pontos = 2.5;
+              }
+              console.log(
+                `[RankingService] Setor ${result.setorNome}: rank ${result.rank}, escala ${useInvertedScale ? 'invertida' : 'normal'}, pontos = ${pontos}`
+              );
+            }
+          }
+          result.pontos = pontos;
+
+          const currentSectorScore = sectorScores[result.setorId];
+          if (currentSectorScore && pontos !== null) {
+            const oldScore = currentSectorScore.totalScore;
+            currentSectorScore.totalScore += pontos;
+            console.log(
+              `[RankingService] Setor ${result.setorNome}: pontuação atualizada ${oldScore} + ${pontos} = ${currentSectorScore.totalScore}`
+            );
+
+            allDetailedResults.push({
+              setorId: result.setorId,
+              setorNome: result.setorNome,
+              criterioId: result.criterioId,
+              criterioNome: result.criterioNome,
+              periodo: competitionPeriod.mesAno,
+              valorRealizado: result.valorRealizado,
+              valorMeta: result.valorMeta,
+              percentualAtingimento: result.razaoCalculada,
+              pontos: result.pontos,
+              // Novos campos são nulos/undefined aqui
+              metaPropostaPadrao: undefined,
+              metaAnteriorValor: undefined,
+              metaAnteriorPeriodo: undefined,
+              regrasAplicadasPadrao: undefined,
+            });
+          } else if (!currentSectorScore) {
+            console.error(
+              `[RankingService] ERRO: Score não encontrado para setor ID ${result.setorId}`
+            );
+          } else {
+            console.log(
+              `[RankingService] Setor ${result.setorNome}: pontos nulos, não somados ao total`
+            );
+          }
+        });
+
+        console.log(
+          `[RankingService] Cálculo concluído para critério ${criterion.nome}`
+        );
+      } // ----- FIM CÁLCULO POR CRITÉRIO -----
+    } // Fim do else (ATIVA/FECHADA)
 
     // 5. Calcular Ranking Final
     console.log('[RankingService] Calculando ranking final...');
     console.log('[RankingService] Pontuações finais por setor:', sectorScores);
 
-    const finalRankingArray = Object.values(sectorScores)
-      .sort((a, b) => a.totalScore - b.totalScore)
-      .map((score, index) => ({
-        RANK: index + 1,
-        SETOR: score.nome,
-        PONTUACAO: parseFloat(score.totalScore.toFixed(2)),
-      }));
+    let finalRankingArray: EntradaRanking[] = [];
+    if (
+      competitionPeriod.status !== 'PLANEJAMENTO' &&
+      Object.keys(sectorScores).length > 0
+    ) {
+      const scoresArray = Object.values(sectorScores);
+      if (scoresArray.length > 0) {
+        finalRankingArray = scoresArray
+          .map((s) => ({
+            sectorId: activeSectors.find((as) => as.nome === s.nome)?.id || 0,
+            ...s,
+          }))
+          .sort((a, b) => {
+            if (a.totalScore === b.totalScore) {
+              return a.sectorId - b.sectorId;
+            }
+            return a.totalScore - b.totalScore;
+          })
+          .map((score, index, arr) => {
+            let rank = index + 1;
+            // Lógica de desempate correta: se pontuação igual ao anterior, rank é o mesmo
+            if (index > 0 && score.totalScore === arr[index - 1]!.totalScore) {
+              rank = arr[index - 1]!.totalScore;
+            }
+            return {
+              RANK: rank,
+              SETOR: score.nome,
+              PONTUACAO: parseFloat(score.totalScore.toFixed(2)),
+            };
+          });
 
-    console.log('[RankingService] Ranking final calculado:', finalRankingArray);
+        // Reajuste de rank para garantir que não haja pulos após empates
+        if (finalRankingArray.length > 0) {
+          let currentActualRank = 1;
+          finalRankingArray[0]!.RANK = currentActualRank;
+          for (let i = 1; i < finalRankingArray.length; i++) {
+            if (
+              finalRankingArray[i]!.PONTUACAO >
+              finalRankingArray[i - 1]!.PONTUACAO
+            ) {
+              currentActualRank = i + 1;
+            }
+            finalRankingArray[i]!.RANK = currentActualRank;
+          }
+        }
+        console.log(
+          '[RankingService] Ranking final calculado:',
+          finalRankingArray
+        );
+      } else {
+        console.log(
+          '[RankingService] Nenhum score de setor para calcular ranking final.'
+        );
+      }
+    } else if (competitionPeriod.status === 'PLANEJAMENTO') {
+      console.log(
+        '[RankingService] Período em PLANEJAMENTO, ranking final não aplicável.'
+      );
+    }
+
     console.log(
       `[RankingService] Detalhes calculados: ${allDetailedResults.length} entradas`
     );
 
     // Verificar se há resultados
-    if (finalRankingArray.length === 0) {
+    if (
+      finalRankingArray.length === 0 &&
+      competitionPeriod.status !== 'PLANEJAMENTO'
+    ) {
       console.warn('[RankingService] AVISO: Nenhum ranking calculado!');
     }
 
@@ -780,607 +845,275 @@ export class RankingService {
 
   // Método interno que aceita uma data alvo específica
   private async calculateAllResultsByDate(
-    period?: string,
-    targetDate?: string
+    periodMesAno?: string,
+    targetDateForData?: string
   ): Promise<{
     ranking: EntradaRanking[];
     details: EntradaResultadoDetalhado[];
   }> {
     console.log(
-      `[RankingService] calculateAllResultsByDate - Período: ${period || 'não especificado'}, Data alvo: ${targetDate || 'não especificada'}`
+      `[RankingService] INÍCIO calculateAllResultsByDate - período: ${periodMesAno || 'não especificado'}, data alvo para dados de performance/metas: ${targetDateForData}`
     );
 
-    // Determinar a vigência a ser usada
-    let competitionPeriod;
+    const competitionPeriod =
+      await this.getValidCompetitionPeriod(periodMesAno);
 
-    if (period) {
-      // Se um período foi especificado, buscar a vigência correspondente
-      console.log(
-        `[RankingService] Buscando vigência para período específico: ${period}`
-      );
-      competitionPeriod = await this.periodRepo.findOne({
-        where: { mesAno: period },
-      });
+    // Se targetDateForData não for fornecido, usar dataFim do período como referência.
+    // A rota /api/results/by-period já passa o endDate do mês como targetDateForData.
+    const effectiveTargetDate = targetDateForData || competitionPeriod.dataFim;
+    console.log(
+      `[RankingService] Data alvo para dados (metas/performance para ATIVA/FECHADA): ${effectiveTargetDate}`
+    );
 
-      console.log(
-        `[RankingService] Resultado da busca por vigência específica:`,
-        competitionPeriod
-      );
-
-      if (!competitionPeriod) {
-        console.error(
-          `[RankingService] ERRO: Vigência não encontrada para o período ${period}`
-        );
-        throw new Error(`Vigência não encontrada para o período ${period}`);
-      }
-    } else {
-      // Se nenhum período foi especificado, buscar a vigência ATIVA
-      console.log(`[RankingService] Buscando vigência ATIVA`);
-      competitionPeriod = await this.periodRepo.findOne({
-        where: { status: 'ATIVA' },
-      });
-
-      console.log(
-        `[RankingService] Resultado da busca por vigência ATIVA:`,
-        competitionPeriod
-      );
-
-      // Se não houver vigência ATIVA, tentar a mais recente em PLANEJAMENTO
-      if (!competitionPeriod) {
-        console.log(
-          `[RankingService] Vigência ATIVA não encontrada, buscando PLANEJAMENTO`
-        );
-        competitionPeriod = await this.periodRepo.findOne({
-          where: { status: 'PLANEJAMENTO' },
-          order: { dataInicio: 'DESC' },
-        });
-
-        console.log(
-          `[RankingService] Resultado da busca por vigência PLANEJAMENTO:`,
-          competitionPeriod
-        );
-      }
-
-      // Se ainda não encontrou, buscar a mais recente de qualquer tipo
-      if (!competitionPeriod) {
-        console.log(
-          `[RankingService] Nenhuma vigência encontrada por status, buscando a mais recente`
-        );
-        competitionPeriod = await this.periodRepo.findOne({
-          order: { dataInicio: 'DESC' },
-        });
-
-        console.log(
-          `[RankingService] Resultado da busca pela vigência mais recente:`,
-          competitionPeriod
-        );
-      }
-
-      if (!competitionPeriod) {
-        console.error(
-          `[RankingService] ERRO: Nenhuma vigência encontrada no sistema`
-        );
-        throw new Error('Nenhuma vigência encontrada no sistema');
-      }
-    }
-
-    console.log(`[RankingService] Vigência selecionada:`, {
-      id: competitionPeriod.id,
-      mesAno: competitionPeriod.mesAno,
-      status: competitionPeriod.status,
-      dataInicio: competitionPeriod.dataInicio,
-      dataFim: competitionPeriod.dataFim,
+    const activeSectors = await this.sectorRepo.find({
+      where: { ativo: true },
+      order: { nome: 'ASC' },
     });
-
-    // Usar a data alvo especificada ou a data fixa padrão
-    const effectiveTargetDate = targetDate || '2025-05-30';
-    console.log(
-      `[RankingService] Usando data alvo para cálculos: ${effectiveTargetDate}`
-    );
-
-    // 1. Buscar Dados Base
-    console.log(`[RankingService] Buscando setores ativos...`);
-    const activeSectors = await this.sectorRepo.findBy({ ativo: true });
-    console.log(
-      `[RankingService] Setores ativos encontrados: ${activeSectors.length}`
-    );
-    if (activeSectors.length > 0) {
-      console.log(
-        `[RankingService] Amostra de setores:`,
-        activeSectors.slice(0, 2)
-      );
-    }
-
-    console.log(`[RankingService] Buscando critérios ativos...`);
-    const activeCriteria = await this.criterionRepo.findBy({ ativo: true });
-    console.log(
-      `[RankingService] Critérios ativos encontrados: ${activeCriteria.length}`
-    );
-    if (activeCriteria.length > 0) {
-      console.log(
-        `[RankingService] Amostra de critérios:`,
-        activeCriteria.slice(0, 2)
-      );
-    }
+    // Certifique-se que CriterionEntity tem 'casasDecimaisPadrao' e 'sentido_melhor' como colunas diretas ou carregue relações se necessário.
+    const activeCriteria = await this.criterionRepo.find({
+      where: { ativo: true },
+      order: { index: 'ASC', id: 'ASC' },
+    });
 
     if (!activeSectors.length || !activeCriteria.length) {
       console.warn(
-        `[RankingService] AVISO: Nenhum setor ativo ou critério ativo encontrado`
+        `[RankingService] AVISO: Nenhum setor ativo ou critério ativo encontrado.`
       );
       return { ranking: [], details: [] };
     }
 
-    // 2. Buscar Dados do Período
-    console.log(
-      `[RankingService] Buscando dados de desempenho para data: ${effectiveTargetDate}`
-    );
-    const performanceData = await this.performanceRepo.find({
-      where: { metricDate: effectiveTargetDate },
-    });
-    console.log(
-      `[RankingService] Dados de desempenho encontrados: ${performanceData.length}`
-    );
-
-    // Verificar se há dados de desempenho
-    if (performanceData.length === 0) {
-      console.warn(
-        `[RankingService] AVISO: Nenhum dado de desempenho encontrado para a data ${effectiveTargetDate}`
-      );
-
-      // Buscar alguns dados de desempenho para diagnóstico
-      console.log(
-        `[RankingService] Buscando amostras de dados de desempenho para diagnóstico...`
-      );
-      const sampleData = await this.performanceRepo.find({
-        take: 5,
-        order: { metricDate: 'DESC' },
-      });
-
-      if (sampleData.length > 0) {
-        console.log(
-          `[RankingService] Amostras de dados de desempenho disponíveis:`
-        );
-        sampleData.forEach((perf) => {
-          console.log(
-            `  - Data: ${perf.metricDate}, Setor: ${perf.sectorId}, Critério: ${perf.criterionId}, Valor: ${perf.valor}`
-          );
-        });
-      } else {
-        console.error(
-          `[RankingService] ERRO: Nenhum dado de desempenho encontrado na tabela!`
-        );
-      }
-    } else {
-      console.log(
-        `[RankingService] Amostra de dados de desempenho:`,
-        performanceData.slice(0, 2)
-      );
-    }
-
-    // Buscar parâmetros vigentes na data alvo
-    console.log(
-      `[RankingService] Buscando parâmetros para data: ${effectiveTargetDate} e período ID: ${competitionPeriod.id}`
-    );
-    const whereParams: FindOptionsWhere<ParameterValueEntity> = {
-      dataInicioEfetivo: LessThanOrEqual(effectiveTargetDate),
-      dataFimEfetivo: IsNull(),
-      competitionPeriodId: competitionPeriod.id, // Importante: filtrar por período de competição
-    };
-    const whereParamsExpired: FindOptionsWhere<ParameterValueEntity> = {
-      dataInicioEfetivo: LessThanOrEqual(effectiveTargetDate),
-      dataFimEfetivo: MoreThanOrEqual(effectiveTargetDate),
-      competitionPeriodId: competitionPeriod.id, // Importante: filtrar por período de competição
-    };
-
-    console.log(`[RankingService] Condições de busca para parâmetros:`, {
-      whereParams,
-      whereParamsExpired,
-    });
-
-    const currentParameters = await this.parameterRepo.find({
-      where: [whereParams, whereParamsExpired],
-      cache: false, // Desativar cache
-    });
-
-    console.log(
-      `[RankingService] Parâmetros encontrados: ${currentParameters.length}`
-    );
-
-    if (currentParameters.length === 0) {
-      console.warn(
-        `[RankingService] AVISO: Nenhum parâmetro encontrado para a data ${effectiveTargetDate} e período ID ${competitionPeriod.id}`
-      );
-
-      // Buscar alguns parâmetros para diagnóstico
-      console.log(
-        `[RankingService] Buscando amostras de parâmetros para diagnóstico...`
-      );
-      const sampleParams = await this.parameterRepo.find({
-        take: 5,
-        order: { createdAt: 'DESC' },
-      });
-
-      if (sampleParams.length > 0) {
-        console.log(`[RankingService] Amostras de parâmetros disponíveis:`);
-        sampleParams.forEach((param) => {
-          console.log(
-            `  - ID: ${param.id}, Nome: ${param.nomeParametro}, Período: ${param.competitionPeriodId}, Critério: ${param.criterionId}, Setor: ${param.sectorId}, Valor: ${param.valor}`
-          );
-          console.log(
-            `    Vigência: ${param.dataInicioEfetivo} até ${param.dataFimEfetivo || 'em aberto'}`
-          );
-        });
-      } else {
-        console.error(
-          `[RankingService] ERRO: Nenhum parâmetro encontrado na tabela!`
-        );
-      }
-    } else {
-      console.log(
-        `[RankingService] Amostra de parâmetros:`,
-        currentParameters.slice(0, 2)
-      );
-    }
-
-    // Ordenar parâmetros por dataInicioEfetivo (decrescente) e createdAt (decrescente)
-    console.log(`[RankingService] Ordenando parâmetros...`);
-    const sortedParameters = [...currentParameters].sort((a, b) => {
-      const dateA = new Date(a.dataInicioEfetivo);
-      const dateB = new Date(b.dataInicioEfetivo);
-
-      if (dateA.getTime() !== dateB.getTime()) {
-        return dateB.getTime() - dateA.getTime(); // Ordem decrescente por data
-      }
-
-      // Se as datas forem iguais, ordenar por createdAt
-      const createdAtA = new Date(a.createdAt);
-      const createdAtB = new Date(b.createdAt);
-
-      return createdAtB.getTime() - createdAtA.getTime(); // Ordem decrescente por createdAt
-    });
-
-    // 3. Preparar Acumuladores
-    console.log(
-      `[RankingService] Preparando acumuladores de score por setor...`
-    );
-    const sectorScores: { [id: number]: AcumuladorScoreSetor } = {};
-    activeSectors.forEach((s) => {
-      sectorScores[s.id] = { nome: s.nome, totalScore: 0 };
-    });
     const allDetailedResults: EntradaResultadoDetalhado[] = [];
+    const sectorScores: { [id: number]: AcumuladorScoreSetor } = {};
 
-    // 4. Calcular por Critério
-    console.log(`[RankingService] Iniciando cálculo por critério...`);
-    for (const criterion of activeCriteria) {
-      console.log(
-        `[RankingService] Calculando para critério: ${criterion.nome} (ID: ${criterion.id})`
-      );
-      const resultsForCriterion: ResultadoPorCriterio[] = [];
-
-      // Filtrar dados de desempenho para este critério
-      const criterionPerformanceData = performanceData.filter(
-        (p) => p.criterionId === criterion.id
-      );
-      console.log(
-        `[RankingService] Dados de desempenho para critério ${criterion.nome}: ${criterionPerformanceData.length}`
-      );
-
-      criterionPerformanceData.forEach((p) => {
-        console.log(
-          ` - setorId: ${p.sectorId}, criterioId: ${p.criterionId}, valor: ${p.valor}`
-        );
+    // Inicializa sectorScores APENAS se não for planejamento
+    if (competitionPeriod.status !== 'PLANEJAMENTO') {
+      activeSectors.forEach((s) => {
+        sectorScores[s.id] = { nome: s.nome, totalScore: 0, setorId: s.id };
       });
+    }
 
-      for (const sector of activeSectors) {
-        console.log(
-          `[RankingService] Processando setor: ${sector.nome} (ID: ${sector.id}) para critério: ${criterion.nome}`
-        );
+    // --- LÓGICA CONDICIONAL BASEADA NO STATUS DO PERÍODO ---
+    if (competitionPeriod.status === 'PLANEJAMENTO') {
+      console.log(
+        `[RankingService] Período ${competitionPeriod.mesAno} está em PLANEJAMENTO.`
+      );
+      for (const criterion of activeCriteria) {
+        for (const sector of activeSectors) {
+          const planningData: PlanningCellOutput =
+            await this.planningCellDataService.getPrecalculatedDataForCell(
+              criterion.id,
+              sector.id,
+              competitionPeriod
+            );
 
-        const perf = performanceData.find(
-          (p) => p.sectorId === sector.id && p.criterionId === criterion.id
-        );
-
-        // Se não houver dados de desempenho para este critério/setor, pular
-        if (!perf) {
-          console.log(
-            `[RankingService] Nenhum dado de desempenho encontrado para setor ${sector.nome} e critério ${criterion.nome}, pulando...`
-          );
-          continue;
+          allDetailedResults.push({
+            setorId: sector.id,
+            setorNome: sector.nome,
+            criterioId: criterion.id,
+            criterioNome: criterion.nome,
+            periodo: competitionPeriod.mesAno,
+            valorRealizado: null,
+            valorMeta: null,
+            percentualAtingimento: null,
+            pontos: null,
+            metaPropostaPadrao: planningData.metaPropostaPadrao,
+            metaAnteriorValor: planningData.metaAnteriorValor,
+            metaAnteriorPeriodo: planningData.metaAnteriorPeriodo,
+            regrasAplicadasPadrao: planningData.regrasAplicadasPadrao,
+          });
         }
+      }
+    } else {
+      // --- SUA LÓGICA ORIGINAL PARA PERÍODOS 'ATIVA' E 'FECHADA' ---
+      console.log(
+        `[RankingService] Período ${competitionPeriod.mesAno} (${competitionPeriod.status}). Calculando performance e ranking.`
+      );
 
-        console.log(
-          `[RankingService] Dado de desempenho encontrado para setor ${sector.nome}:`,
-          perf
-        );
+      // Buscar PerformanceData e ParameterValueEntity (Metas)
+      const performanceData = await this.performanceRepo.find({
+        where: { competitionPeriodId: competitionPeriod.id },
+      });
+      console.log(
+        `[RankingService] Dados de desempenho encontrados para o período ${competitionPeriod.mesAno} (ID: ${competitionPeriod.id}): ${performanceData.length}`
+      );
 
-        //! arredondando valor realizado para duas casas decimais antes do calculo
-        const valorRealizadoA =
-          perf?.valor != null ? parseFloat(String(perf.valor)) : null;
-        console.log(
-          `[RankingService] valor perf original: ${perf?.valor}, convertido: ${valorRealizadoA}`
-        );
+      const whereParamsMetas: FindOptionsWhere<ParameterValueEntity> = {
+        competitionPeriodId: competitionPeriod.id,
+        dataInicioEfetivo: LessThanOrEqual(effectiveTargetDate),
+        dataFimEfetivo: IsNull(),
+      };
+      const whereParamsMetasExpiradasValidas: FindOptionsWhere<ParameterValueEntity> =
+        {
+          competitionPeriodId: competitionPeriod.id,
+          dataInicioEfetivo: LessThanOrEqual(effectiveTargetDate),
+          dataFimEfetivo: MoreThanOrEqual(effectiveTargetDate),
+        };
+      const currentParameters = await this.parameterRepo.find({
+        where: [whereParamsMetas, whereParamsMetasExpiradasValidas],
+        order: { dataInicioEfetivo: 'DESC', createdAt: 'DESC' },
+      });
+      console.log(
+        `[RankingService] Parâmetros (metas) encontrados para período ${competitionPeriod.mesAno}, data ${effectiveTargetDate}: ${currentParameters.length}`
+      );
+      // Sua lógica de ordenação de parâmetros já está na query, mas pode ser feita aqui também se preferir.
+      // const sortedParameters = [...currentParameters].sort(...); // Sua lógica de sort original
 
-        const valorRealizado =
-          valorRealizadoA != null ? Number(valorRealizadoA.toFixed(2)) : null;
-        console.log(
-          `[RankingService] valor realizado final (arredondado): ${valorRealizado}`
-        );
-
-        // Buscar a meta mais recente, com fallback para meta genérica (sem setor)
-        console.log(
-          `[RankingService] Buscando meta para critério ${criterion.nome}, setor ${sector.nome}...`
-        );
-
-        let targetParam = sortedParameters.find(
-          (p) =>
-            p.criterionId === criterion.id &&
-            p.sectorId === sector.id &&
-            p.nomeParametro.startsWith('META_')
-        );
-
-        if (!targetParam) {
-          console.log(
-            `[RankingService] Meta específica não encontrada, buscando meta genérica...`
+      for (const criterion of activeCriteria) {
+        const resultsForCriterion: ResultadoPorCriterio[] = [];
+        for (const sector of activeSectors) {
+          const perf = performanceData.find(
+            (p) => p.sectorId === sector.id && p.criterionId === criterion.id
           );
-          targetParam = sortedParameters.find(
+
+          let targetParam = currentParameters.find(
+            // Usa currentParameters já ordenados
             (p) =>
               p.criterionId === criterion.id &&
-              !p.sectorId &&
+              p.sectorId === sector.id &&
               p.nomeParametro.startsWith('META_')
           );
+          if (!targetParam) {
+            targetParam = currentParameters.find(
+              (p) =>
+                p.criterionId === criterion.id &&
+                (p.sectorId === null || p.sectorId === undefined) &&
+                p.nomeParametro.startsWith('META_')
+            );
+          }
+
+          const valorRealizadoOriginal =
+            perf?.valor != null ? parseFloat(String(perf.valor)) : null;
+          const casasDecimaisRealizado = criterion.casasDecimaisPadrao ?? 2; // Ou uma regra específica para realizado
+          const valorRealizado =
+            valorRealizadoOriginal != null
+              ? Number(valorRealizadoOriginal.toFixed(casasDecimaisRealizado))
+              : null;
+
+          const valorMeta =
+            targetParam?.valor != null
+              ? parseFloat(String(targetParam.valor))
+              : null;
+
+          let razaoCalculada: number | null = null;
+          if (valorRealizado === 0 && valorMeta === 0) {
+            razaoCalculada = 1;
+          } else if (
+            valorRealizado != null &&
+            valorMeta != null &&
+            valorMeta !== 0
+          ) {
+            razaoCalculada = valorRealizado / valorMeta;
+          } else if (
+            valorRealizado != null &&
+            (valorMeta === 0 || valorMeta === null)
+          ) {
+            if (valorRealizado === 0) {
+              razaoCalculada = 1;
+            } else {
+              const sentido = criterion.sentido_melhor || 'MENOR'; // Fallback se não definido
+              razaoCalculada =
+                sentido === 'MAIOR'
+                  ? Infinity
+                  : valorRealizado > 0
+                    ? Infinity
+                    : -Infinity;
+            }
+          }
+
+          resultsForCriterion.push({
+            setorId: sector.id,
+            setorNome: sector.nome,
+            criterioId: criterion.id,
+            criterioNome: criterion.nome,
+            valorRealizado,
+            valorMeta,
+            razaoCalculada,
+            pontos: null,
+          });
         }
 
-        // MODIFICADO: Usar targetValue do dado de desempenho se não houver meta nos parâmetros
-        let valorMeta = null;
-        if (targetParam?.valor != null) {
-          valorMeta = parseFloat(String(targetParam.valor));
-          console.log(
-            `[RankingService] Meta encontrada nos parâmetros: ${valorMeta}`
-          );
-        } else if (perf?.targetValue != null) {
-          valorMeta = parseFloat(String(perf.targetValue));
-          console.log(
-            `[RankingService] Usando targetValue do dado de desempenho como meta: ${valorMeta}`
+        // Ordenar e Rankear `resultsForCriterion`
+        const sentidoCrit = criterion.sentido_melhor || 'MENOR'; // Fallback
+        if (sentidoCrit === 'MENOR') {
+          resultsForCriterion.sort(
+            (a, b) =>
+              (a.razaoCalculada ?? Infinity) - (b.razaoCalculada ?? Infinity)
           );
         } else {
-          console.log(
-            `[RankingService] Meta usada para critério ${criterion.nome}, setor ${sector.nome}: Nenhuma meta encontrada`
+          resultsForCriterion.sort(
+            (a, b) =>
+              (b.razaoCalculada ?? -Infinity) - (a.razaoCalculada ?? -Infinity)
           );
         }
 
-        console.log(`[RankingService] Valor da meta: ${valorMeta}`);
+        let currentRank = 0;
+        let lastRazaoValue: number | null | undefined = undefined;
+        let tieCount = 0;
 
-        // Cálculo da razão
-        console.log(
-          `[RankingService] Calculando razão para critério ${criterion.nome}, setor ${sector.nome}...`
-        );
-        let razaoCalculada: number | null = null;
-
-        if (valorRealizado === 0 && valorMeta === 0) {
-          razaoCalculada = 1; // Caso especial: meta 0 e realizado 0 = OK
-          console.log(
-            `[RankingService] Caso especial: meta 0 e realizado 0, razão = 1`
-          );
-        } else if (
-          valorRealizado != null &&
-          valorMeta != null &&
-          valorMeta !== 0
-        ) {
-          razaoCalculada = valorRealizado / valorMeta;
-          console.log(
-            `[RankingService] Razão calculada: ${valorRealizado} / ${valorMeta} = ${razaoCalculada}`
-          );
-        } else if (valorRealizado != null && valorMeta === 0) {
-          razaoCalculada =
-            criterion.sentido_melhor === 'MAIOR' ? Infinity : -Infinity;
-          console.log(
-            `[RankingService] Meta é zero, razão = ${razaoCalculada}`
-          );
-        } else {
-          razaoCalculada = null;
-          console.log(
-            `[RankingService] Não foi possível calcular razão (valores nulos)`
-          );
-        }
-
-        resultsForCriterion.push({
-          setorId: sector.id,
-          setorNome: sector.nome,
-          criterioId: criterion.id,
-          criterioNome: criterion.nome,
-          valorRealizado,
-          valorMeta,
-          razaoCalculada,
-          pontos: null,
+        resultsForCriterion.forEach((result, index) => {
+          if (
+            result.razaoCalculada === null ||
+            result.razaoCalculada === undefined ||
+            !isFinite(result.razaoCalculada)
+          ) {
+            // Checa também isFinite
+            result.rank = undefined;
+          } else {
+            if (result.razaoCalculada !== lastRazaoValue) {
+              currentRank = index + 1 - tieCount;
+              tieCount = 0;
+            } else {
+              tieCount++;
+            }
+            result.rank = currentRank;
+            lastRazaoValue = result.razaoCalculada;
+          }
         });
-      }
 
-      console.log(
-        `[RankingService] Resultados calculados para critério ${criterion.nome}: ${resultsForCriterion.length}`
-      );
-      console.log(
-        `[RankingService] Ordenando resultados para critério ${criterion.nome}...`
-      );
+        // Calcular Pontos
+        resultsForCriterion.forEach((result) => {
+          let pontos: number | null = null;
+          const useInvertedScale = criterion.index === 0; // Assumindo que 'index' está sempre presente em activeCriteria
 
-      // Ordenação
-      resultsForCriterion.sort((a, b) => {
-        const valA = a.razaoCalculada;
-        const valB = b.razaoCalculada;
-
-        if (valA === null && valB === null) return 0;
-        if (valA === null) return 1;
-        if (valB === null) return -1;
-
-        const isAInf = !isFinite(valA);
-        const isBInf = !isFinite(valB);
-
-        if (isAInf && isBInf) {
-          return valA === valB
-            ? 0
-            : criterion.sentido_melhor === 'MAIOR'
-              ? valA === Infinity
-                ? -1
-                : 1
-              : valA === -Infinity
-                ? -1
-                : 1;
-        }
-        if (isAInf) {
-          return valA === Infinity
-            ? criterion.sentido_melhor === 'MAIOR'
-              ? -1
-              : 1
-            : criterion.sentido_melhor === 'MENOR'
-              ? -1
-              : 1;
-        }
-        if (isBInf) {
-          return valB === Infinity
-            ? criterion.sentido_melhor === 'MAIOR'
-              ? 1
-              : -1
-            : criterion.sentido_melhor === 'MENOR'
-              ? 1
-              : -1;
-        }
-
-        return criterion.sentido_melhor === 'MAIOR' ? valB - valA : valA - valB;
-      });
-
-      // 4.2a Atribuir Rank considerando empates na razaoCalculada
-      console.log(
-        `[RankingService] Atribuindo ranks para critério ${criterion.nome}...`
-      );
-      let currentRank = 0;
-      let lastRazao: number | null | undefined = undefined; // Para comparar com a razaoCalculada anterior
-      let tieCount = 0; // Para ajustar o próximo rank após um empate
-
-      resultsForCriterion.forEach((result, index) => {
-        if (
-          result.razaoCalculada === null ||
-          result.razaoCalculada === undefined
-        ) {
-          result.rank = undefined; // Ou um rank de "não classificado", ex: 5 ou null
-          console.log(
-            `[RankingService] Setor ${result.setorNome}: razão nula, rank indefinido`
-          );
-        } else {
-          if (result.razaoCalculada !== lastRazao) {
-            currentRank = index + 1 - tieCount; // Ajusta o rank se houve empates anteriores
-            tieCount = 0; // Reseta contador de empates
-            console.log(
-              `[RankingService] Setor ${result.setorNome}: nova razão ${result.razaoCalculada}, rank ${currentRank}`
-            );
+          if (
+            criterion.id === 5 &&
+            result.valorRealizado !== null &&
+            result.valorRealizado <= 10
+          ) {
+            // FALTA FUNC
+            pontos = 1.0;
           } else {
-            tieCount++; // Incrementa contador de empates
-            console.log(
-              `[RankingService] Setor ${result.setorNome}: razão empatada ${result.razaoCalculada}, rank ${currentRank} (empate)`
-            );
-          }
-          result.rank = currentRank;
-          lastRazao = result.razaoCalculada;
-        }
-      });
-
-      console.log(
-        `[RankingService] Calculando pontos para critério ${criterion.nome}...`
-      );
-      const useInvertedScale = criterion.index === 0;
-      console.log(
-        `[RankingService] Usando escala invertida: ${useInvertedScale}`
-      );
-
-      resultsForCriterion.forEach((result) => {
-        let pontos: number | null = null;
-
-        if (criterion.id === 5) {
-          // Regra especial para critério FALTA FUNC
-          console.log(
-            `[RankingService] Aplicando regra especial para critério FALTA FUNC`
-          );
-          if (result.valorRealizado !== null && result.valorRealizado <= 10) {
-            pontos = 1;
-            console.log(
-              `[RankingService] Setor ${result.setorNome}: FALTA FUNC <= 10, pontos = 1`
-            );
-          } else {
-            // Aplica a regra normal só se valorRealizado > 10
-            console.log(
-              `[RankingService] Setor ${result.setorNome}: FALTA FUNC > 10, aplicando regra normal`
-            );
-            switch (result.rank) {
-              case 1:
-                pontos = 1.0;
-                break;
-              case 2:
-                pontos = 1.5;
-                break;
-              case 3:
-                pontos = 2.0;
-                break;
-              case 4:
-                pontos = 2.5;
-                break;
-              default:
-                pontos = null;
+            const todosMesmaRazaoUm = resultsForCriterion
+              .filter(
+                (r) => r.razaoCalculada !== null && isFinite(r.razaoCalculada)
+              )
+              .every((r) => r.razaoCalculada === 1);
+            if (todosMesmaRazaoUm && result.razaoCalculada === 1) {
+              pontos = 1.0;
+            } else if (result.rank !== undefined) {
+              // Só atribui pontos se houver rank
+              switch (result.rank) {
+                case 1:
+                  pontos = useInvertedScale ? 2.5 : 1.0;
+                  break;
+                case 2:
+                  pontos = useInvertedScale ? 2.0 : 1.5;
+                  break;
+                case 3:
+                  pontos = useInvertedScale ? 1.5 : 2.0;
+                  break;
+                case 4:
+                  pontos = useInvertedScale ? 1.0 : 2.5;
+                  break;
+                default:
+                  pontos = 2.5; // Para ranks > 4 ou undefined (se não tratados antes)
+              }
+            } else {
+              pontos = 2.5; // Se não puder ser rankeado (ex: razaoCalculada null)
             }
-            console.log(
-              `[RankingService] Setor ${result.setorNome}: rank ${result.rank}, pontos = ${pontos}`
-            );
           }
-        } else {
-          const todosMesmaRazao = resultsForCriterion.every(
-            (r) => r.razaoCalculada === 1
-          );
+          result.pontos = pontos;
 
-          console.log(
-            `[RankingService] Todos setores com mesma razão (1): ${todosMesmaRazao}`
-          );
-
-          if (todosMesmaRazao) {
-            pontos = 1.0; // Pontuação padrão (verde)
-            console.log(
-              `[RankingService] Setor ${result.setorNome}: todos mesma razão, pontos = 1`
-            );
-          } else {
-            switch (result.rank) {
-              case 1:
-                pontos = useInvertedScale ? 2.5 : 1.0;
-                break;
-              case 2:
-                pontos = useInvertedScale ? 2.0 : 1.5;
-                break;
-              case 3:
-                pontos = useInvertedScale ? 1.5 : 2.0;
-                break;
-              case 4:
-                pontos = useInvertedScale ? 1.0 : 2.5;
-                break;
-              default:
-                pontos = null;
-            }
-            console.log(
-              `[RankingService] Setor ${result.setorNome}: rank ${result.rank}, escala ${useInvertedScale ? 'invertida' : 'normal'}, pontos = ${pontos}`
-            );
-          }
-        }
-        result.pontos = pontos;
-
-        const currentSectorScore = sectorScores[result.setorId];
-        if (currentSectorScore) {
-          if (pontos !== null) {
-            const oldScore = currentSectorScore.totalScore;
-            currentSectorScore.totalScore += pontos;
-            console.log(
-              `[RankingService] Setor ${result.setorNome}: pontuação atualizada ${oldScore} + ${pontos} = ${currentSectorScore.totalScore}`
-            );
-          } else {
-            console.log(
-              `[RankingService] Setor ${result.setorNome}: pontos nulos, não somados ao total`
-            );
-          }
-
-          // Adicionar aos detalhes
           allDetailedResults.push({
             setorId: result.setorId,
             setorNome: result.setorNome,
@@ -1388,52 +1121,82 @@ export class RankingService {
             criterioNome: result.criterioNome,
             periodo: competitionPeriod.mesAno,
             valorRealizado: result.valorRealizado,
-            valorMeta: result.valorMeta,
+            valorMeta:
+              typeof result.valorMeta === 'number'
+                ? result.valorMeta
+                : parseFloat(result.valorMeta || '0'),
             percentualAtingimento: result.razaoCalculada,
             pontos: result.pontos,
+            // Novos campos ficam undefined aqui para não serem enviados no JSON se não aplicável
+            metaPropostaPadrao: undefined,
+            metaAnteriorValor: undefined,
+            metaAnteriorPeriodo: undefined,
+            regrasAplicadasPadrao: undefined,
           });
-        } else if (!currentSectorScore) {
-          console.error(
-            `[RankingService] ERRO: Score não encontrado para setor ID ${result.setorId}`
-          );
+
+          if (sectorScores[result.setorId] && result.pontos !== null) {
+            sectorScores[result.setorId]!.totalScore += result.pontos;
+          }
+        });
+      }
+    }
+
+    let finalRankingArray: EntradaRanking[] = [];
+    if (
+      competitionPeriod.status !== 'PLANEJAMENTO' &&
+      Object.keys(sectorScores).length > 0
+    ) {
+      const scoresArray = Object.values(sectorScores);
+      if (scoresArray.length > 0) {
+        finalRankingArray = scoresArray
+          .sort((a, b) => {
+            if (a.totalScore === b.totalScore) {
+              return a.setorId! - b.setorId!;
+            }
+            return a.totalScore - b.totalScore;
+          })
+          .map((score, index, arr) => {
+            // Este map apenas formata, o rank é ajustado depois
+            return {
+              RANK: 0, // Será definido no loop abaixo
+              SETOR: score.nome,
+              PONTUACAO: parseFloat(score.totalScore.toFixed(2)),
+            };
+          });
+
+        if (finalRankingArray.length > 0) {
+          finalRankingArray[0]!.RANK = 1;
+          for (let i = 1; i < finalRankingArray.length; i++) {
+            if (
+              finalRankingArray[i]!.PONTUACAO ===
+              finalRankingArray[i - 1]!.PONTUACAO
+            ) {
+              finalRankingArray[i]!.RANK = finalRankingArray[i - 1]!.RANK;
+            } else {
+              finalRankingArray[i]!.RANK = i + 1; // Rank real baseado na posição após desempate
+            }
+          }
         }
-      });
-
+        console.log(
+          '[RankingService] Ranking final calculado:',
+          finalRankingArray
+        );
+      } else {
+        console.log(
+          '[RankingService] Nenhum score de setor para calcular ranking final.'
+        );
+      }
+    } else if (competitionPeriod.status === 'PLANEJAMENTO') {
       console.log(
-        `[RankingService] Cálculo concluído para critério ${criterion.nome}`
+        '[RankingService] Período em PLANEJAMENTO, ranking final não aplicável.'
       );
-    } // ----- FIM CÁLCULO POR CRITÉRIO -----
+    }
 
-    // 5. Calcular Ranking Final
-    console.log('[RankingService] Calculando ranking final...');
-    console.log('[RankingService] Pontuações finais por setor:', sectorScores);
-
-    const finalRankingArray = Object.values(sectorScores)
-      .sort((a, b) => a.totalScore - b.totalScore)
-      .map((score, index) => ({
-        RANK: index + 1,
-        SETOR: score.nome,
-        PONTUACAO: parseFloat(score.totalScore.toFixed(2)),
-      }));
-
-    console.log('[RankingService] Ranking final calculado:', finalRankingArray);
     console.log(
-      `[RankingService] Detalhes calculados: ${allDetailedResults.length} entradas`
+      `[RankingService] FIM calculateAllResultsByDate. Total de details: ${allDetailedResults.length}`
     );
-
-    // Verificar se há resultados
-    if (finalRankingArray.length === 0) {
-      console.warn('[RankingService] AVISO: Nenhum ranking calculado!');
-    }
-
-    if (allDetailedResults.length === 0) {
-      console.warn('[RankingService] AVISO: Nenhum detalhe calculado!');
-    }
-
-    console.log(`[RankingService] FIM calculateAllResultsByDate`);
     return { ranking: finalRankingArray, details: allDetailedResults };
   }
-
   // --- MÉTODOS PÚBLICOS ---
   async getCurrentRanking(period?: string): Promise<EntradaRanking[]> {
     console.log(
@@ -1455,7 +1218,13 @@ export class RankingService {
       `[RankingService] getDetailedResults - Período: ${period || 'não especificado'}`
     );
     try {
-      const { details } = await this.calculateAllResults(period);
+      // Se 'period' não for fornecido, this.getValidCompetitionPeriod() em calculateAllResultsByDate
+      // buscará o período ATIVO, depois PLANEJAMENTO, depois o mais recente.
+      // A targetDateForData será então o dataFim desse período encontrado.
+      const { details } = await this.calculateAllResultsByDate(
+        period,
+        undefined
+      );
       console.log(
         `[RankingService] getDetailedResults - Resultados encontrados: ${details.length}`
       );
@@ -1466,7 +1235,6 @@ export class RankingService {
     }
   }
 
-  // Em ranking.service.ts
   // Em ranking.service.ts
   /**
    * Busca resultados detalhados para um intervalo de datas dentro de um período específico
@@ -1590,10 +1358,10 @@ export class RankingService {
 
     // Usar o método existente com a data correta
     try {
-      const { details } = await this.calculateAllResultsByDate(
-        period,
-        effectiveDate
-      );
+      // O 'targetDateForData' é a data de referência para buscar os dados consolidados do mês.
+      // Seus dados de performance são por 'metricDate'. Se o ETL consolida para o último dia do mês, use 'endDate'.
+      // Se for para o primeiro, use 'startDate'. Vou manter 'endDate' como na sua rota.
+      const { details } = await this.calculateAllResultsByDate(period, endDate);
 
       console.log(`[RankingService] Resultados calculados: ${details.length}`);
       return details;

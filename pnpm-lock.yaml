@@ -35,6 +35,9 @@ importers:
       '@fastify/cors':
         specifier: ^11.0.1
         version: 11.0.1
+      '@sistema-premiacao/shared-calculation-utils':
+        specifier: workspace:^
+        version: link:../../packages/shared-calculation-utils
       '@sistema-premiacao/shared-types':
         specifier: workspace:^
         version: link:../../packages/shared-types
@@ -126,6 +129,9 @@ importers:
       '@radix-ui/react-tooltip':
         specifier: ^1.2.4
         version: 1.2.4(@types/react-dom@19.1.2(@types/react@19.1.2))(@types/react@19.1.2)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@sistema-premiacao/shared-calculation-utils':
+        specifier: workspace:^
+        version: link:../../packages/shared-calculation-utils
       '@sistema-premiacao/shared-types':
         specifier: workspace:^
         version: link:../../packages/shared-types
@@ -232,6 +238,12 @@ importers:
       typescript-eslint:
         specifier: ^8.30.1
         version: 8.30.1(eslint@9.25.0(jiti@2.4.2))(typescript@5.8.2)
+
+  packages/shared-calculation-utils:
+    devDependencies:
+      typescript:
+        specifier: 5.8.2
+        version: 5.8.2
 
   packages/shared-types:
     devDependencies:
@@ -3226,6 +3238,7 @@ packages:
   typescript@5.8.2:
     resolution: {integrity: sha512-aJn6wq13/afZp/jT9QZmwEjDqqvSGp1VT5GVg+f/t6/oVyrgXM6BY1h9BRh/O5p3PlUPAe+WuiEZOmb/49RqoQ==}
     engines: {node: '>=14.17'}
+    hasBin: true
 
   typescript@5.8.3:
     resolution: {integrity: sha512-p1diW6TqL9L07nNxvRMM7hMMw4c5XOo/1ibL4aAIGmSAt9slTE1Xgw5KWuof2uTOvCg9BY7ZRi+GaF+7sfgPeQ==}

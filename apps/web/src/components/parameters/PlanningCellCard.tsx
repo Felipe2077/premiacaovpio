@@ -1,392 +1,73 @@
-// // src/components/parameters/PlanningCellCard.tsx
-// 'use client';
-
-// import { useCalculationSettings } from '@/hooks/useCalculationSettings'; // Hook que busca as regras padrão
-// import {
-//   Period as CompetitionPeriod,
-//   Criterion,
-// } from '@/hooks/useParametersData'; // Ajuste os tipos se necessário
-// import { calculateProposedMeta } from '@/utils/calculationUtils'; // Nossas funções de cálculo
-// import { useEffect, useState } from 'react';
-// import { CalculationSettings } from './CalculationSettings'; // Para exibir as regras textualmente
-
-// // Props que o PlanningCellCard receberá
-// interface PlanningCellCardProps {
-//   criterion: Criterion; // Contém id, nome, casasDecimaisPadrao, sentido_melhor
-//   sectorId: number | null;
-//   periodoAtual: CompetitionPeriod; // Para saber para qual mês estamos planejando
-//   fetchHistoricalData: (
-//     criterionId: number,
-//     sectorId: number | null,
-//     currentPeriodYYYYMM: string, // Este será o periodoAtual.mesAno
-//     count: number
-//   ) => Promise<any[]>; // Função para buscar o histórico
-// }
-
-// // Função para formatar YYYY-MM-DD para YYYY-MM (pode vir de utils se usada em mais lugares)
-// const formatDateToYearMonth = (dateInput: Date | string | number): string => {
-//   const date = new Date(dateInput);
-//   if (isNaN(date.getTime())) return 'data-invalida';
-//   const year = date.getUTCFullYear();
-//   const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
-//   return `${year}-${month}`;
-// };
-
-// export function PlanningCellCard({
-//   criterion,
-//   sectorId,
-//   periodoAtual,
-//   fetchHistoricalData,
-// }: PlanningCellCardProps) {
-//   const { settings: defaultSettings, isLoading: isLoadingSettings } =
-//     useCalculationSettings(criterion.id);
-
-//   const [historicalData, setHistoricalData] = useState<any[] | null>(null);
-//   const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(false);
-
-//   const [metaProposta, setMetaProposta] = useState<number | null>(null);
-//   const [metaAnterior, setMetaAnterior] = useState<number | null>(null);
-//   const [periodoMetaAnterior, setPeriodoMetaAnterior] = useState<string | null>(
-//     null
-//   );
-//   const [error, setError] = useState<string | null>(null);
-
-//   useEffect(() => {
-//     if (!criterion || !periodoAtual || !defaultSettings) {
-//       // Aguarda settings também
-//       return;
-//     }
-
-//     const loadDataAndCalculate = async () => {
-//       setIsLoadingHistory(true);
-//       setError(null);
-//       setMetaProposta(null); // Reseta antes de calcular
-//       setMetaAnterior(null);
-//       setPeriodoMetaAnterior(null);
-
-//       try {
-//         // fetchHistoricalData busca dados ANTERIORES ao currentPeriodYYYYMM fornecido.
-//         // Se periodoAtual.mesAno é "2025-05" (Maio, para o qual estamos planejando),
-//         // fetchHistoricalData com "2025-05" buscará Abril, Março, etc.
-//         const history = await fetchHistoricalData(
-//           criterion.id,
-//           sectorId,
-//           periodoAtual.mesAno, // Passa o mesAno do período de planejamento
-//           6 // Busca os últimos 6 meses para ter dados para media3, media6, etc.
-//         );
-//         setHistoricalData(history);
-
-//         // 1. Extrair Meta Anterior
-//         if (history && history.length > 0) {
-//           // Assumindo que o primeiro item é o mais recente (mês anterior ao de planejamento)
-//           // e que ele contém 'valorMeta'
-//           const prevMonthData = history[0];
-//           if (
-//             prevMonthData &&
-//             prevMonthData.valorMeta !== null &&
-//             prevMonthData.valorMeta !== undefined
-//           ) {
-//             setMetaAnterior(prevMonthData.valorMeta);
-//             setPeriodoMetaAnterior(prevMonthData.periodo); // Para exibir "Meta Anterior (Abr/2025): valor"
-//           }
-//         }
-
-//         // 2. Calcular Meta Proposta
-//         // Determinar as casas decimais efetivas (Configuração salva > Padrão do Critério > Fallback)
-//         const effectiveDecimalPlaces =
-//           defaultSettings.roundingDecimalPlaces?.toString() ||
-//           criterion.casasDecimaisPadrao?.toString() ||
-//           '0'; // Fallback para 0 casas se nada definido
-
-//         const proposed = calculateProposedMeta({
-//           historicalData: history,
-//           calculationMethod: defaultSettings.calculationMethod,
-//           adjustmentPercentage:
-//             defaultSettings.adjustmentPercentage?.toString() || '0',
-//           roundingMethod: defaultSettings.roundingMethod || 'none',
-//           decimalPlaces: effectiveDecimalPlaces,
-//           criterionBetterDirection: criterion.sentido_melhor,
-//         });
-//         setMetaProposta(proposed);
-//       } catch (err) {
-//         console.error('Erro no PlanningCellCard:', err);
-//         setError('Falha ao calcular proposta.');
-//       } finally {
-//         setIsLoadingHistory(false);
-//       }
-//     };
-
-//     loadDataAndCalculate();
-//   }, [
-//     criterion,
-//     sectorId,
-//     periodoAtual,
-//     fetchHistoricalData,
-//     defaultSettings, // Recalcula se as settings padrão mudarem
-//   ]);
-
-//   const isLoading = isLoadingSettings || isLoadingHistory;
-
-//   if (isLoading) {
-//     return (
-//       <div className='p-3 text-xs text-gray-400 min-h-[100px] flex justify-center items-center'>
-//         Calculando proposta...
-//       </div>
-//     );
-//   }
-
-//   if (error) {
-//     return (
-//       <div className='p-3 text-xs text-red-500 min-h-[100px] flex justify-center items-center'>
-//         {error}
-//       </div>
-//     );
-//   }
-
-//   // Formatar para exibição (usando casasDecimaisPadrao do critério para consistência)
-//   const displayDecimalPlaces =
-//     criterion.casasDecimaisPadrao !== undefined
-//       ? criterion.casasDecimaisPadrao
-//       : 0;
-
-//   return (
-//     <div className='p-3 bg-blue-50 rounded-md border border-blue-100'>
-//       <div className='text-center'>
-//         <div className='text-lg font-semibold'>
-//           {metaProposta !== null
-//             ? metaProposta.toLocaleString('pt-BR', {
-//                 minimumFractionDigits: displayDecimalPlaces,
-//                 maximumFractionDigits: displayDecimalPlaces,
-//               })
-//             : '-'}
-//         </div>
-//         <div className='text-xs text-gray-500 mt-1'>Meta Proposta</div>
-//       </div>
-
-//       <div className='mt-3 pt-2 border-t border-blue-100'>
-//         <div className='text-xs text-gray-600 flex justify-between'>
-//           <span>
-//             Meta Anterior
-//             {periodoMetaAnterior && ` (${periodoMetaAnterior})`}:
-//           </span>
-//           <span className='font-medium'>
-//             {metaAnterior !== null
-//               ? metaAnterior.toLocaleString('pt-BR', {
-//                   minimumFractionDigits: displayDecimalPlaces,
-//                   maximumFractionDigits: displayDecimalPlaces,
-//                 })
-//               : '-'}
-//           </span>
-//         </div>
-//         {/* O CalculationSettings apenas exibe as regras, não precisa recalcular */}
-//         <CalculationSettings criterionId={criterion.id} />
-//       </div>
-//       {/* Os botões de ação (Editar, Calcular no Modal, Histórico) virão do ParametersMatrix */}
-//     </div>
-//   );
-// }
 // src/components/parameters/PlanningCellCard.tsx
 'use client';
 
-import { Button } from '@/components/ui/button'; // Para os botões de ação
+import { Button } from '@/components/ui/button';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { useCalculationSettings } from '@/hooks/useCalculationSettings';
 import {
-  Period as CompetitionPeriod,
-  Criterion,
-  Sector,
-} from '@/hooks/useParametersData'; // Ajuste se seus tipos estiverem em outro lugar
-import { calculateProposedMeta } from '@/utils/calculationUtils';
-import { Calculator, Edit, History } from 'lucide-react'; // Ícones
-import React, { useEffect, useMemo, useState } from 'react';
-import { CalculationSettings } from './CalculationSettings'; // Para exibir as regras textualmente
+  Criterion, // Tipo vindo de useParametersData ou shared-types
+} from '@/hooks/useParametersData';
+import { EntradaResultadoDetalhado } from '@sistema-premiacao/shared-types'; // Importa o tipo da API
+import { Calculator, Edit, History } from 'lucide-react';
+import React from 'react'; // Removido useEffect, useMemo, useState não mais necessários para busca/cálculo aqui
+import { CalculationSettings } from './CalculationSettings';
 
+// Props que o PlanningCellCard receberá
 interface PlanningCellCardProps {
-  criterion: Criterion; // Inclui id, nome, casasDecimaisPadrao, sentido_melhor
-  sector: Sector | null; // Objeto completo do setor
-  periodoAtual: CompetitionPeriod;
-  fetchHistoricalData: (
-    criterionId: number,
-    sectorId: number | null,
-    currentPeriodYYYYMM: string,
-    count: number
-  ) => Promise<any[]>;
-  onEdit: () => void; // Função para editar manualmente (recebida de ParametersMatrix)
-  onCalculate: () => void; // Função para abrir o modal de cálculo (recebida de ParametersMatrix)
-  // onHistory: () => void; // Se tiver uma função para ver histórico
+  criterion: Criterion; // Para passar id, nome, casasDecimaisPadrao para CalculationSettings e formatação
+  // sector: Sector | null; // Não mais necessário se a API principal já considera o setor
+  // periodoAtual: CompetitionPeriod; // Não mais necessário
+  // fetchHistoricalData: (...args: any[]) => Promise<any[]>; // Não mais necessário
+
+  // Dados pré-calculados vindos da API (parte de EntradaResultadoDetalhado)
+  cellData: EntradaResultadoDetalhado; // Este objeto conterá os campos pré-calculados
+
+  onEdit: () => void;
+  onCalculate: () => void;
+  // onHistory?: () => void;
 }
 
-// Componente Skeleton Loader
+// O Skeleton Loader pode ser mantido como estava ou simplificado
+// Se a matriz inteira tem um loader, talvez um placeholder simples seja suficiente aqui.
 const PlanningCellSkeleton: React.FC = () => {
   return (
-    <div className='p-3 bg-blue-50 rounded-md border border-blue-100 animate-pulse min-h-[160px]'>
-      {' '}
-      {/* Dimensão aproximada */}
-      <div className='text-center mb-3'>
-        <div className='h-7 bg-slate-200 rounded w-1/2 mx-auto mb-1'></div>
-        <div className='h-3 bg-slate-200 rounded w-1/3 mx-auto'></div>
-      </div>
-      <div className='mt-3 pt-2 border-t border-blue-100'>
-        <div className='h-4 bg-slate-200 rounded w-3/4 mb-2'></div>
-        <div className='h-3 bg-slate-200 rounded w-1/2 mb-1'></div>
-        <div className='h-3 bg-slate-200 rounded w-1/2'></div>
-      </div>
-      <div className='flex justify-between mt-4 pt-2 border-t border-gray-100'>
-        <div className='h-6 w-6 bg-slate-200 rounded-full'></div>
-        <div className='h-6 w-6 bg-slate-200 rounded-full'></div>
-        <div className='h-6 w-6 bg-slate-200 rounded-full'></div>
-      </div>
+    <div className='p-3 bg-blue-50 rounded-md border border-blue-100 animate-pulse min-h-[160px] flex justify-center items-center'>
+      <span className='text-xs text-gray-400'>Carregando...</span>
     </div>
   );
 };
 
 export function PlanningCellCard({
   criterion,
-  sector,
-  periodoAtual,
-  fetchHistoricalData,
+  cellData, // Recebe todos os dados da célula, incluindo os pré-calculados
   onEdit,
   onCalculate,
 }: PlanningCellCardProps) {
-  // 1. Buscar as configurações padrão para este critério
+  // Se cellData ainda não chegou (ex: loading da matriz inteira), pode mostrar um skeleton ou nada.
+  // Assumindo que ParametersMatrix só renderiza PlanningCellCard quando cellData (ou seu equivalente) existe.
+  // Se os campos de planejamento podem ser opcionais, precisamos de checagens.
   const {
-    settings: defaultSettings,
-    isLoading: isLoadingSettings,
-    error: settingsError,
-  } = useCalculationSettings(criterion.id);
+    metaPropostaPadrao,
+    metaAnteriorValor,
+    metaAnteriorPeriodo,
+    regrasAplicadasPadrao,
+  } = cellData;
 
-  // 2. Estados para dados históricos e valores calculados
-  const [historicalData, setHistoricalData] = useState<any[] | null>(null);
-  const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(false);
-  const [historyError, setHistoryError] = useState<string | null>(null);
-
-  // useEffect para buscar dados históricos quando as props necessárias estiverem disponíveis
-  useEffect(() => {
-    if (!criterion || !periodoAtual || !fetchHistoricalData) {
-      return;
-    }
-
-    const loadHistory = async () => {
-      setIsLoadingHistory(true);
-      setHistoryError(null);
-      try {
-        // periodoAtual.mesAno é o mês para o qual estamos planejando (ex: "2025-05")
-        // fetchHistoricalData busca dados ANTERIORES a este período.
-        const history = await fetchHistoricalData(
-          criterion.id,
-          sector?.id || null, // Usa o ID do setor passado na prop
-          periodoAtual.mesAno,
-          6 // Ex: busca os últimos 6 meses de dados
-        );
-        setHistoricalData(history);
-      } catch (err: any) {
-        console.error(
-          `Erro ao buscar histórico para critério ${criterion.id}, setor ${sector?.id}:`,
-          err
-        );
-        setHistoryError(err.message || 'Falha ao buscar histórico.');
-      } finally {
-        setIsLoadingHistory(false);
-      }
-    };
-
-    loadHistory();
-  }, [criterion, sector?.id, periodoAtual, fetchHistoricalData]);
-
-  // 3. Memoizar o cálculo da meta proposta e meta anterior
-  const { metaProposta, metaAnterior, periodoMetaAnterior } = useMemo(() => {
-    if (!defaultSettings || !historicalData) {
-      return {
-        metaProposta: null,
-        metaAnterior: null,
-        periodoMetaAnterior: null,
-      };
-    }
-
-    // Extrair Meta Anterior
-    let anterior: number | null = null;
-    let periodoAnterior: string | null = null;
-    if (
-      historicalData.length > 0 &&
-      historicalData[0]?.valorMeta !== null &&
-      historicalData[0]?.valorMeta !== undefined
-    ) {
-      anterior = historicalData[0].valorMeta;
-      periodoAnterior = historicalData[0].periodo;
-    }
-
-    // Determinar casas decimais para o cálculo e exibição da proposta
-    // Prioridade: Configuração salva (defaultSettings) > Padrão do critério > Fallback
-    const effectiveDecimalPlacesStr =
-      defaultSettings.roundingDecimalPlaces?.toString() ||
-      criterion.casasDecimaisPadrao?.toString() ||
-      '0'; // Usar '0' como fallback se tudo for nulo
-
-    const proposed = calculateProposedMeta({
-      historicalData,
-      calculationMethod: defaultSettings.calculationMethod,
-      adjustmentPercentage:
-        defaultSettings.adjustmentPercentage?.toString() || '0',
-      roundingMethod: defaultSettings.roundingMethod || 'none',
-      decimalPlaces: effectiveDecimalPlacesStr,
-      criterionBetterDirection: criterion.sentido_melhor,
-    });
-
-    return {
-      metaProposta: proposed,
-      metaAnterior: anterior,
-      periodoMetaAnterior: periodoAnterior,
-    };
-  }, [
-    defaultSettings,
-    historicalData,
-    criterion.casasDecimaisPadrao,
-    criterion.sentido_melhor,
-  ]);
-
-  // Estado geral de carregamento para o card
-  const isLoadingCardData = isLoadingSettings || isLoadingHistory;
-
-  if (isLoadingCardData) {
-    return <PlanningCellSkeleton />;
-  }
-
-  if (settingsError || historyError) {
-    return (
-      <div className='p-3 text-xs text-red-500 min-h-[100px] flex justify-center items-center'>
-        {settingsError || historyError}
-      </div>
-    );
-  }
-
-  if (!defaultSettings) {
-    // Segurança caso settings não carregue por algum motivo não pego pelo error state do hook
-    return (
-      <div className='p-3 text-xs text-gray-400 min-h-[100px] flex justify-center items-center'>
-        Configurações não disponíveis.
-      </div>
-    );
-  }
-
-  // Casas decimais para EXIBIÇÃO (pode ser diferente das usadas no cálculo se a regra mudar)
-  // Aqui usamos o padrão do critério para a exibição da proposta e anterior.
-  const displayDecimalPlaces =
-    criterion.casasDecimaisPadrao !== undefined
-      ? criterion.casasDecimaisPadrao
-      : 0;
+  // Casas decimais para EXIBIÇÃO da meta proposta e anterior
+  // Usa casasDecimaisPadrao do critério. Se não existir, fallback para 0.
+  const displayDecimalPlaces = criterion.casasDecimaisPadrao ?? 0;
 
   return (
     <div className='p-3 bg-blue-50 rounded-md border border-blue-100 min-h-[160px] flex flex-col justify-between'>
       <div>
         <div className='text-center'>
           <div className='text-lg font-semibold'>
-            {metaProposta !== null
-              ? metaProposta.toLocaleString('pt-BR', {
+            {metaPropostaPadrao !== null && metaPropostaPadrao !== undefined
+              ? metaPropostaPadrao.toLocaleString('pt-BR', {
                   minimumFractionDigits: displayDecimalPlaces,
                   maximumFractionDigits: displayDecimalPlaces,
                 })
@@ -399,19 +80,22 @@ export function PlanningCellCard({
           <div className='text-xs text-gray-600 flex justify-between'>
             <span>
               Meta Anterior
-              {periodoMetaAnterior && ` (${periodoMetaAnterior})`}:
+              {metaAnteriorPeriodo && ` (${metaAnteriorPeriodo})`}:
             </span>
             <span className='font-medium'>
-              {metaAnterior !== null
-                ? metaAnterior.toLocaleString('pt-BR', {
+              {metaAnteriorValor !== null && metaAnteriorValor !== undefined
+                ? metaAnteriorValor.toLocaleString('pt-BR', {
                     minimumFractionDigits: displayDecimalPlaces,
                     maximumFractionDigits: displayDecimalPlaces,
                   })
                 : '-'}
             </span>
           </div>
-          {/* CalculationSettings exibe as regras que FORAM USADAS para a proposta acima */}
-          <CalculationSettings criterionId={criterion.id} />
+          {/* Passa as regras pré-calculadas para CalculationSettings */}
+          <CalculationSettings
+            criterionId={criterion.id}
+            regrasParaExibicao={regrasAplicadasPadrao || null} // Passa o objeto de regras
+          />
         </div>
       </div>
 
