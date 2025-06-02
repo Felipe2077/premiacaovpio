@@ -121,7 +121,10 @@ export class RankingService {
     targetDate?: string
   ): Promise<EntradaResultadoDetalhado[]> {
     try {
-      const { details } = await this.calculate(period, { targetDate });
+      // Se não foi fornecida uma data específica, o sistema determinará dinamicamente
+      const { details } = await this.calculate(period, {
+        targetDate: targetDate || undefined,
+      });
       return details;
     } catch (error) {
       console.error(
@@ -211,9 +214,20 @@ export class RankingService {
       throw new Error('Nenhum setor ativo ou critério ativo encontrado');
     }
 
-    const targetDate =
-      options!.targetDate ||
-      (options!.useFixedDate ? DEFAULT_TARGET_DATE : competitionPeriod.dataFim);
+    // MUDANÇA PRINCIPAL: Determinar a data alvo dinamicamente
+    let targetDate: string;
+
+    if (options?.targetDate) {
+      // Se uma data específica foi fornecida, usar ela
+      targetDate = options.targetDate;
+    } else {
+      // Caso contrário, determinar dinamicamente baseado no período
+      targetDate = await this.determineTargetDateForPeriod(competitionPeriod);
+    }
+
+    this.log(
+      `Data alvo determinada: ${targetDate} para período ${competitionPeriod.mesAno}`
+    );
 
     return {
       competitionPeriod,
@@ -222,6 +236,73 @@ export class RankingService {
       targetDate,
       isPlanejamento: competitionPeriod.status === 'PLANEJAMENTO',
     };
+  }
+
+  // ========== NOVO MÉTODO PARA DETERMINAR DATA ALVO ==========
+  private async determineTargetDateForPeriod(
+    competitionPeriod: CompetitionPeriodEntity
+  ): Promise<string> {
+    // Se o período tem uma data fim definida, usar ela
+    if (competitionPeriod.dataFim) {
+      return competitionPeriod.dataFim;
+    }
+
+    // Extrair ano e mês do período
+    const [year, month] = competitionPeriod.mesAno.split('-').map(Number);
+
+    if (!year || !month) {
+      throw new Error(
+        `Formato inválido de mesAno: ${competitionPeriod.mesAno}`
+      );
+    }
+
+    // Por padrão, usar o último dia do mês
+    const lastDayOfMonth = new Date(year, month, 0);
+    const targetDate = lastDayOfMonth.toISOString().split('T')[0];
+
+    // Verificar se há dados para o último dia do mês
+    const hasDataLastDay = await this.performanceRepo.count({
+      where: {
+        metricDate: targetDate,
+        competitionPeriodId: competitionPeriod.id,
+      },
+    });
+
+    if (hasDataLastDay > 0) {
+      return targetDate!;
+    }
+
+    // Se não há dados no último dia, tentar o primeiro dia
+    const firstDayOfMonth = new Date(year, month - 1, 1);
+    const firstDayStr = firstDayOfMonth.toISOString().split('T')[0];
+
+    const hasDataFirstDay = await this.performanceRepo.count({
+      where: {
+        metricDate: firstDayStr,
+        competitionPeriodId: competitionPeriod.id,
+      },
+    });
+
+    if (hasDataFirstDay > 0) {
+      return firstDayStr!;
+    }
+
+    // Se não há dados em nenhuma das datas padrão, buscar qualquer data com dados
+    const anyData = await this.performanceRepo.findOne({
+      where: { competitionPeriodId: competitionPeriod.id },
+      order: { metricDate: 'DESC' },
+    });
+
+    if (anyData?.metricDate) {
+      this.log(`Usando data alternativa com dados: ${anyData.metricDate}`);
+      return anyData.metricDate;
+    }
+
+    // Se não há dados, retornar o último dia do mês como fallback
+    this.log(
+      `Nenhum dado encontrado, usando último dia do mês como fallback: ${targetDate}`
+    );
+    return targetDate!;
   }
 
   // ========== CÁLCULO PARA PLANEJAMENTO ==========
@@ -517,16 +598,12 @@ export class RankingService {
   private async getPerformanceData(
     context: CalculationContext
   ): Promise<PerformanceDataEntity[]> {
-    // Se usar data fixa, buscar por metricDate
-    if (context.targetDate === DEFAULT_TARGET_DATE) {
-      return await this.performanceRepo.find({
-        where: { metricDate: context.targetDate },
-      });
-    }
-
-    // Senão, buscar por competitionPeriodId
+    // Buscar por metricDate E competitionPeriodId para maior precisão
     return await this.performanceRepo.find({
-      where: { competitionPeriodId: context.competitionPeriod.id },
+      where: {
+        metricDate: context.targetDate,
+        competitionPeriodId: context.competitionPeriod.id,
+      },
     });
   }
 
@@ -656,10 +733,6 @@ export class RankingService {
     startDate: string,
     endDate: string
   ): Promise<string> {
-    // Regras específicas conhecidas
-    if (period === '2025-04') return '2025-04-30';
-    if (period === '2025-05') return '2025-05-01';
-
     const competitionPeriod = await this.periodRepo.findOne({
       where: { mesAno: period },
     });
@@ -667,23 +740,7 @@ export class RankingService {
     if (!competitionPeriod) {
       throw new Error(`Vigência não encontrada para o período ${period}`);
     }
-
-    // Verificar datas com dados disponíveis
-    const checkDates = [startDate, endDate];
-    for (const date of checkDates) {
-      const hasData = await this.performanceRepo.count({
-        where: { metricDate: date, competitionPeriodId: competitionPeriod.id },
-      });
-      if (hasData > 0) return date;
-    }
-
-    // Buscar qualquer data com dados
-    const anyData = await this.performanceRepo.findOne({
-      where: { competitionPeriodId: competitionPeriod.id },
-      order: { metricDate: 'DESC' },
-    });
-
-    return anyData?.metricDate || startDate;
+    return await this.determineTargetDateForPeriod(competitionPeriod);
   }
 
   private async findBestAlternativeDate(
