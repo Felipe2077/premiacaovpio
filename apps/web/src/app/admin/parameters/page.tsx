@@ -22,7 +22,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useParametersData } from '@/hooks/useParametersData';
-import { Criterio as Criterion } from '@sistema-premiacao/shared-types';
+import {
+  CalculateParameterDto,
+  Criterio as Criterion,
+  RegrasAplicadasPadrao,
+} from '@sistema-premiacao/shared-types';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -395,6 +399,97 @@ export default function ParametersPage() {
     []
   );
 
+  const handleAcceptSuggestion = useCallback(
+    async (
+      criterionId: number,
+      sectorId: number | null,
+      competitionPeriodId: number,
+      suggestedValue: number,
+      defaultSettingsApplied: RegrasAplicadasPadrao | null // As regras que geraram a sugestão
+    ) => {
+      console.log('Aceitando sugestão:', {
+        criterionId,
+        sectorId,
+        competitionPeriodId,
+        suggestedValue,
+        defaultSettingsApplied,
+      });
+      setIsApplying(true); // Pode reusar o estado de loading do modal, ou criar um novo
+
+      // Encontrar o nome do critério para nomeParametro
+      const criterion = uniqueCriteria.find((c) => c.id === criterionId);
+      const sector = sectors.find((s) => s.id === sectorId);
+      const period = periods.find((p) => p.id === competitionPeriodId);
+
+      if (!criterion || !period) {
+        toast.error(
+          'Dados de critério ou período ausentes para salvar sugestão.'
+        );
+        setIsApplying(false);
+        return;
+      }
+
+      // Montar o DTO para criar/atualizar o ParameterValueEntity
+      // A API /api/parameters/calculate com previewOnly: false parece ser para aplicar o resultado do MODAL.
+      // Para "aceitar sugestão", pode ser que você queira chamar diretamente o endpoint de criar/atualizar
+      // ParameterValueEntity, similar ao que ParameterForm faz.
+      // Ou, adaptar o DTO do calculateParameter para aceitar um valor direto sem recálculo no backend.
+
+      // Opção 1: Usar o endpoint de criação de parâmetro (ParameterValueEntity)
+      // Assumindo que aceitar uma sugestão cria um novo registro de meta se não existir,
+      // ou atualiza (versiona) um existente.
+      // Por simplicidade, vamos focar em criar um novo se não existir, ou chamar o serviço de cálculo
+      // do backend que já atualiza/cria ParameterValue e também atualiza performance_data.
+      // Usar o handleApiCalculation (que chama POST /api/parameters/calculate) parece mais alinhado
+      // pois ele já está configurado para potencialmente salvar settings e criar o ParameterValue.
+
+      const payload: Omit<CalculateParameterDto, 'previewOnly'> & {
+        previewOnly: false;
+        justificativa: string;
+      } = {
+        criterionId,
+        sectorId,
+        competitionPeriodId,
+        calculationMethod:
+          defaultSettingsApplied?.calculationMethod || 'manual', // Indica que foi uma sugestão baseada nesse método
+        adjustmentPercentage: defaultSettingsApplied?.adjustmentPercentage || 0,
+        finalValue: suggestedValue, // O valor da sugestão a ser salvo
+        wasRounded: defaultSettingsApplied?.roundingMethod !== 'none',
+        roundingMethod:
+          (defaultSettingsApplied?.roundingMethod as any) || 'none',
+        roundingDecimalPlaces:
+          defaultSettingsApplied?.roundingDecimalPlaces || 0,
+        saveAsDefault: false, // Não salvar como padrão ao aceitar sugestão, a menos que desejado
+        justificativa: `Sugestão do sistema aceita (baseada em ${defaultSettingsApplied?.calculationMethodLabel || 'regra padrão'})`,
+        previewOnly: false,
+      };
+
+      try {
+        await handleApiCalculation(payload); // Reutiliza a mesma função do modal
+        toast.success(
+          `Meta sugerida para ${criterion.nome} / ${sector?.nome || 'Geral'} aceita e aplicada!`
+        );
+        if (selectedPeriod?.mesAno) {
+          await fetchResults(selectedPeriod.mesAno); // Atualiza a matriz
+        }
+      } catch (error) {
+        // handleApiCalculation já mostra toast de erro
+        console.error('Erro ao aceitar sugestão:', error);
+      } finally {
+        setIsApplying(false);
+      }
+    },
+    [
+      uniqueCriteria,
+      sectors,
+      periods,
+      handleApiCalculation,
+      fetchResults,
+      selectedPeriod?.mesAno,
+      setIsApplying,
+    ]
+  );
+
   return (
     <div className='container mx-auto py-6 space-y-6'>
       <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'>
@@ -470,6 +565,7 @@ export default function ParametersPage() {
               isLoading={isLoading}
               periodoAtual={selectedPeriod as CompetitionPeriod} // Passa o objeto do período selecionado
               fetchHistoricalData={fetchHistoricalData}
+              onAcceptSuggestion={handleAcceptSuggestion}
             />
           </CardContent>
         </Card>

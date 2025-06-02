@@ -26,6 +26,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import React, { useState } from 'react';
+import { Button } from '../ui/button';
 import { PlanningCellCard } from './PlanningCellCard';
 
 interface CompetitionPeriod {
@@ -43,26 +44,28 @@ interface ParametersMatrixProps {
     criterion: Criterion,
     sector: Sector | null,
     currentParameterValue: string | number | null
-  ) => void; // Ajustado para exemplo, revise a assinatura em ParametersPage
+  ) => void;
   onCreate?: (
     criterion: Criterion,
     sector: Sector | null,
     currentCompetitionPeriod: CompetitionPeriod
   ) => void;
   onCalculate?: (
-    // <<< ASSINATURA CORRIGIDA
     criterion: Criterion,
     sector: Sector | null,
     currentCompetitionPeriod: CompetitionPeriod
   ) => void;
   isLoading?: boolean;
-  periodoAtual?: CompetitionPeriod; // ANTES: tipo anônimo
-  fetchHistoricalData: (
+  periodoAtual?: CompetitionPeriod;
+  fetchHistoricalData: (...args: any[]) => Promise<any[]>;
+  onAcceptSuggestion: (
     criterionId: number,
     sectorId: number | null,
-    currentPeriodYYYYMM: string,
-    count: number
-  ) => Promise<any[]>;
+    competitionPeriodId: number,
+    suggestedValue: number,
+    defaultSettingsApplied: EntradaResultadoDetalhado['regrasAplicadasPadrao']
+  ) => void;
+  isLoadingMatrixData: boolean;
 }
 
 const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
@@ -75,13 +78,13 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
   periodoAtual,
   sectors,
   fetchHistoricalData,
+  onAcceptSuggestion,
 }) => {
   const [sortConfig, setSortConfig] = useState<{
     key: string;
     direction: 'ascending' | 'descending';
   } | null>(null);
 
-  // Verificar se os dados estão disponíveis
   if (isLoading) {
     return (
       <div className='flex justify-center items-center p-8 min-h-[200px]'>
@@ -91,7 +94,6 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
       </div>
     );
   }
-
   if (!resultsBySector || Object.keys(resultsBySector).length === 0) {
     return (
       <div className='flex justify-center items-center p-8 min-h-[200px] border rounded-md bg-muted/10'>
@@ -172,66 +174,112 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
 
   // Função para renderizar o conteúdo da célula baseado na fase
   const renderCellContent = (
-    criterio: FullCriterionType,
+    criterionFromLoop: FullCriterionType,
     sectorIdStr: string,
-    sectorData: any
+    sectorDataFromLoop: any
   ) => {
-    const criterioIdMatrix = String(criterio.id);
+    const criterioIdMatrix = String(criterionFromLoop.id);
     const currentSector =
       sectors.find((s) => s.id === parseInt(sectorIdStr)) || null;
 
-    const cellApiData: EntradaResultadoDetalhado | null = // Esta é a variável correta
-      sectorData.criterios && criterioIdMatrix in sectorData.criterios
-        ? sectorData.criterios[criterioIdMatrix]
+    const cellApiData: EntradaResultadoDetalhado | null =
+      sectorDataFromLoop.criterios &&
+      criterioIdMatrix in sectorDataFromLoop.criterios
+        ? sectorDataFromLoop.criterios[criterioIdMatrix]
         : null;
 
     if (isPlanejamento && periodoAtual) {
-      if (!cellApiData) {
-        // Caso não haja NENHUMA entrada para este critério/setor no período de planejamento
-        // (ex: se a API não retornar uma linha para ele, nem mesmo com nulos)
-        // Aqui você pode manter o botão "Definir Meta" se fizer sentido
+      if (!cellApiData && onCreate) {
+        // Se não há dados NENHUM e onCreate existe
         return (
-          <div className='flex flex-col items-center justify-center p-3 h-full min-h-[100px] bg-muted/5 rounded-md'>
+          <div className='flex flex-col items-center justify-center p-3 h-full min-h-[175px] bg-muted/5 rounded-md'>
             <div className='text-muted-foreground text-sm mb-2'>
               Meta a definir
             </div>
-            {onCreate && currentSector && periodoAtual && (
+            {currentSector && ( // Só mostra o botão se tiver um setor (ou ajuste para metas gerais)
               <button
-                onClick={() => onCreate(criterio, currentSector, periodoAtual)}
+                onClick={() =>
+                  onCreate(criterionFromLoop, currentSector, periodoAtual)
+                }
                 className='text-xs px-3 py-1 bg-green-100 text-green-700 hover:bg-green-200 rounded-full'
               >
-                Definir Meta
+                Definir Nova Meta
               </button>
+            )}
+            {/* Adicionar botão para calcular (abrir modal) mesmo se não houver meta ainda */}
+            {onCalculate && currentSector && (
+              <Button
+                variant='link'
+                size='sm'
+                onClick={() =>
+                  onCalculate(criterionFromLoop, currentSector, periodoAtual)
+                }
+                className='mt-1 text-xs'
+              >
+                Calcular no Modal
+              </Button>
             )}
           </div>
         );
       }
 
-      // Prepara as funções de callback para os botões dentro do card
-      const handleEditInCard = () => {
-        if (onEdit && currentSector && cellApiData) {
-          // Adicionado check cellApiData aqui também
-          onEdit(
-            criterio,
-            currentSector,
-            cellApiData.metaPropostaPadrao || null
-          );
-        }
-      };
-      const handleCalculateInCard = () => {
-        if (onCalculate && currentSector && periodoAtual) {
-          onCalculate(criterio, currentSector, periodoAtual);
-        }
-      };
+      if (cellApiData) {
+        const handleEditInCard = () => {
+          if (onEdit && currentSector) {
+            const valueToEdit = cellApiData.isMetaDefinida
+              ? cellApiData.metaDefinidaValor
+              : cellApiData.metaPropostaPadrao;
+            onEdit(criterionFromLoop, currentSector, valueToEdit ?? null);
+          } else if (onEdit && !currentSector) {
+            // Caso de meta geral
+            const valueToEdit = cellApiData.isMetaDefinida
+              ? cellApiData.metaDefinidaValor
+              : cellApiData.metaPropostaPadrao;
+            onEdit(criterionFromLoop, null, valueToEdit ?? null);
+          }
+        };
 
-      return (
-        <PlanningCellCard
-          criterion={criterio}
-          cellData={cellApiData}
-          onEdit={handleEditInCard}
-          onCalculate={handleCalculateInCard}
-        />
-      );
+        const handleCalculateInCard = () => {
+          if (onCalculate && periodoAtual) {
+            onCalculate(criterionFromLoop, currentSector, periodoAtual);
+          }
+        };
+
+        const handleAcceptSuggestionInCard = (
+          // criterionId: number, // Já temos criterionFromLoop.id
+          // sectorId: number | null, // Já temos currentSector.id
+          // competitionPeriodId: number, // Já temos periodoAtual.id
+          suggestedValue: number
+          // defaultSettingsApplied: EntradaResultadoDetalhado['regrasAplicadasPadrao']
+        ) => {
+          if (onAcceptSuggestion && cellApiData.regrasAplicadasPadrao) {
+            // Garante que regras existem
+            onAcceptSuggestion(
+              criterionFromLoop.id,
+              currentSector?.id || null,
+              periodoAtual.id,
+              suggestedValue,
+              cellApiData.regrasAplicadasPadrao // Passa as regras usadas para a sugestão
+            );
+          } else {
+            console.warn(
+              'onAcceptSuggestion não fornecido ou regrasAplicadasPadrao ausentes'
+            );
+            // Adicionar um toast.error aqui seria bom
+          }
+        };
+
+        return (
+          <PlanningCellCard
+            criterion={criterionFromLoop}
+            cellData={cellApiData}
+            isLoadingMatrixData={isLoading} // Passa o isLoading geral da matriz
+            onEdit={handleEditInCard}
+            onCalculate={handleCalculateInCard}
+            onAcceptSuggestion={handleAcceptSuggestionInCard}
+          />
+        );
+      }
     }
     // --- CORREÇÕES PARA FASE ATIVA E FECHADA ---
     // Primeiro, verifique se cellApiData existe. Se não, não há o que mostrar.
@@ -243,7 +291,7 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
       );
     }
     // Fase Ativa (Premiação em Andamento)
-    if (isAtiva) {
+    if (isAtiva && cellApiData) {
       const atingimento = cellApiData.percentualAtingimento || 0;
       const statusColor =
         atingimento >= 1
@@ -337,7 +385,7 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
     }
 
     // Fase Fechada (Período Encerrado)
-    if (isFechada) {
+    if (isFechada && cellApiData) {
       // Calcular cor com base no atingimento
       const atingimento = cellApiData.percentualAtingimento || 0;
       const statusColor =
