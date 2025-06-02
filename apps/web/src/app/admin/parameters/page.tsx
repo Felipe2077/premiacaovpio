@@ -129,53 +129,69 @@ export default function ParametersPage() {
     setIsLoadingSettings(true);
     try {
       const criterioAtual = uniqueCriteria.find((c) => c.id === criterionId);
-      // Define as casas decimais COM BASE APENAS NO PADRÃO DO CRITÉRIO
-      // Fallback para '0' se casasDecimaisPadrao não estiver definido no critério
-      const casasDecimaisParaEsteCriterio =
+      const casasDecimaisDoCriterioStr =
         criterioAtual?.casasDecimaisPadrao?.toString() || '0';
-      setDecimalPlaces(casasDecimaisParaEsteCriterio);
-      console.log(
-        `[ParametersPage] loadDefaultSettings - decimalPlaces DEFINIDO (pelo critério) COMO: ${casasDecimaisParaEsteCriterio}`
-      );
+      // O número de casas decimais é fixo pelo padrão do critério (ou fallback '0')
+      setDecimalPlaces(casasDecimaisDoCriterioStr);
+      // console.log(`[ParametersPage] loadDefaultSettings - decimalPlaces DEFINIDO (pelo critério) COMO: ${casasDecimaisDoCriterioStr}`); // Log para confirmar
 
       const settings = await fetchCriterionCalculationSettings(criterionId);
-      console.log(
-        '[ParametersPage] loadDefaultSettings - settings recebidas da API:',
-        settings
-      );
+      // console.log('[ParametersPage] loadDefaultSettings - settings recebidas da API:', settings);
+
+      let effectiveRoundingMethod = 'none'; // Padrão inicial
+      const casasDecimaisNum = parseInt(casasDecimaisDoCriterioStr, 10);
 
       if (settings) {
         setCalculationMethod(settings.calculationMethod || 'media3');
         setCalculationAdjustment(
           settings.adjustmentPercentage?.toString() || '0'
         );
-        // O método de arredondamento ainda pode vir das settings salvas ou default 'none'
-        setRoundingMethod(settings.roundingMethod || 'none');
+
+        // Define o método de arredondamento:
+        // Se o critério NÃO FOR INTEIRO (casasDecimaisNum > 0), força 'none'.
+        // Se FOR INTEIRO (casasDecimaisNum === 0), usa o salvo ou 'none'.
+        if (casasDecimaisNum > 0) {
+          effectiveRoundingMethod = 'none';
+        } else {
+          effectiveRoundingMethod = settings.roundingMethod || 'none';
+        }
+        setRoundingMethod(effectiveRoundingMethod);
       } else {
         // Nenhuma configuração salva encontrada
         setCalculationMethod('media3');
         setCalculationAdjustment('0');
-        setRoundingMethod('none'); // Default 'none'
+        // Se o critério NÃO FOR INTEIRO, força 'none'.
+        // Se FOR INTEIRO, usa 'none' como fallback.
+        if (casasDecimaisNum > 0) {
+          effectiveRoundingMethod = 'none';
+        } else {
+          effectiveRoundingMethod = 'none'; // Fallback para 'none' se não houver settings
+        }
+        setRoundingMethod(effectiveRoundingMethod);
       }
+      // console.log(`[ParametersPage] loadDefaultSettings - roundingMethod DEFINIDO COMO: ${effectiveRoundingMethod}`);
     } catch (error) {
       console.error('Erro ao carregar configurações de cálculo:', error);
       toast.error('Não foi possível carregar as configurações padrão.');
 
-      // Fallback em caso de erro
       const criterioAtualOnError = uniqueCriteria.find(
         (c) => c.id === criterionId
       );
-      const casasDecimaisOnError =
+      const casasDecimaisOnErrorStr =
         criterioAtualOnError?.casasDecimaisPadrao?.toString() || '0';
-      setDecimalPlaces(casasDecimaisOnError);
-      console.log(
-        `[ParametersPage] loadDefaultSettings (ERRO) - decimalPlaces DEFINIDO (pelo critério) COMO: ${casasDecimaisOnError}`
-      );
+      const casasDecimaisOnErrorNum = parseInt(casasDecimaisOnErrorStr, 10);
 
+      setDecimalPlaces(casasDecimaisOnErrorStr);
+
+      if (casasDecimaisOnErrorNum > 0) {
+        setRoundingMethod('none');
+      } else {
+        setRoundingMethod('none'); // Fallback de erro para 'none'
+      }
       setCalculationMethod('media3');
       setCalculationAdjustment('0');
-      setRoundingMethod('none');
     } finally {
+      setSaveAsDefault(false); // Sempre reseta ou conforme sua regra
       setIsLoadingSettings(false);
     }
   };

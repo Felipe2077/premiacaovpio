@@ -320,8 +320,8 @@ export default function CalculationModal({
     await handleApplyCalculation(payloadApply); // Chama a prop do pai
   };
 
-  // UI não será alterada significativamente, apenas adição do campo de justificativa
-  // e ajuste nos botões/loading states.
+  const showRoundingMethodSelector = parseInt(decimalPlaces, 10) === 0;
+  const parsedPlaces = parseInt(decimalPlaces, 10);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -416,32 +416,38 @@ export default function CalculationModal({
               </div>
             </div>
 
-            {/* Arredondamento */}
-            <div className='space-y-2'>
-              <Label>Opções de Arredondamento</Label>
-              <div className='grid grid-cols-2 gap-4'>
-                <div>
-                  <Label htmlFor='roundingMethod' className='text-sm'>
-                    Método
-                  </Label>
-                  <Select
-                    value={roundingMethod}
-                    onValueChange={setRoundingMethod}
-                  >
-                    <SelectTrigger id='roundingMethod'>
-                      <SelectValue placeholder='Método' />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value='none'>Sem arredondar</SelectItem>{' '}
-                      {/* <<< OPÇÃO PARA NÃO ARREDONDAR */}
-                      <SelectItem value='nearest'>Mais próximo</SelectItem>
-                      <SelectItem value='up'>Para cima</SelectItem>
-                      <SelectItem value='down'>Para baixo</SelectItem>
-                    </SelectContent>
-                  </Select>
+            {/* Arredondamento - Renderizado condicionalmente */}
+            {showRoundingMethodSelector && (
+              <div className='space-y-2'>
+                <Label>Opções de Arredondamento</Label>
+                <div className='grid grid-cols-1 gap-4'>
+                  {' '}
+                  {/* Era grid-cols-2, agora só 1 se o input de casas foi removido */}
+                  <div>
+                    <Label htmlFor='roundingMethod' className='text-sm'>
+                      Método
+                    </Label>
+                    <Select
+                      value={roundingMethod}
+                      onValueChange={setRoundingMethod}
+                      // Opcional: desabilitar se só houver 'none' como opção real
+                      // disabled={!showRoundingMethodSelector}
+                    >
+                      <SelectTrigger id='roundingMethod'>
+                        <SelectValue placeholder='Método' />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value='none'>Sem arredondar</SelectItem>
+                        <SelectItem value='nearest'>Mais próximo</SelectItem>
+                        <SelectItem value='up'>Para cima</SelectItem>
+                        <SelectItem value='down'>Para baixo</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {/* O Input para Casas Decimais já foi removido anteriormente */}
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Salvar como Padrão */}
             <div className='flex items-center space-x-2 pt-2'>

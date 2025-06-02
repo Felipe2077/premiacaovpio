@@ -29,6 +29,8 @@ export interface EntradaResultadoDetalhado {
   metaAnteriorValor?: number | null;
   metaAnteriorPeriodo?: string | null;
   regrasAplicadasPadrao?: RegrasAplicadasPadrao | null;
+  metaDefinidaValor: number | null;
+  isMetaDefinida: boolean;
 }
 
 interface RelatedUser {

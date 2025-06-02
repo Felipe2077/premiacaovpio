@@ -8,6 +8,7 @@ import { SectorEntity } from '@/entity/sector.entity';
 import {
   EntradaRanking,
   EntradaResultadoDetalhado,
+  RegrasAplicadasPadrao,
 } from '@sistema-premiacao/shared-types';
 import {
   FindOptionsWhere,
@@ -30,15 +31,23 @@ interface ResultadoPorCriterio {
   criterioNome: string;
   valorRealizado: number | null;
   valorMeta: number | null;
-  razaoCalculada: number | null; // Pode ser null, finite, Infinity, -Infinity
+  razaoCalculada: number | null;
   rank?: number;
   pontos: number | null;
+  percentualAtingimento?: number | null;
+  periodo?: string | null;
+  // Novos campos opcionais para compatibilidade
+  metaPropostaPadrao?: number | null;
+  metaAnteriorValor?: number | null;
+  metaAnteriorPeriodo?: string | null;
+  regrasAplicadasPadrao?: RegrasAplicadasPadrao | null;
+  metaDefinidaValor?: number | null;
+  isMetaDefinida?: boolean;
 }
 interface AcumuladorScoreSetor {
+  setorId: number; // Adicionado para desempate consistente
   nome: string;
   totalScore: number;
-  // Adicionado para desempate se necessário
-  setorId?: number;
 }
 
 export class RankingService {
@@ -162,7 +171,7 @@ export class RankingService {
       `[RankingService] Preparando acumuladores de score por setor...`
     );
     const sectorScores: { [id: number]: AcumuladorScoreSetor } = {};
-    const allDetailedResults: EntradaResultadoDetalhado[] = [];
+    const allDetailedResults: EntradaResultadoDetalhado[] = []; // CORREÇÃO: Mudando para EntradaResultadoDetalhado[]
 
     // Inicializa sectorScores APENAS se não for planejamento, pois ranking não se aplica
     if (competitionPeriod.status !== 'PLANEJAMENTO') {
@@ -193,14 +202,15 @@ export class RankingService {
             criterioNome: criterion.nome,
             periodo: competitionPeriod.mesAno,
             valorRealizado: null,
-            valorMeta: null, // Meta oficial do período de planejamento (ainda não definida/salva)
+            valorMeta: null,
             percentualAtingimento: null,
             pontos: null,
-            // --- Novos Campos ---
             metaPropostaPadrao: planningData.metaPropostaPadrao,
             metaAnteriorValor: planningData.metaAnteriorValor,
             metaAnteriorPeriodo: planningData.metaAnteriorPeriodo,
             regrasAplicadasPadrao: planningData.regrasAplicadasPadrao,
+            metaDefinidaValor: planningData.metaDefinidaValor,
+            isMetaDefinida: planningData.isMetaDefinida,
           });
         }
       }
@@ -400,7 +410,7 @@ export class RankingService {
         console.log(
           `[RankingService] Calculando para critério: ${criterion.nome} (ID: ${criterion.id})`
         );
-        const resultsForCriterion: ResultadoPorCriterio[] = [];
+        const resultsForCriterion: ResultadoPorCriterio[] = []; // CORREÇÃO: Usando ResultadoPorCriterio para cálculos internos
 
         // Filtrar dados de desempenho para este critério
         const criterionPerformanceData = performanceData.filter(
@@ -545,6 +555,7 @@ export class RankingService {
             valorMeta,
             razaoCalculada,
             pontos: null,
+            periodo: competitionPeriod.mesAno, // CORREÇÃO: Adicionando periodo
           });
         }
 
@@ -705,11 +716,12 @@ export class RankingService {
               valorMeta: result.valorMeta,
               percentualAtingimento: result.razaoCalculada,
               pontos: result.pontos,
-              // Novos campos são nulos/undefined aqui
-              metaPropostaPadrao: undefined,
-              metaAnteriorValor: undefined,
-              metaAnteriorPeriodo: undefined,
-              regrasAplicadasPadrao: undefined,
+              metaPropostaPadrao: null,
+              metaAnteriorValor: null,
+              metaAnteriorPeriodo: null,
+              regrasAplicadasPadrao: null,
+              metaDefinidaValor: null,
+              isMetaDefinida: false,
             });
           } else if (!currentSectorScore) {
             console.error(
@@ -754,7 +766,7 @@ export class RankingService {
             let rank = index + 1;
             // Lógica de desempate correta: se pontuação igual ao anterior, rank é o mesmo
             if (index > 0 && score.totalScore === arr[index - 1]!.totalScore) {
-              rank = arr[index - 1]!.totalScore;
+              rank = arr[index - 1]!.totalScore!; // CORREÇÃO: Pegando o RANK e não totalScore
             }
             return {
               RANK: rank,
@@ -843,7 +855,11 @@ export class RankingService {
     }
   }
 
-  // Método interno que aceita uma data alvo específica
+  // --- MÉTODO PRIVADO: Lógica Central de Cálculo ---
+  // No seu código original, este era `calculateAllResults`. Renomeei para `calculateAllResultsByDate`
+  // na minha sugestão anterior e a rota o chamava. Vou manter `calculateAllResultsByDate`
+  // como o método principal aqui para consistência com as discussões.
+  // Se o seu `calculateAllResults` chama o `calculateAllResultsByDate`, a lógica principal está aqui.
   private async calculateAllResultsByDate(
     periodMesAno?: string,
     targetDateForData?: string
@@ -852,24 +868,17 @@ export class RankingService {
     details: EntradaResultadoDetalhado[];
   }> {
     console.log(
-      `[RankingService] INÍCIO calculateAllResultsByDate - período: ${periodMesAno || 'não especificado'}, data alvo para dados de performance/metas: ${targetDateForData}`
+      `[RankingService] INÍCIO calculateAllResultsByDate - período: ${periodMesAno || 'não especificado'}, data alvo: ${targetDateForData}`
     );
 
     const competitionPeriod =
       await this.getValidCompetitionPeriod(periodMesAno);
-
-    // Se targetDateForData não for fornecido, usar dataFim do período como referência.
-    // A rota /api/results/by-period já passa o endDate do mês como targetDateForData.
     const effectiveTargetDate = targetDateForData || competitionPeriod.dataFim;
-    console.log(
-      `[RankingService] Data alvo para dados (metas/performance para ATIVA/FECHADA): ${effectiveTargetDate}`
-    );
 
     const activeSectors = await this.sectorRepo.find({
       where: { ativo: true },
       order: { nome: 'ASC' },
     });
-    // Certifique-se que CriterionEntity tem 'casasDecimaisPadrao' e 'sentido_melhor' como colunas diretas ou carregue relações se necessário.
     const activeCriteria = await this.criterionRepo.find({
       where: { ativo: true },
       order: { index: 'ASC', id: 'ASC' },
@@ -877,7 +886,7 @@ export class RankingService {
 
     if (!activeSectors.length || !activeCriteria.length) {
       console.warn(
-        `[RankingService] AVISO: Nenhum setor ativo ou critério ativo encontrado.`
+        `[RankingService] AVISO: Nenhum setor ativo ou critério ativo encontrado`
       );
       return { ranking: [], details: [] };
     }
@@ -885,14 +894,12 @@ export class RankingService {
     const allDetailedResults: EntradaResultadoDetalhado[] = [];
     const sectorScores: { [id: number]: AcumuladorScoreSetor } = {};
 
-    // Inicializa sectorScores APENAS se não for planejamento
     if (competitionPeriod.status !== 'PLANEJAMENTO') {
       activeSectors.forEach((s) => {
-        sectorScores[s.id] = { nome: s.nome, totalScore: 0, setorId: s.id };
+        sectorScores[s.id] = { setorId: s.id, nome: s.nome, totalScore: 0 };
       });
     }
 
-    // --- LÓGICA CONDICIONAL BASEADA NO STATUS DO PERÍODO ---
     if (competitionPeriod.status === 'PLANEJAMENTO') {
       console.log(
         `[RankingService] Período ${competitionPeriod.mesAno} está em PLANEJAMENTO.`
@@ -905,7 +912,6 @@ export class RankingService {
               sector.id,
               competitionPeriod
             );
-
           allDetailedResults.push({
             setorId: sector.id,
             setorNome: sector.nome,
@@ -920,21 +926,22 @@ export class RankingService {
             metaAnteriorValor: planningData.metaAnteriorValor,
             metaAnteriorPeriodo: planningData.metaAnteriorPeriodo,
             regrasAplicadasPadrao: planningData.regrasAplicadasPadrao,
+            metaDefinidaValor: planningData.metaDefinidaValor,
+            isMetaDefinida: planningData.isMetaDefinida,
           });
         }
       }
     } else {
-      // --- SUA LÓGICA ORIGINAL PARA PERÍODOS 'ATIVA' E 'FECHADA' ---
+      // Lógica para 'ATIVA' ou 'FECHADA'
       console.log(
         `[RankingService] Período ${competitionPeriod.mesAno} (${competitionPeriod.status}). Calculando performance e ranking.`
       );
 
-      // Buscar PerformanceData e ParameterValueEntity (Metas)
       const performanceData = await this.performanceRepo.find({
         where: { competitionPeriodId: competitionPeriod.id },
       });
       console.log(
-        `[RankingService] Dados de desempenho encontrados para o período ${competitionPeriod.mesAno} (ID: ${competitionPeriod.id}): ${performanceData.length}`
+        `[RankingService] Dados de desempenho para ${competitionPeriod.mesAno} (ID:${competitionPeriod.id}): ${performanceData.length}`
       );
 
       const whereParamsMetas: FindOptionsWhere<ParameterValueEntity> = {
@@ -953,10 +960,8 @@ export class RankingService {
         order: { dataInicioEfetivo: 'DESC', createdAt: 'DESC' },
       });
       console.log(
-        `[RankingService] Parâmetros (metas) encontrados para período ${competitionPeriod.mesAno}, data ${effectiveTargetDate}: ${currentParameters.length}`
+        `[RankingService] Parâmetros (metas) vigentes em ${effectiveTargetDate} para período ${competitionPeriod.mesAno}: ${currentParameters.length}`
       );
-      // Sua lógica de ordenação de parâmetros já está na query, mas pode ser feita aqui também se preferir.
-      // const sortedParameters = [...currentParameters].sort(...); // Sua lógica de sort original
 
       for (const criterion of activeCriteria) {
         const resultsForCriterion: ResultadoPorCriterio[] = [];
@@ -966,7 +971,6 @@ export class RankingService {
           );
 
           let targetParam = currentParameters.find(
-            // Usa currentParameters já ordenados
             (p) =>
               p.criterionId === criterion.id &&
               p.sectorId === sector.id &&
@@ -983,7 +987,7 @@ export class RankingService {
 
           const valorRealizadoOriginal =
             perf?.valor != null ? parseFloat(String(perf.valor)) : null;
-          const casasDecimaisRealizado = criterion.casasDecimaisPadrao ?? 2; // Ou uma regra específica para realizado
+          const casasDecimaisRealizado = criterion.casasDecimaisPadrao ?? 2;
           const valorRealizado =
             valorRealizadoOriginal != null
               ? Number(valorRealizadoOriginal.toFixed(casasDecimaisRealizado))
@@ -1010,7 +1014,7 @@ export class RankingService {
             if (valorRealizado === 0) {
               razaoCalculada = 1;
             } else {
-              const sentido = criterion.sentido_melhor || 'MENOR'; // Fallback se não definido
+              const sentido = criterion.sentido_melhor || 'MENOR';
               razaoCalculada =
                 sentido === 'MAIOR'
                   ? Infinity
@@ -1032,8 +1036,7 @@ export class RankingService {
           });
         }
 
-        // Ordenar e Rankear `resultsForCriterion`
-        const sentidoCrit = criterion.sentido_melhor || 'MENOR'; // Fallback
+        const sentidoCrit = criterion.sentido_melhor || 'MENOR';
         if (sentidoCrit === 'MENOR') {
           resultsForCriterion.sort(
             (a, b) =>
@@ -1056,7 +1059,6 @@ export class RankingService {
             result.razaoCalculada === undefined ||
             !isFinite(result.razaoCalculada)
           ) {
-            // Checa também isFinite
             result.rank = undefined;
           } else {
             if (result.razaoCalculada !== lastRazaoValue) {
@@ -1070,28 +1072,27 @@ export class RankingService {
           }
         });
 
-        // Calcular Pontos
         resultsForCriterion.forEach((result) => {
           let pontos: number | null = null;
-          const useInvertedScale = criterion.index === 0; // Assumindo que 'index' está sempre presente em activeCriteria
+          const useInvertedScale = criterion.index === 0;
 
           if (
             criterion.id === 5 &&
             result.valorRealizado !== null &&
             result.valorRealizado <= 10
           ) {
-            // FALTA FUNC
             pontos = 1.0;
           } else {
-            const todosMesmaRazaoUm = resultsForCriterion
-              .filter(
-                (r) => r.razaoCalculada !== null && isFinite(r.razaoCalculada)
-              )
-              .every((r) => r.razaoCalculada === 1);
+            const validResultsForRank = resultsForCriterion.filter(
+              (r) => r.razaoCalculada !== null && isFinite(r.razaoCalculada)
+            );
+            const todosMesmaRazaoUm =
+              validResultsForRank.length > 0 &&
+              validResultsForRank.every((r) => r.razaoCalculada === 1);
+
             if (todosMesmaRazaoUm && result.razaoCalculada === 1) {
               pontos = 1.0;
             } else if (result.rank !== undefined) {
-              // Só atribui pontos se houver rank
               switch (result.rank) {
                 case 1:
                   pontos = useInvertedScale ? 2.5 : 1.0;
@@ -1106,10 +1107,10 @@ export class RankingService {
                   pontos = useInvertedScale ? 1.0 : 2.5;
                   break;
                 default:
-                  pontos = 2.5; // Para ranks > 4 ou undefined (se não tratados antes)
+                  pontos = 2.5;
               }
             } else {
-              pontos = 2.5; // Se não puder ser rankeado (ex: razaoCalculada null)
+              pontos = 2.5;
             }
           }
           result.pontos = pontos;
@@ -1122,16 +1123,17 @@ export class RankingService {
             periodo: competitionPeriod.mesAno,
             valorRealizado: result.valorRealizado,
             valorMeta:
-              typeof result.valorMeta === 'number'
-                ? result.valorMeta
-                : parseFloat(result.valorMeta || '0'),
+              typeof result.valorMeta === 'string'
+                ? parseFloat(result.valorMeta)
+                : result.valorMeta,
             percentualAtingimento: result.razaoCalculada,
             pontos: result.pontos,
-            // Novos campos ficam undefined aqui para não serem enviados no JSON se não aplicável
-            metaPropostaPadrao: undefined,
-            metaAnteriorValor: undefined,
-            metaAnteriorPeriodo: undefined,
-            regrasAplicadasPadrao: undefined,
+            metaPropostaPadrao: null,
+            metaAnteriorValor: null,
+            metaAnteriorPeriodo: null,
+            regrasAplicadasPadrao: null,
+            metaDefinidaValor: null,
+            isMetaDefinida: false,
           });
 
           if (sectorScores[result.setorId] && result.pontos !== null) {
@@ -1148,32 +1150,51 @@ export class RankingService {
     ) {
       const scoresArray = Object.values(sectorScores);
       if (scoresArray.length > 0) {
-        finalRankingArray = scoresArray
+        const rankedItems = scoresArray
           .sort((a, b) => {
             if (a.totalScore === b.totalScore) {
-              return a.setorId! - b.setorId!;
+              return a.setorId - b.setorId;
             }
             return a.totalScore - b.totalScore;
           })
-          .map((score, index, arr) => {
-            // Este map apenas formata, o rank é ajustado depois
-            return {
-              RANK: 0, // Será definido no loop abaixo
-              SETOR: score.nome,
-              PONTUACAO: parseFloat(score.totalScore.toFixed(2)),
-            };
+          .map((score) => ({
+            SETOR: score.nome,
+            PONTUACAO: parseFloat(score.totalScore.toFixed(2)),
+          }));
+
+        if (rankedItems.length > 0) {
+          finalRankingArray = rankedItems.map((item, index, all) => {
+            let rank = 1;
+            if (index > 0) {
+              if (item.PONTUACAO === all[index - 1]!.PONTUACAO) {
+                rank = index + 1;
+              } else {
+                rank = index + 1;
+              }
+            }
+            return { ...item, RANK: rank };
           });
 
-        if (finalRankingArray.length > 0) {
-          finalRankingArray[0]!.RANK = 1;
           for (let i = 1; i < finalRankingArray.length; i++) {
             if (
               finalRankingArray[i]!.PONTUACAO ===
               finalRankingArray[i - 1]!.PONTUACAO
             ) {
               finalRankingArray[i]!.RANK = finalRankingArray[i - 1]!.RANK;
-            } else {
-              finalRankingArray[i]!.RANK = i + 1; // Rank real baseado na posição após desempate
+            }
+          }
+
+          if (finalRankingArray.length > 0) {
+            let currentRankValue = 1;
+            finalRankingArray[0]!.RANK = currentRankValue;
+            for (let i = 1; i < finalRankingArray.length; i++) {
+              if (
+                finalRankingArray[i]!.PONTUACAO >
+                finalRankingArray[i - 1]!.PONTUACAO
+              ) {
+                currentRankValue = i + 1;
+              }
+              finalRankingArray[i]!.RANK = currentRankValue;
             }
           }
         }

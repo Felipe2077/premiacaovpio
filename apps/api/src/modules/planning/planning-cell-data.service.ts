@@ -2,10 +2,17 @@
 import { AppDataSource } from '@/database/data-source';
 import { CompetitionPeriodEntity } from '@/entity/competition-period.entity';
 import { CriterionEntity } from '@/entity/criterion.entity';
+import { ParameterValueEntity } from '@/entity/parameter-value.entity'; // Para buscar meta definida
 import { PerformanceDataEntity } from '@/entity/performance-data.entity';
-import { calculateProposedMeta } from '@/utils/calculationUtils'; // <<< Certifique-se que este caminho está correto para sua cópia local dos utils
-import { RegrasAplicadasPadrao } from '@sistema-premiacao/shared-types'; // Assumindo que este tipo está em shared-types
-import { FindOptionsWhere, In, IsNull, Repository } from 'typeorm'; // <<< ADICIONADO FindOptionsWhere
+import { RegrasAplicadasPadrao } from '@sistema-premiacao/shared-types';
+import {
+  FindOptionsWhere,
+  In,
+  IsNull,
+  LessThanOrEqual,
+  Repository,
+} from 'typeorm';
+import { calculateProposedMeta } from '../../utils/calculationUtils'; // <<< Ajuste se o nome/caminho do pacote for diferente
 import { CriterionCalculationSettingsService } from '../parameters/criterion-calculation-settings.service';
 
 interface HistoricalPerformanceDataItem {
@@ -14,25 +21,30 @@ interface HistoricalPerformanceDataItem {
   valorMeta: number | null;
 }
 
-// PlanningCellOutput deve corresponder ao que você quer adicionar em EntradaResultadoDetalhado
-// Certifique-se que RegrasAplicadasPadrao está definido em shared-types
+// Esta interface será o tipo de retorno do nosso serviço
 export interface PlanningCellOutput {
   metaPropostaPadrao: number | null;
   metaAnteriorValor: number | null;
   metaAnteriorPeriodo: string | null;
   regrasAplicadasPadrao: RegrasAplicadasPadrao | null;
+  // Novos campos para a meta já definida
+  metaDefinidaValor: number | null;
+  isMetaDefinida: boolean;
+  idMetaDefinida?: number | null;
 }
 
 export class PlanningCellDataService {
   private criterionRepo: Repository<CriterionEntity>;
   private performanceRepo: Repository<PerformanceDataEntity>;
   private periodRepo: Repository<CompetitionPeriodEntity>;
+  private parameterValueRepo: Repository<ParameterValueEntity>; // Repositório para ParameterValueEntity
   private criterionSettingsService: CriterionCalculationSettingsService;
 
   constructor() {
     this.criterionRepo = AppDataSource.getRepository(CriterionEntity);
     this.performanceRepo = AppDataSource.getRepository(PerformanceDataEntity);
     this.periodRepo = AppDataSource.getRepository(CompetitionPeriodEntity);
+    this.parameterValueRepo = AppDataSource.getRepository(ParameterValueEntity); // Inicializa o novo repo
     this.criterionSettingsService = new CriterionCalculationSettingsService();
     console.log('[PlanningCellDataService] Instanciado.');
   }
@@ -55,19 +67,15 @@ export class PlanningCellDataService {
   ): string[] {
     const periods: string[] = [];
     const parts = currentPeriodMesAno.split('-');
-
     if (parts.length !== 2 || !parts[0] || !parts[1]) {
-      // Validação mais robusta
       console.error(
-        '[PlanningCellDataService] Formato de currentPeriodMesAno inválido para generatePreviousPeriodStrings:',
+        '[PlanningCellDataService] Formato de currentPeriodMesAno inválido:',
         currentPeriodMesAno
       );
       return periods;
     }
-
-    let year = parseInt(parts[0]!, 10); // Usando '!' pois parts[0] é garantido como string aqui
-    let month = parseInt(parts[1]!, 10); // Usando '!' pois parts[1] é garantido como string aqui
-
+    let year = parseInt(parts[0]!, 10);
+    let month = parseInt(parts[1]!, 10);
     if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
       console.error(
         '[PlanningCellDataService] Ano ou mês inválido em currentPeriodMesAno após parseInt:',
@@ -75,7 +83,6 @@ export class PlanningCellDataService {
       );
       return periods;
     }
-
     for (let i = 0; i < count; i++) {
       month--;
       if (month < 1) {
@@ -93,28 +100,54 @@ export class PlanningCellDataService {
     planningCompetitionPeriod: CompetitionPeriodEntity
   ): Promise<PlanningCellOutput> {
     console.log(
-      `[PlanningCellDataService] Gerando dados para CritérioID: ${criterionId}, SetorID: ${sectorId}, Período Planejamento: ${planningCompetitionPeriod.mesAno}`
+      `[PlanningCellDataService] Gerando dados para CritérioID: ${criterionId}, SetorID: ${sectorId}, Período: ${planningCompetitionPeriod.mesAno}`
     );
 
+    let metaDefinidaValor: number | null = null;
+    let isMetaDefinida: boolean = false;
+    let idMetaDefinida: number | undefined = undefined;
+
     try {
+      // 1. Buscar Detalhes do Critério
       const criterion = await this.criterionRepo.findOneBy({ id: criterionId });
       if (!criterion) {
-        console.error(
-          `[PlanningCellDataService] Critério com ID ${criterionId} não encontrado.`
-        );
-        return {
-          metaPropostaPadrao: null,
-          metaAnteriorValor: null,
-          metaAnteriorPeriodo: null,
-          regrasAplicadasPadrao: null,
-        };
+        throw new Error(`Critério com ID ${criterionId} não encontrado.`);
       }
 
+      // 2. Verificar se já existe uma Meta OFICIAL SALVA para este período de planejamento
+      const whereClauseMetaDefinida: FindOptionsWhere<ParameterValueEntity> = {
+        criterionId: criterionId,
+        sectorId: sectorId === null ? IsNull() : sectorId,
+        competitionPeriodId: planningCompetitionPeriod.id,
+        // Considerar apenas metas ativas (sem data de fim ou com data de fim futura)
+        // A data de início deve ser relevante para o período de planejamento
+        dataInicioEfetivo: LessThanOrEqual(planningCompetitionPeriod.dataFim), // Começou antes ou durante o período
+        dataFimEfetivo: IsNull(),
+      };
+      // Se houver múltiplas, pegar a mais recente (maior ID ou createdAt mais recente)
+      const metaDefinidaExistente = await this.parameterValueRepo.findOne({
+        where: whereClauseMetaDefinida,
+        order: { createdAt: 'DESC' }, // Pega a mais recente se houver mais de uma ativa
+      });
+
+      if (metaDefinidaExistente && metaDefinidaExistente.valor !== null) {
+        isMetaDefinida = true;
+        metaDefinidaValor = parseFloat(metaDefinidaExistente.valor);
+        idMetaDefinida = metaDefinidaExistente.id;
+        console.log(
+          `  [PlanningCellDataService] Meta já DEFINIDA encontrada: ID ${idMetaDefinida}, Valor ${metaDefinidaValor}`
+        );
+      } else {
+        console.log(
+          `  [PlanningCellDataService] Nenhuma meta oficial definida encontrada para esta célula.`
+        );
+      }
+
+      // 3. Buscar Regras de Cálculo Padrão (para a metaPropostaPadrao)
       const defaultSettings =
         await this.criterionSettingsService.getSettingsForCriterion(
           criterionId
         );
-
       const effectiveCalculationMethod =
         defaultSettings?.calculationMethod || 'media3';
       const effectiveAdjustmentPercentage =
@@ -125,7 +158,8 @@ export class PlanningCellDataService {
         criterion.casasDecimaisPadrao?.toString() ??
         '0';
 
-      let historyCount = 6;
+      // 4. Buscar Dados Históricos (para metaPropostaPadrao e metaAnteriorValor)
+      let historyCount = 6; // Padrão
       if (
         effectiveCalculationMethod === 'media3' ||
         effectiveCalculationMethod === 'melhor3'
@@ -135,8 +169,8 @@ export class PlanningCellDataService {
 
       const previousPeriodStrings = this.generatePreviousPeriodStrings(
         planningCompetitionPeriod.mesAno,
-        historyCount
-      );
+        Math.max(historyCount, 1)
+      ); // Garante pelo menos 1 para meta anterior
 
       let historicalValues: HistoricalPerformanceDataItem[] = [];
       if (previousPeriodStrings.length > 0) {
@@ -146,57 +180,53 @@ export class PlanningCellDataService {
 
         if (historicalPeriods.length > 0) {
           const historicalPeriodIds = historicalPeriods.map((p) => p.id);
-
-          const whereClauseForPerformance: FindOptionsWhere<PerformanceDataEntity> =
+          const performanceWhereClause: FindOptionsWhere<PerformanceDataEntity> =
             {
-              // <<< Tipo explícito
               criterionId: criterionId,
               competitionPeriodId: In(historicalPeriodIds),
-              sectorId: sectorId === null ? IsNull() : sectorId, // <<< Correção para sectorId
+              sectorId: sectorId === null ? IsNull() : sectorId,
             };
-
           const performanceHistory = await this.performanceRepo.find({
-            where: whereClauseForPerformance,
+            where: performanceWhereClause,
             relations: ['competitionPeriod'],
             order: { competitionPeriod: { mesAno: 'DESC' } },
           });
-
-          historicalValues = previousPeriodStrings.map((periodStr) => {
-            const foundPerformance = performanceHistory.find(
-              (ph) => ph.competitionPeriod?.mesAno === periodStr
-            );
-            return {
-              periodo: periodStr,
-              valorRealizado: foundPerformance?.valor ?? null,
-              valorMeta: foundPerformance?.targetValue ?? null,
-            };
-          });
+          historicalValues = previousPeriodStrings
+            .map((periodStr) => {
+              const foundPerformance = performanceHistory.find(
+                (ph) => ph.competitionPeriod?.mesAno === periodStr
+              );
+              return {
+                periodo: periodStr,
+                valorRealizado: foundPerformance?.valor ?? null,
+                valorMeta: foundPerformance?.targetValue ?? null,
+              };
+            })
+            .sort((a, b) => b.periodo.localeCompare(a.periodo)); // Garante ordem decrescente por período
         } else {
-          historicalValues = previousPeriodStrings.map((periodStr) => ({
-            periodo: periodStr,
-            valorRealizado: null,
-            valorMeta: null,
-          }));
+          historicalValues = previousPeriodStrings
+            .map((periodStr) => ({
+              periodo: periodStr,
+              valorRealizado: null,
+              valorMeta: null,
+            }))
+            .sort((a, b) => b.periodo.localeCompare(a.periodo));
         }
       }
       console.log(
-        `[PlanningCellDataService] Histórico formatado (${historicalValues.length} registros):`,
+        `  [PlanningCellDataService] Histórico encontrado (${historicalValues.length}):`,
         historicalValues.slice(0, 3)
       );
 
+      // 5. Extrair "Meta Anterior"
       let metaAnteriorValor: number | null = null;
       let metaAnteriorPeriodo: string | null = null;
-
-      if (
-        historicalValues &&
-        historicalValues.length > 0 &&
-        historicalValues[0]
-      ) {
-        // <<< Checagem robusta
+      if (historicalValues.length > 0 && historicalValues[0]) {
         metaAnteriorValor = historicalValues[0].valorMeta;
         metaAnteriorPeriodo = historicalValues[0].periodo;
       }
 
+      // 6. Calcular "Meta Proposta Padrão" (sugestão do sistema)
       const metaPropostaPadrao = calculateProposedMeta({
         historicalData: historicalValues,
         calculationMethod: effectiveCalculationMethod,
@@ -208,31 +238,33 @@ export class PlanningCellDataService {
           | 'MENOR'
           | undefined,
       });
+      console.log(
+        `  [PlanningCellDataService] Meta Proposta Padrão calculada: ${metaPropostaPadrao}`
+      );
 
-      const regrasAplicadasPadrao: RegrasAplicadasPadrao | null =
-        defaultSettings
-          ? {
-              // Checa se defaultSettings existe
-              calculationMethod: effectiveCalculationMethod,
-              calculationMethodLabel: this.getCalculationMethodLabel(
-                effectiveCalculationMethod
-              ),
-              adjustmentPercentage:
-                parseFloat(effectiveAdjustmentPercentage) || 0,
-              roundingMethod: effectiveRoundingMethod,
-              roundingDecimalPlaces: parseInt(effectiveDecimalPlacesStr, 10),
-            }
-          : null; // Retorna null se não houver defaultSettings
+      // 7. Montar Objeto de Regras Aplicadas
+      const regrasAplicadasPadrao: RegrasAplicadasPadrao = {
+        calculationMethod: effectiveCalculationMethod,
+        calculationMethodLabel: this.getCalculationMethodLabel(
+          effectiveCalculationMethod
+        ),
+        adjustmentPercentage: parseFloat(effectiveAdjustmentPercentage) || 0,
+        roundingMethod: effectiveRoundingMethod,
+        roundingDecimalPlaces: parseInt(effectiveDecimalPlacesStr, 10),
+      };
 
       return {
         metaPropostaPadrao,
         metaAnteriorValor,
         metaAnteriorPeriodo,
         regrasAplicadasPadrao,
+        metaDefinidaValor, // Valor da meta já salva para o período de planejamento
+        isMetaDefinida, // Flag
+        idMetaDefinida, // ID da meta salva
       };
     } catch (error) {
       console.error(
-        `[PlanningCellDataService] Erro ao obter dados para célula (Critério ${criterionId}, Setor ${sectorId}):`,
+        `[PlanningCellDataService] Erro CATCH para Critério ${criterionId}, Setor ${sectorId}:`,
         error
       );
       return {
@@ -240,6 +272,9 @@ export class PlanningCellDataService {
         metaAnteriorValor: null,
         metaAnteriorPeriodo: null,
         regrasAplicadasPadrao: null,
+        metaDefinidaValor: null,
+        isMetaDefinida: false,
+        idMetaDefinida: null,
       };
     }
   }
