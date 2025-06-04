@@ -1,6 +1,7 @@
 // src/pages/ParametersPage.tsx
 'use client';
 import CalculationModal from '@/components/parameters/CalculationModal';
+
 import ParametersMatrix from '@/components/parameters/ParametersMatrix';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
