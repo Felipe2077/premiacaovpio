@@ -1,91 +1,48 @@
 // src/pages/ParametersPage.tsx
 'use client';
-import CalculationModal from '@/components/parameters/CalculationModal';
-
-import ParametersMatrix from '@/components/parameters/ParametersMatrix';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { useParametersData } from '@/hooks/useParametersData';
-import {
-  CalculateParameterDto,
-  Criterio as Criterion,
-  RegrasAplicadasPadrao,
-} from '@sistema-premiacao/shared-types';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
-// Interface para o objeto de período (ajuste conforme sua definição real)
-interface CompetitionPeriod {
-  id: number;
-  mesAno: string;
-  status: string;
-  startDate: Date | string; // Data de início ou referência do período
-  // Adicione outras propriedades se necessário
-}
+// Componentes
+import CalculationModal from '@/components/parameters/CalculationModal';
+import {
+  CreateDialog,
+  EditDialog,
+} from '@/components/parameters/ParameterDialogs';
+import { ParametersHeader } from '@/components/parameters/ParametersHeader';
+import ParametersMatrix from '@/components/parameters/ParametersMatrix';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-// Interface para o objeto de setor (ajuste conforme sua definição real)
-interface Sector {
-  id: number;
-  nome: string;
-  // Adicione outras propriedades se necessário
-}
+// Hooks
+import { useCalculationActions } from '@/hooks/useCalculationActions';
+import { useCalculationSettingsNew as useCalculationSettings } from '@/hooks/useCalculationSettingsNew';
+import { useModals } from '@/hooks/useModals';
+import { useParametersData } from '@/hooks/useParametersData';
+
+// Tipos
+import {
+  CalculateData,
+  CompetitionPeriod,
+  Sector,
+} from '@/types/parameters.types';
+import {
+  Criterio as Criterion,
+  RegrasAplicadasPadrao,
+} from '@sistema-premiacao/shared-types';
+
+// Serviços
+import { ParametersAPI } from '@/services/parameters.api';
 
 export default function ParametersPage() {
   const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [editData, setEditData] = useState<any>(null);
-  const [createData, setCreateData] = useState<any>(null);
-  const [newMetaValue, setNewMetaValue] = useState<string>('');
 
-  // --- Estados para o CalculationModal ---
-  const [calculationModalOpen, setCalculationModalOpen] = useState(false);
-  const [calculateData, setCalculateData] = useState<null | {
-    criterioId: number;
-    criterioNome: string;
-    setorId: number | null;
-    setorNome: string;
-    competitionPeriodId: number;
-    competitionPeriodDate: Date | string | number; // Data de referência do período
-  }>(null);
-  const [calculationMethod, setCalculationMethod] = useState<string>('media3');
-  const [calculationAdjustment, setCalculationAdjustment] =
-    useState<string>('0');
-  const [roundingMethod, setRoundingMethod] = useState<string>('none');
-  const [decimalPlaces, setDecimalPlaces] = useState<string>('2');
-  const [saveAsDefault, setSaveAsDefault] = useState<boolean>(false);
-
-  const [isLoadingSettings, setIsLoadingSettings] = useState<boolean>(false);
-  const [calculatedValuePreview, setCalculatedValuePreview] = useState<
-    number | null
-  >(null);
-  const [isCalculatingPreview, setIsCalculatingPreview] =
-    useState<boolean>(false);
-  const [isApplying, setIsApplying] = useState<boolean>(false);
-
+  // Hook de dados
   const {
-    periods, // Supondo que periods é CompetitionPeriod[]
-    uniqueCriteria, // Supondo que uniqueCriteria é Criterion[]
+    periods,
+    uniqueCriteria,
     resultsBySector,
-    sectors, // Supondo que sectors é Sector[]
+    sectors,
     isLoading,
     fetchResults,
     fetchAllData,
@@ -93,114 +50,27 @@ export default function ParametersPage() {
     fetchCriterionCalculationSettings,
   } = useParametersData();
 
-  // Obter o período selecionado com base no ID
-  // selectedPeriod terá o tipo CompetitionPeriod | null
+  // Hook de modais
+  const modals = useModals();
+
+  // Hook de configurações de cálculo
+  const calculationSettings = useCalculationSettings({
+    uniqueCriteria,
+    fetchCriterionCalculationSettings,
+  });
+
+  // Período selecionado
   const selectedPeriod: CompetitionPeriod | null = selectedPeriodId
-    ? (getPeriodById(selectedPeriodId) as CompetitionPeriod | null) // Cast se getPeriodById retorna any
+    ? (getPeriodById(selectedPeriodId) as CompetitionPeriod | null)
     : null;
 
-  // Função para abrir o modal de cálculo
-  // *** ASSINATURA CORRIGIDA E USO DOS PARÂMETROS ***
-  const handleOpenCalculationModal = (
-    criterion: Criterion, // Objeto do critério
-    sector: Sector | null, // Objeto do setor ou null
-    currentCompetitionPeriod: CompetitionPeriod // Objeto do período da competição
-  ) => {
-    if (!currentCompetitionPeriod) {
-      toast.error('Período da competição não fornecido para cálculo.');
-      return;
-    }
-    if (currentCompetitionPeriod.status !== 'PLANEJAMENTO') {
-      toast.error('Metas só podem ser calculadas na fase de PLANEJAMENTO.');
-      return;
-    }
+  // Hook de ações de cálculo
+  const calculationActions = useCalculationActions({
+    fetchResults,
+    selectedPeriodMesAno: selectedPeriod?.mesAno,
+  });
 
-    setCalculateData({
-      criterioId: criterion.id,
-      criterioNome: criterion.nome,
-      setorId: sector ? sector.id : null,
-      setorNome: sector ? sector.nome : 'Geral',
-      // Usa o objeto currentCompetitionPeriod passado como parâmetro
-      competitionPeriodId: currentCompetitionPeriod.id,
-      competitionPeriodDate: currentCompetitionPeriod.dataInicio, // Assumindo que seu objeto Period tem startDate
-    });
-
-    setCalculatedValuePreview(null);
-    loadDefaultSettings(criterion.id);
-    setCalculationModalOpen(true);
-  };
-
-  const loadDefaultSettings = async (criterionId: number) => {
-    setIsLoadingSettings(true);
-    try {
-      const criterioAtual = uniqueCriteria.find((c) => c.id === criterionId);
-      const casasDecimaisDoCriterioStr =
-        criterioAtual?.casasDecimaisPadrao?.toString() || '0';
-      // O número de casas decimais é fixo pelo padrão do critério (ou fallback '0')
-      setDecimalPlaces(casasDecimaisDoCriterioStr);
-      // console.log(`[ParametersPage] loadDefaultSettings - decimalPlaces DEFINIDO (pelo critério) COMO: ${casasDecimaisDoCriterioStr}`); // Log para confirmar
-
-      const settings = await fetchCriterionCalculationSettings(criterionId);
-      // console.log('[ParametersPage] loadDefaultSettings - settings recebidas da API:', settings);
-
-      let effectiveRoundingMethod = 'none'; // Padrão inicial
-      const casasDecimaisNum = parseInt(casasDecimaisDoCriterioStr, 10);
-
-      if (settings) {
-        setCalculationMethod(settings.calculationMethod || 'media3');
-        setCalculationAdjustment(
-          settings.adjustmentPercentage?.toString() || '0'
-        );
-
-        // Define o método de arredondamento:
-        // Se o critério NÃO FOR INTEIRO (casasDecimaisNum > 0), força 'none'.
-        // Se FOR INTEIRO (casasDecimaisNum === 0), usa o salvo ou 'none'.
-        if (casasDecimaisNum > 0) {
-          effectiveRoundingMethod = 'none';
-        } else {
-          effectiveRoundingMethod = settings.roundingMethod || 'none';
-        }
-        setRoundingMethod(effectiveRoundingMethod);
-      } else {
-        // Nenhuma configuração salva encontrada
-        setCalculationMethod('media3');
-        setCalculationAdjustment('0');
-        // Se o critério NÃO FOR INTEIRO, força 'none'.
-        // Se FOR INTEIRO, usa 'none' como fallback.
-        if (casasDecimaisNum > 0) {
-          effectiveRoundingMethod = 'none';
-        } else {
-          effectiveRoundingMethod = 'none'; // Fallback para 'none' se não houver settings
-        }
-        setRoundingMethod(effectiveRoundingMethod);
-      }
-      // console.log(`[ParametersPage] loadDefaultSettings - roundingMethod DEFINIDO COMO: ${effectiveRoundingMethod}`);
-    } catch (error) {
-      console.error('Erro ao carregar configurações de cálculo:', error);
-      toast.error('Não foi possível carregar as configurações padrão.');
-
-      const criterioAtualOnError = uniqueCriteria.find(
-        (c) => c.id === criterionId
-      );
-      const casasDecimaisOnErrorStr =
-        criterioAtualOnError?.casasDecimaisPadrao?.toString() || '0';
-      const casasDecimaisOnErrorNum = parseInt(casasDecimaisOnErrorStr, 10);
-
-      setDecimalPlaces(casasDecimaisOnErrorStr);
-
-      if (casasDecimaisOnErrorNum > 0) {
-        setRoundingMethod('none');
-      } else {
-        setRoundingMethod('none'); // Fallback de erro para 'none'
-      }
-      setCalculationMethod('media3');
-      setCalculationAdjustment('0');
-    } finally {
-      setSaveAsDefault(false); // Sempre reseta ou conforme sua regra
-      setIsLoadingSettings(false);
-    }
-  };
-
+  // Inicialização do período
   useEffect(() => {
     if (periods.length > 0 && !selectedPeriodId) {
       const activePeriod = periods.find(
@@ -215,12 +85,14 @@ export default function ParametersPage() {
     }
   }, [periods, selectedPeriodId]);
 
+  // Buscar resultados quando o período mudar
   useEffect(() => {
     if (selectedPeriod?.mesAno) {
       fetchResults(selectedPeriod.mesAno);
     }
   }, [selectedPeriod, fetchResults]);
 
+  // Handlers
   const handlePeriodChange = (value: string) => {
     const periodId = parseInt(value);
     setSelectedPeriodId(periodId);
@@ -233,172 +105,96 @@ export default function ParametersPage() {
     }
   };
 
-  const handleEditMeta = (
-    criterion: Criterion, // Espera objeto critério
-    sector: Sector | null, // Espera objeto setor ou null
-    currentParameterValue: string | number | null // Valor atual da meta para preencher
-  ) => {
-    setEditData({
-      criterionId: criterion.id,
-      criterioNome: criterion.nome,
-      setorId: sector ? sector.id : null,
-      setorNome: sector ? sector.nome : 'Geral',
-    });
-    setNewMetaValue(currentParameterValue?.toString() || '');
-    setEditModalOpen(true);
-  };
+  const handleOpenCalculationModal = useCallback(
+    (
+      criterion: Criterion,
+      sector: Sector | null,
+      currentCompetitionPeriod: CompetitionPeriod
+    ) => {
+      if (!currentCompetitionPeriod) {
+        toast.error('Período da competição não fornecido para cálculo.');
+        return;
+      }
+      if (currentCompetitionPeriod.status !== 'PLANEJAMENTO') {
+        toast.error('Metas só podem ser calculadas na fase de PLANEJAMENTO.');
+        return;
+      }
 
-  const handleCreateMeta = (
-    criterion: Criterion,
-    sector: Sector | null,
-    currentCompetitionPeriod: CompetitionPeriod
-  ) => {
-    setCreateData({
-      criterioId: criterion.id,
-      criterioNome: criterion.nome,
-      setorId: sector ? sector.id : null,
-      setorNome: sector ? sector.nome : 'Geral',
-      competitionPeriodId: currentCompetitionPeriod.id,
-    });
-    setNewMetaValue('');
-    setCreateModalOpen(true);
-  };
+      const data: CalculateData = {
+        criterioId: criterion.id,
+        criterioNome: criterion.nome,
+        setorId: sector ? sector.id : null,
+        setorNome: sector ? sector.nome : 'Geral',
+        competitionPeriodId: currentCompetitionPeriod.id,
+        competitionPeriodDate:
+          currentCompetitionPeriod.dataInicio ||
+          currentCompetitionPeriod.startDate,
+      };
+
+      modals.openCalculationModal(data);
+      calculationActions.setCalculatedValuePreview(null);
+      calculationSettings.loadDefaultSettings(criterion.id);
+    },
+    [modals, calculationActions, calculationSettings]
+  );
+
+  const handleEditMeta = useCallback(
+    (
+      criterion: Criterion,
+      sector: Sector | null,
+      currentParameterValue: string | number | null
+    ) => {
+      modals.openEditModal(
+        {
+          criterionId: criterion.id,
+          criterioNome: criterion.nome,
+          setorId: sector ? sector.id : null,
+          setorNome: sector ? sector.nome : 'Geral',
+        },
+        currentParameterValue
+      );
+    },
+    [modals]
+  );
+
+  const handleCreateMeta = useCallback(
+    (
+      criterion: Criterion,
+      sector: Sector | null,
+      currentCompetitionPeriod: CompetitionPeriod
+    ) => {
+      modals.openCreateModal({
+        criterionId: criterion.id,
+        criterioNome: criterion.nome,
+        setorId: sector ? sector.id : null,
+        setorNome: sector ? sector.nome : 'Geral',
+        competitionPeriodId: currentCompetitionPeriod.id,
+      });
+    },
+    [modals]
+  );
 
   const handleSaveEdit = async () => {
-    if (!editData || newMetaValue === '') return; // Permitir 0 como valor
-    // Chamar API para salvar meta editada
+    if (!modals.editData || modals.newMetaValue === '') return;
 
+    // TODO: Implementar chamada à API para salvar meta editada
     // await updateParameter(...);
+
     toast.success('Meta atualizada com sucesso! (Simulado)');
     if (selectedPeriod?.mesAno) await fetchResults(selectedPeriod.mesAno);
-    setEditModalOpen(false);
+    modals.closeEditModal();
   };
 
   const handleSaveCreate = async () => {
-    if (!createData || newMetaValue === '') return;
-    // Chamar API para criar nova meta
+    if (!modals.createData || modals.newMetaValue === '') return;
 
+    // TODO: Implementar chamada à API para criar nova meta
     // await createParameter(...);
+
     toast.success('Meta criada com sucesso! (Simulado)');
     if (selectedPeriod?.mesAno) await fetchResults(selectedPeriod.mesAno);
-    setCreateModalOpen(false);
+    modals.closeCreateModal();
   };
-
-  const handleApiCalculation = useCallback(async (payload: any) => {
-    // Envolvida com useCallback
-    try {
-      const response = await fetch('/api/parameters/calculate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok) {
-        const errorData = await response
-          .json()
-          .catch(() => ({ message: `Erro ${response.status}` }));
-        throw new Error(
-          errorData.message || `Erro ${response.status}: ${response.statusText}`
-        );
-      }
-      return await response.json();
-    } catch (error) {
-      console.error('Erro na chamada API de cálculo:', error);
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : 'Erro desconhecido ao calcular.'
-      );
-      throw error;
-    }
-  }, []);
-
-  const handlePreviewCalculation = useCallback(
-    async (payload: any) => {
-      setIsCalculatingPreview(true);
-      setCalculatedValuePreview(null);
-      try {
-        const result = await handleApiCalculation(payload);
-        setCalculatedValuePreview(result.value);
-        toast.info('Pré-visualização calculada.');
-      } catch (error) {
-        /* já tratado em handleApiCalculation */
-      } finally {
-        setIsCalculatingPreview(false);
-      }
-    },
-    [handleApiCalculation]
-  );
-
-  const handleApplyCalculationCallback = useCallback(
-    async (payload: any) => {
-      setIsApplying(true);
-      try {
-        await handleApiCalculation(payload);
-        setCalculationModalOpen(false);
-        toast.success('Meta calculada e aplicada com sucesso!');
-        if (selectedPeriod?.mesAno) {
-          // Verifica se selectedPeriod existe
-          await fetchResults(selectedPeriod.mesAno);
-        }
-      } catch (error) {
-        /* já tratado em handleApiCalculation */
-      } finally {
-        setIsApplying(false);
-      }
-    },
-    [
-      handleApiCalculation,
-      selectedPeriod,
-      fetchResults,
-      setIsApplying,
-      setCalculationModalOpen,
-    ]
-  );
-
-  const fetchHistoricalData = useCallback(
-    async (
-      criterionId: number,
-      sectorId: number | null,
-      currentPeriodYYYYMM: string,
-      count: number = 6
-    ): Promise<any[]> => {
-      let apiUrl = `/api/results/historical?criterionId=${criterionId}&currentPeriod=${currentPeriodYYYYMM}&count=${count}`;
-      if (sectorId !== null && sectorId !== undefined) {
-        apiUrl += `&sectorId=${sectorId}`;
-      }
-
-      try {
-        const response = await fetch(apiUrl);
-        if (!response.ok) {
-          const errorBody = await response.text();
-          throw new Error(
-            `Erro ${response.status}: ${response.statusText} - ${errorBody}`
-          );
-        }
-        const result = await response.json();
-        if (result.success && result.data && result.data.history) {
-          return result.data.history.map((item: any) => ({
-            periodo: item.period,
-            valorRealizado:
-              item.realizedValue !== null
-                ? parseFloat(item.realizedValue)
-                : null,
-            // <<< ADICIONE ESTA LINHA
-            valorMeta:
-              item.targetValue !== null ? parseFloat(item.targetValue) : null,
-            status:
-              item.realizedValue !== null ? 'FECHADO' : 'ABERTO_OU_SEM_DADOS',
-          }));
-        }
-        return [];
-      } catch (error) {
-        console.error('[ParametersPage] Erro em fetchHistoricalData:', error);
-        toast.error('Falha ao buscar dados históricos.');
-        throw error;
-      }
-    },
-    []
-  );
 
   const handleAcceptSuggestion = useCallback(
     async (
@@ -406,137 +202,76 @@ export default function ParametersPage() {
       sectorId: number | null,
       competitionPeriodId: number,
       suggestedValue: number,
-      defaultSettingsApplied: RegrasAplicadasPadrao | null // As regras que geraram a sugestão
+      defaultSettingsApplied: RegrasAplicadasPadrao | null
     ) => {
-      console.log('Aceitando sugestão:', {
+      console.log(
+        '[DEBUG ParametersPage] handleAcceptSystemSuggestion RECEBEU:'
+      );
+      console.log('[DEBUG] criterionId:', criterionId, typeof criterionId);
+      console.log('[DEBUG] sectorId:', sectorId, typeof sectorId);
+      console.log(
+        '[DEBUG] competitionPeriodId:',
+        competitionPeriodId,
+        typeof competitionPeriodId
+      );
+      console.log(
+        '[DEBUG] suggestedValue:',
+        suggestedValue,
+        typeof suggestedValue
+      );
+
+      const criterion = uniqueCriteria.find((c) => c.id === criterionId);
+      const sector = sectors.find((s) => s.id === sectorId);
+
+      if (!criterion) {
+        toast.error('Dados de critério ausentes para salvar sugestão.');
+        return;
+      }
+
+      await calculationActions.handleAcceptSuggestion(
         criterionId,
         sectorId,
         competitionPeriodId,
         suggestedValue,
         defaultSettingsApplied,
-      });
-      setIsApplying(true); // Pode reusar o estado de loading do modal, ou criar um novo
-
-      // Encontrar o nome do critério para nomeParametro
-      const criterion = uniqueCriteria.find((c) => c.id === criterionId);
-      const sector = sectors.find((s) => s.id === sectorId);
-      const period = periods.find((p) => p.id === competitionPeriodId);
-
-      if (!criterion || !period) {
-        toast.error(
-          'Dados de critério ou período ausentes para salvar sugestão.'
-        );
-        setIsApplying(false);
-        return;
-      }
-
-      // Montar o DTO para criar/atualizar o ParameterValueEntity
-      // A API /api/parameters/calculate com previewOnly: false parece ser para aplicar o resultado do MODAL.
-      // Para "aceitar sugestão", pode ser que você queira chamar diretamente o endpoint de criar/atualizar
-      // ParameterValueEntity, similar ao que ParameterForm faz.
-      // Ou, adaptar o DTO do calculateParameter para aceitar um valor direto sem recálculo no backend.
-
-      // Opção 1: Usar o endpoint de criação de parâmetro (ParameterValueEntity)
-      // Assumindo que aceitar uma sugestão cria um novo registro de meta se não existir,
-      // ou atualiza (versiona) um existente.
-      // Por simplicidade, vamos focar em criar um novo se não existir, ou chamar o serviço de cálculo
-      // do backend que já atualiza/cria ParameterValue e também atualiza performance_data.
-      // Usar o handleApiCalculation (que chama POST /api/parameters/calculate) parece mais alinhado
-      // pois ele já está configurado para potencialmente salvar settings e criar o ParameterValue.
-
-      const payload: Omit<CalculateParameterDto, 'previewOnly'> & {
-        previewOnly: false;
-        justificativa: string;
-      } = {
-        criterionId,
-        sectorId,
-        competitionPeriodId,
-        calculationMethod:
-          defaultSettingsApplied?.calculationMethod || 'manual', // Indica que foi uma sugestão baseada nesse método
-        adjustmentPercentage: defaultSettingsApplied?.adjustmentPercentage || 0,
-        finalValue: suggestedValue, // O valor da sugestão a ser salvo
-        wasRounded: defaultSettingsApplied?.roundingMethod !== 'none',
-        roundingMethod:
-          (defaultSettingsApplied?.roundingMethod as any) || 'none',
-        roundingDecimalPlaces:
-          defaultSettingsApplied?.roundingDecimalPlaces || 0,
-        saveAsDefault: false, // Não salvar como padrão ao aceitar sugestão, a menos que desejado
-        justificativa: `Sugestão do sistema aceita (baseada em ${defaultSettingsApplied?.calculationMethodLabel || 'regra padrão'})`,
-        previewOnly: false,
-      };
-
-      try {
-        await handleApiCalculation(payload); // Reutiliza a mesma função do modal
-        toast.success(
-          `Meta sugerida para ${criterion.nome} / ${sector?.nome || 'Geral'} aceita e aplicada!`
-        );
-        if (selectedPeriod?.mesAno) {
-          await fetchResults(selectedPeriod.mesAno); // Atualiza a matriz
-        }
-      } catch (error) {
-        // handleApiCalculation já mostra toast de erro
-        console.error('Erro ao aceitar sugestão:', error);
-      } finally {
-        setIsApplying(false);
-      }
+        criterion.nome,
+        sector?.nome
+      );
     },
-    [
-      uniqueCriteria,
-      sectors,
-      periods,
-      handleApiCalculation,
-      fetchResults,
-      selectedPeriod?.mesAno,
-      setIsApplying,
-    ]
+    [uniqueCriteria, sectors, calculationActions]
   );
 
-  return (
-    <div className='container mx-auto py-6 space-y-6'>
-      <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'>
-        <div>
-          <h1 className='text-2xl font-bold tracking-tight'>Parâmetros</h1>
-          <p className='text-muted-foreground'>
-            Gerencie as metas e parâmetros para cada setor e critério.
-          </p>
-        </div>
-        <div className='flex items-center gap-2'>
-          <Select
-            value={selectedPeriodId?.toString() || ''}
-            onValueChange={handlePeriodChange}
-            disabled={isLoading || periods.length === 0}
-          >
-            <SelectTrigger className='w-[220px]'>
-              <SelectValue placeholder='Selecione um período' />
-            </SelectTrigger>
-            <SelectContent>
-              {periods.map((period: CompetitionPeriod) => (
-                <SelectItem key={period.id} value={period.id.toString()}>
-                  {period.mesAno} - {period.status}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            variant='outline'
-            size='icon'
-            onClick={handleRefresh}
-            disabled={isLoading || !selectedPeriod}
-          >
-            {isLoading ? (
-              <Loader2 className='h-4 w-4 animate-spin' />
-            ) : (
-              <RefreshCw className='h-4 w-4' />
-            )}
-          </Button>
-        </div>
-      </div>
+  const handleApplyCalculation = useCallback(
+    async (payload: any) => {
+      await calculationActions.handleApplyCalculation(payload, () =>
+        modals.closeCalculationModal()
+      );
+    },
+    [calculationActions, modals]
+  );
 
-      {isLoading ? (
+  // Estados de loading
+  if (isLoading && !selectedPeriod) {
+    return (
+      <div className='container mx-auto py-6'>
         <div className='flex justify-center items-center h-64'>
           <Loader2 className='h-8 w-8 animate-spin text-muted-foreground' />
         </div>
-      ) : !selectedPeriod ? (
+      </div>
+    );
+  }
+
+  return (
+    <div className='container mx-auto py-6 space-y-6'>
+      <ParametersHeader
+        periods={periods as CompetitionPeriod[]}
+        selectedPeriodId={selectedPeriodId}
+        isLoading={isLoading}
+        onPeriodChange={handlePeriodChange}
+        onRefresh={handleRefresh}
+      />
+
+      {!selectedPeriod ? (
         <Card>
           <CardContent className='flex justify-center items-center h-64'>
             <p className='text-muted-foreground'>Selecione um período.</p>
@@ -548,121 +283,81 @@ export default function ParametersPage() {
             <CardTitle>
               Matriz de Parâmetros - {selectedPeriod.mesAno}
               <span
-                className={`ml-2 text-sm font-normal px-2 py-0.5 rounded-full ${selectedPeriod.status === 'PLANEJAMENTO' ? 'bg-blue-100 text-blue-700' : selectedPeriod.status === 'ATIVA' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}
+                className={`ml-2 text-sm font-normal px-2 py-0.5 rounded-full ${
+                  selectedPeriod.status === 'PLANEJAMENTO'
+                    ? 'bg-blue-100 text-blue-700'
+                    : selectedPeriod.status === 'ATIVA'
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-gray-100 text-gray-700'
+                }`}
               >
                 {selectedPeriod.status}
               </span>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {/* *** AQUI É ONDE VOCÊ PRECISA AJUSTAR A CHAMADA `onCalculate` *** */}
             <ParametersMatrix
-              uniqueCriteria={uniqueCriteria} // Deve ser Criterion[]
+              uniqueCriteria={uniqueCriteria}
               resultsBySector={resultsBySector}
-              sectors={sectors as Sector[]} // Passando sectors, que deve ser Sector[]
-              onEdit={handleEditMeta} // Ajustar os params que onEdit espera também
-              onCreate={handleCreateMeta} // Ajustar os params que onCreate espera também
-              onCalculate={handleOpenCalculationModal} // ESTA É A PROP CORRETA
+              sectors={sectors as Sector[]}
+              onEdit={handleEditMeta}
+              onCreate={handleCreateMeta}
+              onCalculate={handleOpenCalculationModal}
               isLoading={isLoading}
-              periodoAtual={selectedPeriod as CompetitionPeriod} // Passa o objeto do período selecionado
-              fetchHistoricalData={fetchHistoricalData}
+              periodoAtual={selectedPeriod as CompetitionPeriod}
+              fetchHistoricalData={ParametersAPI.fetchHistoricalData}
               onAcceptSuggestion={handleAcceptSuggestion}
+              isLoadingMatrixData={isLoading}
             />
           </CardContent>
         </Card>
       )}
 
-      {/* Modal de Edição */}
-      <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
-        <DialogContent className='sm:max-w-[425px]'>
-          <DialogHeader>
-            <DialogTitle>Editar Meta</DialogTitle>
-            <DialogDescription>
-              Atualize o valor da meta para {editData?.criterioNome} no setor{' '}
-              {editData?.setorNome}.
-            </DialogDescription>
-          </DialogHeader>
-          <div className='grid gap-4 py-4'>
-            <div className='grid grid-cols-4 items-center gap-4'>
-              <Label htmlFor='meta' className='text-right'>
-                Meta
-              </Label>
-              <Input
-                id='meta'
-                type='number'
-                step='0.01'
-                value={newMetaValue}
-                onChange={(e) => setNewMetaValue(e.target.value)}
-                className='col-span-3'
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant='outline' onClick={() => setEditModalOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveEdit}>Salvar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Modais */}
+      <EditDialog
+        open={modals.editModalOpen}
+        onOpenChange={modals.setEditModalOpen}
+        editData={modals.editData}
+        newMetaValue={modals.newMetaValue}
+        onMetaValueChange={modals.setNewMetaValue}
+        onSave={handleSaveEdit}
+      />
 
-      {/* Modal de Criação */}
-      <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
-        <DialogContent className='sm:max-w-[425px]'>
-          <DialogHeader>
-            <DialogTitle>Criar Meta</DialogTitle>
-            <DialogDescription>
-              Defina o valor da meta para {createData?.criterioNome} no setor{' '}
-              {createData?.setorNome}.
-            </DialogDescription>
-          </DialogHeader>
-          <div className='grid gap-4 py-4'>
-            <div className='grid grid-cols-4 items-center gap-4'>
-              <Label htmlFor='newMeta' className='text-right'>
-                Meta
-              </Label>
-              <Input
-                id='newMeta'
-                type='number'
-                step='0.01'
-                value={newMetaValue}
-                onChange={(e) => setNewMetaValue(e.target.value)}
-                className='col-span-3'
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant='outline' onClick={() => setCreateModalOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveCreate}>Criar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CreateDialog
+        open={modals.createModalOpen}
+        onOpenChange={modals.setCreateModalOpen}
+        createData={modals.createData}
+        newMetaValue={modals.newMetaValue}
+        onMetaValueChange={modals.setNewMetaValue}
+        onSave={handleSaveCreate}
+      />
 
-      {/* Modal de Cálculo Automático */}
-      {calculationModalOpen && calculateData && (
+      {modals.calculationModalOpen && modals.calculateData && (
         <CalculationModal
-          open={calculationModalOpen}
-          onOpenChange={setCalculationModalOpen}
-          calculateData={calculateData}
-          calculationMethod={calculationMethod}
-          setCalculationMethod={setCalculationMethod}
-          calculationAdjustment={calculationAdjustment}
-          setCalculationAdjustment={setCalculationAdjustment}
-          roundingMethod={roundingMethod}
-          setRoundingMethod={setRoundingMethod}
-          decimalPlaces={decimalPlaces}
-          setDecimalPlaces={setDecimalPlaces}
-          saveAsDefault={saveAsDefault}
-          setSaveAsDefault={setSaveAsDefault}
-          handlePreviewCalculation={handlePreviewCalculation}
-          calculatedValuePreview={calculatedValuePreview}
-          handleApplyCalculation={handleApplyCalculationCallback}
-          isLoadingSettings={isLoadingSettings}
-          isCalculatingPreview={isCalculatingPreview}
-          isApplying={isApplying}
-          fetchHistoricalData={fetchHistoricalData}
+          open={modals.calculationModalOpen}
+          onOpenChange={modals.setCalculationModalOpen}
+          calculateData={modals.calculateData}
+          calculationMethod={calculationSettings.settings.calculationMethod}
+          setCalculationMethod={calculationSettings.setCalculationMethod}
+          calculationAdjustment={
+            calculationSettings.settings.calculationAdjustment
+          }
+          setCalculationAdjustment={
+            calculationSettings.setCalculationAdjustment
+          }
+          roundingMethod={calculationSettings.settings.roundingMethod}
+          setRoundingMethod={calculationSettings.setRoundingMethod}
+          decimalPlaces={calculationSettings.settings.decimalPlaces}
+          setDecimalPlaces={calculationSettings.setDecimalPlaces}
+          saveAsDefault={calculationSettings.settings.saveAsDefault}
+          setSaveAsDefault={calculationSettings.setSaveAsDefault}
+          handlePreviewCalculation={calculationActions.handlePreviewCalculation}
+          calculatedValuePreview={calculationActions.calculatedValuePreview}
+          handleApplyCalculation={handleApplyCalculation}
+          isLoadingSettings={calculationSettings.isLoadingSettings}
+          isCalculatingPreview={calculationActions.isCalculatingPreview}
+          isApplying={calculationActions.isApplying}
+          fetchHistoricalData={ParametersAPI.fetchHistoricalData}
         />
       )}
     </div>

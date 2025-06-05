@@ -88,11 +88,23 @@ export function PlanningCellCard({
   } = cellData;
 
   const displayValue = isMetaDefinida ? metaDefinidaValor : metaPropostaPadrao;
+
   const displayLabel = isMetaDefinida ? 'Meta Definida' : 'Meta Proposta';
   const numDisplayDecimalPlaces = criterion.casasDecimaisPadrao ?? 0;
 
   const handleAccept = () => {
     // Verifica se onAcceptSuggestion existe, se a meta não está definida, se há uma proposta e regras
+
+    console.log(
+      '[DEBUG PlanningCellCard] ANTES de chamar handleAcceptSystemSuggestion:'
+    );
+    console.log('[DEBUG] props.competitionPeriodId:', competitionPeriodId);
+    console.log('[DEBUG] criterion.id:', criterion.id);
+    console.log('[DEBUG] cellData completo:', cellData);
+    console.log('[DEBUG] cellData.setorId:', cellData.setorId);
+    console.log('[DEBUG] cellData.setor:', cellData.setor);
+    console.log('[DEBUG] typeof cellData.setorId:', typeof cellData.setorId);
+
     if (
       onAcceptSuggestion &&
       !isMetaDefinida &&
@@ -100,6 +112,18 @@ export function PlanningCellCard({
       metaPropostaPadrao !== undefined &&
       regrasAplicadasPadrao
     ) {
+      console.log(
+        '[PlanningCellCard] ACEITANDO SUGESTÃO COM OS SEGUINTES VALORES:'
+      );
+      console.log('  criterion.id:', criterion.id);
+      console.log('  cellData.setorId:', cellData.setorId);
+      console.log('  props.competitionPeriodId:', competitionPeriodId); // Se você adicionou essa prop
+      console.log(
+        '  metaPropostaPadrao (valor a ser salvo):',
+        metaPropostaPadrao
+      ); // <<< VALOR CRÍTICO
+      console.log('  regrasAplicadasPadrao:', regrasAplicadasPadrao);
+
       onAcceptSuggestion(
         criterion.id,
         cellData.setorId, // setorId vem de cellData (que é EntradaResultadoDetalhado)
@@ -123,7 +147,6 @@ export function PlanningCellCard({
       className={`p-3 rounded-md border shadow-sm min-h-[175px] flex flex-col justify-between ${isMetaDefinida ? 'bg-green-50 dark:bg-green-900/30 border-green-300 dark:border-green-700' : 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700'}`}
     >
       <div>
-        {' '}
         {/* Conteúdo principal */}
         <div className='text-center mb-2'>
           {isMetaDefinida && (

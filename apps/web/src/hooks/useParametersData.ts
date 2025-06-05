@@ -1,5 +1,8 @@
 // hooks/useParametersData.ts
-import { Criterio as Criterion } from '@sistema-premiacao/shared-types';
+import {
+  Criterio as Criterion,
+  RegrasAplicadasPadrao,
+} from '@sistema-premiacao/shared-types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -27,11 +30,12 @@ export interface ResultData {
   valorMeta: number | null;
   percentualAtingimento: number | null;
   pontos: number | null;
-
   metaPropostaPadrao: number | null;
   metaAnteriorValor: number | null;
   metaAnteriorPeriodo: number | null;
-  regrasAplicadasPadrao: number | null;
+  regrasAplicadasPadrao: RegrasAplicadasPadrao | null; // ✅ CORRIGIR TIPO
+  metaDefinidaValor: number | null; // ✅ ADICIONAR
+  isMetaDefinida: boolean; // ✅ ADICIONAR
 }
 
 const API_BASE_URL = 'http://localhost:3001';
@@ -53,6 +57,8 @@ export function useParametersData(selectedPeriod?: string) {
       const response = await fetch(
         `/api/criteria/${criterionId}/calculation-settings`
       );
+      console.log('[DEBUG] 📊 Response status:', response.status);
+      console.log('[DEBUG] 📊 Response OK:', response.ok);
 
       if (response.status === 404) {
         return {
@@ -69,6 +75,8 @@ export function useParametersData(selectedPeriod?: string) {
         console.warn(
           `Erro ${response.status} ao buscar configurações: ${response.statusText}`
         );
+        console.log('[DEBUG] ❌ Response failed:', await response.text());
+
         const errorData = await response.json().catch(() => ({}));
         throw new Error(
           errorData.message ||
@@ -78,6 +86,8 @@ export function useParametersData(selectedPeriod?: string) {
       }
 
       const data = await response.json();
+      console.log('[DEBUG] 📦 Raw data received:', data);
+      console.log('[DEBUG] 📦 First item setorId:', data[0]?.setorId);
 
       // Se não houver configurações, o backend retorna defaultSettings
       if (data.defaultSettings) {
@@ -123,70 +133,58 @@ export function useParametersData(selectedPeriod?: string) {
   }, []);
 
   // Função para buscar resultados
-  const fetchResults = useCallback(async (period: string) => {
-    setIsLoadingResults(true);
-    setError(null);
-    try {
-      // Adicionar timestamp para evitar cache
-      const timestamp = new Date().getTime();
+  const fetchResults = useCallback(
+    async (period: string): Promise<ResultData[]> => {
+      // Ou Promise<EntradaResultadoDetalhado[]>
 
-      // Usar o novo endpoint que aceita apenas o período
-      const response = await fetch(
-        `${API_BASE_URL}/api/results/by-period?period=${period}&_t=${timestamp}`
-      );
-
-      if (!response.ok) {
-        throw new Error('Falha ao buscar resultados');
-      }
-      const data = await response.json();
-
-      setResults(data);
-      return data;
-    } catch (error) {
-      console.error(
-        `Erro ao buscar resultados para o período ${period}:`,
-        error
-      );
-
-      // Tentar o endpoint original como fallback
+      setIsLoadingResults(true);
+      setError(null);
       try {
         const timestamp = new Date().getTime();
-
-        // Primeiro tentar o endpoint by-date com data específica para o período
-        const fallbackDate = period === '2025-04' ? '2025-04-30' : '2025-05-01';
-
-        let fallbackResponse = await fetch(
-          `${API_BASE_URL}/api/results/by-date?period=${period}&targetDate=${fallbackDate}&_t=${timestamp}`
+        const response = await fetch(
+          `${API_BASE_URL}/api/results/by-period?period=${period}&_t=${timestamp}`
         );
 
-        if (fallbackResponse.ok) {
-          const fallbackData = await fallbackResponse.json();
-
-          setResults(fallbackData);
-          return fallbackData;
+        if (!response.ok) {
+          // Tenta pegar uma mensagem de erro mais detalhada do corpo da resposta
+          let errorMessage = `Falha ao buscar resultados para o período ${period}. Status: ${response.status}`;
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.message || errorData.error || errorMessage;
+          } catch (e) {
+            // Ignora erro ao fazer parse do JSON de erro, mantém a mensagem de status
+          }
+          throw new Error(errorMessage);
         }
 
-        // Se o primeiro fallback falhar, tentar o endpoint results genérico
-        fallbackResponse = await fetch(
-          `${API_BASE_URL}/api/results?period=${period}&_t=${timestamp}`
+        const data = await response.json();
+        console.log(
+          `[useParametersData] Resultados recebidos para ${period}:`,
+          data.length > 0 ? data[0] : 'Array vazio ou dados ausentes'
+        ); // Log do primeiro item
+
+        setResults(data);
+        return data;
+      } catch (error: any) {
+        console.error(
+          `[useParametersData] Erro final ao buscar resultados para o período ${period}:`,
+          error
         );
-
-        if (fallbackResponse.ok) {
-          const fallbackData = await fallbackResponse.json();
-
-          setResults(fallbackData);
-          return fallbackData;
-        }
-      } catch (fallbackError) {
-        console.error(`Erro no fallback:`, fallbackError);
+        setError(
+          error.message ||
+            'Falha ao carregar resultados. Verifique o console do backend.'
+        );
+        toast.error(
+          `Erro ao carregar resultados para ${period}: ${error.message}`
+        );
+        setResults([]); // Limpa os resultados em caso de erro
+        return []; // Retorna array vazio para manter a consistência do tipo de retorno
+      } finally {
+        setIsLoadingResults(false);
       }
-
-      setError('Falha ao carregar resultados. Tente novamente mais tarde.');
-      return [];
-    } finally {
-      setIsLoadingResults(false);
-    }
-  }, []);
+    },
+    [setResults, setIsLoadingResults, setError]
+  ); // Dependências do useCallback
 
   // Função para buscar critérios
   const fetchCriteria = useCallback(async () => {
@@ -309,6 +307,8 @@ export function useParametersData(selectedPeriod?: string) {
         try {
           const cache = await caches.open('v1');
           const url = `${API_BASE_URL}/api/results?period=${periodToFetch}`;
+          console.log('[DEBUG] 🔍 URL REAL sendo chamada:', url);
+
           await cache.delete(url);
         } catch (cacheError) {
           console.warn('Erro ao limpar cache:', cacheError);
@@ -398,9 +398,12 @@ export function useParametersData(selectedPeriod?: string) {
         };
       }
 
+      // 🎯 CORREÇÃO PRINCIPAL: Incluir setorId em cada critério
       bySector[sectorId].criterios[criterioId] = {
         criterioId: result.criterioId,
         criterioNome: result.criterioNome,
+        setorId: result.setorId,
+        setorNome: result.setorNome, // ✅ ADICIONAR ESTA LINHA
         valorRealizado: result.valorRealizado,
         valorMeta: result.valorMeta,
         percentualAtingimento: result.percentualAtingimento,
@@ -409,6 +412,8 @@ export function useParametersData(selectedPeriod?: string) {
         metaAnteriorValor: result.metaAnteriorValor,
         metaAnteriorPeriodo: result.metaAnteriorPeriodo,
         regrasAplicadasPadrao: result.regrasAplicadasPadrao,
+        metaDefinidaValor: result.metaDefinidaValor,
+        isMetaDefinida: result.isMetaDefinida,
       };
     });
 

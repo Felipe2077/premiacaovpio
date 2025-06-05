@@ -23,8 +23,8 @@ export class PerformanceDataEntity {
   @JoinColumn({ name: 'competitionPeriodId' }) // Mapeia a coluna da FK
   competitionPeriod!: CompetitionPeriodEntity; // Propriedade para acessar o objeto
 
-  @Column({ type: 'int' })
-  sectorId!: number;
+  @Column({ type: 'int', nullable: true })
+  sectorId!: number | null;
 
   @Column({ type: 'int' })
   criterionId!: number;

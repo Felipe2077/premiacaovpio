@@ -71,7 +71,6 @@ const PONTUACAO_REGRAS = {
 
 const CRITERIO_FALTA_FUNC_ID = 5;
 const FALTA_FUNC_LIMITE = 10;
-const DEFAULT_TARGET_DATE = '2025-05-30';
 
 export class RankingService {
   private sectorRepo: Repository<SectorEntity>;
