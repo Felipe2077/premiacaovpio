@@ -63,6 +63,18 @@ interface CalculationOptions {
   useFixedDate?: boolean;
 }
 
+interface DateSearchResult {
+  targetDate: string;
+  dataCount: number;
+  searchStrategy:
+    | 'provided'
+    | 'period_end'
+    | 'last_day'
+    | 'first_day'
+    | 'most_recent'
+    | 'fallback';
+}
+
 // Constantes
 const PONTUACAO_REGRAS = {
   INVERTIDA: { 1: 2.5, 2: 2.0, 3: 1.5, 4: 1.0, default: 2.5 },
@@ -120,7 +132,6 @@ export class RankingService {
     targetDate?: string
   ): Promise<EntradaResultadoDetalhado[]> {
     try {
-      // Se não foi fornecida uma data específica, o sistema determinará dinamicamente
       const { details } = await this.calculate(period, {
         targetDate: targetDate || undefined,
       });
@@ -144,34 +155,13 @@ export class RankingService {
     }
 
     try {
-      const effectiveDate = await this.determineEffectiveDate(
-        period,
-        startDate,
-        endDate
-      );
+      const dateSearchResult = await this.findBestDateForPeriod(period);
       const { details } = await this.calculate(period, {
-        targetDate: effectiveDate,
+        targetDate: dateSearchResult.targetDate,
       });
       return details;
     } catch (error: any) {
       console.error('[RankingService] Erro ao calcular resultados:', error);
-
-      // Tentar abordagem alternativa
-      const alternativeDate = await this.findBestAlternativeDate(period);
-      if (alternativeDate) {
-        try {
-          const { details } = await this.calculate(period, {
-            targetDate: alternativeDate,
-          });
-          return details;
-        } catch (secondError) {
-          console.error(
-            '[RankingService] Erro na segunda tentativa:',
-            secondError
-          );
-        }
-      }
-
       return [];
     }
   }
@@ -194,7 +184,7 @@ export class RankingService {
     return await this.calculateAtivoOuFechado(context);
   }
 
-  // ========== PREPARAÇÃO DO CONTEXTO ==========
+  // ========== PREPARAÇÃO DO CONTEXTO (CORRIGIDA) ==========
   private async prepareCalculationContext(
     period?: string,
     options?: CalculationOptions
@@ -213,95 +203,214 @@ export class RankingService {
       throw new Error('Nenhum setor ativo ou critério ativo encontrado');
     }
 
-    // MUDANÇA PRINCIPAL: Determinar a data alvo dinamicamente
-    let targetDate: string;
+    // CORREÇÃO PRINCIPAL: Nova estratégia para determinar data alvo
+    let dateSearchResult: DateSearchResult;
 
     if (options?.targetDate) {
-      // Se uma data específica foi fornecida, usar ela
-      targetDate = options.targetDate;
+      // Se uma data específica foi fornecida, validar e usar
+      const dataCount = await this.countPerformanceDataForDate(
+        competitionPeriod.id,
+        options.targetDate
+      );
+      dateSearchResult = {
+        targetDate: options.targetDate,
+        dataCount,
+        searchStrategy: 'provided',
+      };
     } else {
-      // Caso contrário, determinar dinamicamente baseado no período
-      targetDate = await this.determineTargetDateForPeriod(competitionPeriod);
+      // Buscar a melhor data disponível para o período
+      dateSearchResult = await this.findBestDateForPeriod(
+        competitionPeriod.mesAno
+      );
     }
 
+    // ATIVAR DEBUG TEMPORARIAMENTE PARA INVESTIGAÇÃO
+    console.log('=== DEBUG INVESTIGAÇÃO ===');
+    console.log(`Período: ${competitionPeriod.mesAno}`);
+    console.log(`Competition Period ID: ${competitionPeriod.id}`);
+    console.log(`Data alvo selecionada: ${dateSearchResult.targetDate}`);
+    console.log(`Estratégia: ${dateSearchResult.searchStrategy}`);
+    console.log(`Dados encontrados: ${dateSearchResult.dataCount}`);
+
+    // Verificar TODOS os dados de performance para este período
+    const allPerformanceForPeriod = await this.performanceRepo.find({
+      where: { competitionPeriodId: competitionPeriod.id },
+      order: { metricDate: 'ASC', sectorId: 'ASC', criterionId: 'ASC' },
+    });
+
+    console.log(
+      `Total de registros de performance para período ${competitionPeriod.mesAno}: ${allPerformanceForPeriod.length}`
+    );
+
+    // Agrupar por data
+    const datasByDate = allPerformanceForPeriod.reduce(
+      (acc, item) => {
+        if (!acc[item.metricDate]) {
+          acc[item.metricDate] = 0;
+        }
+        acc[item.metricDate]!++;
+        return acc;
+      },
+      {} as Record<string, number>
+    );
+
+    console.log('Dados por data:', datasByDate);
+
+    // Verificar especificamente GAMA + ATRASO para debug
+    const gamaAtrasoData = allPerformanceForPeriod.filter(
+      (p) => p.sectorId === 1 && p.criterionId === 1
+    );
+
+    console.log(
+      `Dados GAMA + ATRASO encontrados:`,
+      gamaAtrasoData.map((d) => ({
+        metricDate: d.metricDate,
+        valor: d.valor,
+        sectorId: d.sectorId,
+        criterionId: d.criterionId,
+      }))
+    );
+
+    console.log('=== FIM DEBUG ===');
+
     this.log(
-      `Data alvo determinada: ${targetDate} para período ${competitionPeriod.mesAno}`
+      `Data alvo selecionada: ${dateSearchResult.targetDate} ` +
+        `(estratégia: ${dateSearchResult.searchStrategy}, ` +
+        `dados encontrados: ${dateSearchResult.dataCount}) ` +
+        `para período ${competitionPeriod.mesAno}`
     );
 
     return {
       competitionPeriod,
       activeSectors,
       activeCriteria,
-      targetDate,
+      targetDate: dateSearchResult.targetDate,
       isPlanejamento: competitionPeriod.status === 'PLANEJAMENTO',
     };
   }
 
-  // ========== NOVO MÉTODO PARA DETERMINAR DATA ALVO ==========
-  private async determineTargetDateForPeriod(
-    competitionPeriod: CompetitionPeriodEntity
-  ): Promise<string> {
-    // Se o período tem uma data fim definida, usar ela
+  // ========== NOVA ESTRATÉGIA DE BUSCA DE DATA (CORRIGIDA) ==========
+  private async findBestDateForPeriod(
+    periodMesAno: string
+  ): Promise<DateSearchResult> {
+    const competitionPeriod = await this.periodRepo.findOne({
+      where: { mesAno: periodMesAno },
+    });
+
+    if (!competitionPeriod) {
+      throw new Error(`Período de competição não encontrado: ${periodMesAno}`);
+    }
+
+    // 1. Se há dataFim definida no período, tentar usar ela primeiro
     if (competitionPeriod.dataFim) {
-      return competitionPeriod.dataFim;
-    }
-
-    // Extrair ano e mês do período
-    const [year, month] = competitionPeriod.mesAno.split('-').map(Number);
-
-    if (!year || !month) {
-      throw new Error(
-        `Formato inválido de mesAno: ${competitionPeriod.mesAno}`
+      const dataCount = await this.countPerformanceDataForDate(
+        competitionPeriod.id,
+        competitionPeriod.dataFim
       );
+
+      if (dataCount > 0) {
+        return {
+          targetDate: competitionPeriod.dataFim,
+          dataCount,
+          searchStrategy: 'period_end',
+        };
+      }
     }
 
-    // Por padrão, usar o último dia do mês
-    const lastDayOfMonth = new Date(year, month, 0);
-    const targetDate = lastDayOfMonth.toISOString().split('T')[0];
-
-    // Verificar se há dados para o último dia do mês
-    const hasDataLastDay = await this.performanceRepo.count({
-      where: {
-        metricDate: targetDate,
-        competitionPeriodId: competitionPeriod.id,
-      },
-    });
-
-    if (hasDataLastDay > 0) {
-      return targetDate!;
-    }
-
-    // Se não há dados no último dia, tentar o primeiro dia
-    const firstDayOfMonth = new Date(year, month - 1, 1);
-    const firstDayStr = firstDayOfMonth.toISOString().split('T')[0];
-
-    const hasDataFirstDay = await this.performanceRepo.count({
-      where: {
-        metricDate: firstDayStr,
-        competitionPeriodId: competitionPeriod.id,
-      },
-    });
-
-    if (hasDataFirstDay > 0) {
-      return firstDayStr!;
-    }
-
-    // Se não há dados em nenhuma das datas padrão, buscar qualquer data com dados
-    const anyData = await this.performanceRepo.findOne({
+    // 2. Buscar qualquer data com dados no período (estratégia mais robusta)
+    const anyPerformanceData = await this.performanceRepo.findOne({
       where: { competitionPeriodId: competitionPeriod.id },
-      order: { metricDate: 'DESC' },
+      order: { metricDate: 'DESC', id: 'DESC' },
     });
 
-    if (anyData?.metricDate) {
-      this.log(`Usando data alternativa com dados: ${anyData.metricDate}`);
-      return anyData.metricDate;
+    if (anyPerformanceData?.metricDate) {
+      const dataCount = await this.countPerformanceDataForDate(
+        competitionPeriod.id,
+        anyPerformanceData.metricDate
+      );
+
+      return {
+        targetDate: anyPerformanceData.metricDate,
+        dataCount,
+        searchStrategy: 'most_recent',
+      };
     }
 
-    // Se não há dados, retornar o último dia do mês como fallback
-    this.log(
-      `Nenhum dado encontrado, usando último dia do mês como fallback: ${targetDate}`
+    // 3. Fallback: calcular último dia do mês
+    const [year, month] = periodMesAno.split('-').map(Number);
+    if (!year || !month) {
+      throw new Error(`Formato inválido de mesAno: ${periodMesAno}`);
+    }
+
+    const lastDayOfMonth = new Date(year, month, 0);
+    const lastDayStr = this.formatDateToString(lastDayOfMonth);
+
+    // 4. Tentar último dia do mês
+    let dataCount = await this.countPerformanceDataForDate(
+      competitionPeriod.id,
+      lastDayStr
     );
-    return targetDate!;
+
+    if (dataCount > 0) {
+      return {
+        targetDate: lastDayStr,
+        dataCount,
+        searchStrategy: 'last_day',
+      };
+    }
+
+    // 5. Tentar primeiro dia do mês
+    const firstDayOfMonth = new Date(year, month - 1, 1);
+    const firstDayStr = this.formatDateToString(firstDayOfMonth);
+
+    dataCount = await this.countPerformanceDataForDate(
+      competitionPeriod.id,
+      firstDayStr
+    );
+
+    if (dataCount > 0) {
+      return {
+        targetDate: firstDayStr,
+        dataCount,
+        searchStrategy: 'first_day',
+      };
+    }
+
+    // 6. Fallback final: usar último dia do mês mesmo sem dados
+    console.warn(
+      `ATENÇÃO: Nenhum dado encontrado para período ${periodMesAno}. ` +
+        `Usando último dia do mês como fallback: ${lastDayStr}`
+    );
+
+    return {
+      targetDate: lastDayStr,
+      dataCount: 0,
+      searchStrategy: 'fallback',
+    };
+  }
+
+  // ========== MÉTODOS AUXILIARES PARA DATA ==========
+  private async countPerformanceDataForDate(
+    competitionPeriodId: number,
+    metricDate: string
+  ): Promise<number> {
+    return await this.performanceRepo.count({
+      where: {
+        competitionPeriodId,
+        metricDate,
+      },
+    });
+  }
+
+  private formatDateToString(date: Date): string {
+    const isoString = date.toISOString();
+    const datePart = isoString.split('T')[0];
+
+    if (!datePart) {
+      throw new Error(`Falha ao extrair data de: ${isoString}`);
+    }
+
+    return datePart;
   }
 
   // ========== CÁLCULO PARA PLANEJAMENTO ==========
@@ -333,13 +442,19 @@ export class RankingService {
     return results;
   }
 
-  // ========== CÁLCULO PARA ATIVO/FECHADO ==========
+  // ========== CÁLCULO PARA ATIVO/FECHADO (CORRIGIDO) ==========
   private async calculateAtivoOuFechado(context: CalculationContext): Promise<{
     ranking: EntradaRanking[];
     details: EntradaResultadoDetalhado[];
   }> {
     const performanceData = await this.getPerformanceData(context);
     const parameters = await this.getParameters(context);
+
+    this.log(
+      `Dados de performance encontrados: ${performanceData.length} registros ` +
+        `para data ${context.targetDate}`
+    );
+
     const sectorScores = this.initializeSectorScores(context.activeSectors);
     const allDetailedResults: EntradaResultadoDetalhado[] = [];
 
@@ -402,6 +517,12 @@ export class RankingService {
         valorRealizado,
         valorMeta,
         criterion.sentido_melhor || 'MENOR'
+      );
+
+      // Log para debug
+      this.log(
+        `Processando ${sector.nome} - ${criterion.nome}: ` +
+          `realizado=${valorRealizado}, meta=${valorMeta}, razao=${razaoCalculada}`
       );
 
       results.push({
@@ -563,7 +684,7 @@ export class RankingService {
     }
   }
 
-  // ========== MÉTODOS AUXILIARES ==========
+  // ========== MÉTODOS AUXILIARES (MANTIDOS) ==========
   private async getValidCompetitionPeriod(
     periodMesAno?: string
   ): Promise<CompetitionPeriodEntity> {
@@ -598,12 +719,57 @@ export class RankingService {
     context: CalculationContext
   ): Promise<PerformanceDataEntity[]> {
     // Buscar por metricDate E competitionPeriodId para maior precisão
-    return await this.performanceRepo.find({
+    const data = await this.performanceRepo.find({
       where: {
         metricDate: context.targetDate,
         competitionPeriodId: context.competitionPeriod.id,
       },
     });
+
+    console.log('=== DEBUG PERFORMANCE DATA ===');
+    console.log(
+      `Query: metricDate=${context.targetDate}, competitionPeriodId=${context.competitionPeriod.id}`
+    );
+    console.log(`Resultados encontrados: ${data.length}`);
+
+    // Mostrar primeiros 5 resultados para debug
+    console.log(
+      'Primeiros resultados:',
+      data.slice(0, 5).map((d) => ({
+        id: d.id,
+        sectorId: d.sectorId,
+        criterionId: d.criterionId,
+        valor: d.valor,
+        metricDate: d.metricDate,
+        competitionPeriodId: d.competitionPeriodId,
+      }))
+    );
+
+    // Verificar especificamente GAMA + ATRASO
+    const gamaAtraso = data.find(
+      (d) => d.sectorId === 1 && d.criterionId === 1
+    );
+    console.log(
+      'GAMA + ATRASO específico:',
+      gamaAtraso
+        ? {
+            valor: gamaAtraso.valor,
+            metricDate: gamaAtraso.metricDate,
+            sectorId: gamaAtraso.sectorId,
+            criterionId: gamaAtraso.criterionId,
+          }
+        : 'NÃO ENCONTRADO'
+    );
+
+    console.log('=== FIM DEBUG PERFORMANCE ===');
+
+    this.log(
+      `Performance data query: metricDate=${context.targetDate}, ` +
+        `competitionPeriodId=${context.competitionPeriod.id}, ` +
+        `resultados=${data.length}`
+    );
+
+    return data;
   }
 
   private async getParameters(
@@ -727,63 +893,23 @@ export class RankingService {
     };
   }
 
-  private async determineEffectiveDate(
-    period: string,
-    startDate: string,
-    endDate: string
-  ): Promise<string> {
-    const competitionPeriod = await this.periodRepo.findOne({
-      where: { mesAno: period },
-    });
+  // ========== MÉTODOS DE COMPATIBILIDADE (REMOVIDOS) ==========
+  // Os métodos antigos de determineEffectiveDate e findBestAlternativeDate foram removidos
+  // pois são substituídos pela nova estratégia findBestDateForPeriod
 
-    if (!competitionPeriod) {
-      throw new Error(`Vigência não encontrada para o período ${period}`);
-    }
-    return await this.determineTargetDateForPeriod(competitionPeriod);
-  }
-
-  private async findBestAlternativeDate(
-    period: string
-  ): Promise<string | null> {
-    const competitionPeriod = await this.periodRepo.findOne({
-      where: { mesAno: period },
-    });
-
-    if (!competitionPeriod) return null;
-
-    const allData = await this.performanceRepo.find({
-      where: { competitionPeriodId: competitionPeriod.id },
-    });
-
-    if (allData.length === 0) return null;
-
-    // Agrupar por data e encontrar a com mais dados
-    const dataByDate = allData.reduce(
-      (acc, curr) => {
-        const date = curr.metricDate;
-        acc[date] = (acc[date] || 0) + 1;
-        return acc;
-      },
-      {} as Record<string, number>
-    );
-
-    let bestDate = '';
-    let maxCount = 0;
-
-    for (const [date, count] of Object.entries(dataByDate)) {
-      if (count > maxCount) {
-        maxCount = count;
-        bestDate = date;
-      }
-    }
-
-    return bestDate || null;
-  }
-
-  // ========== MÉTODOS DE DEBUG ==========
+  // ========== MÉTODO DE DEBUG ==========
   private log(message: string, data?: any): void {
-    if (this.debugMode) {
+    if (this.debugMode || process.env.NODE_ENV === 'development') {
       console.log(`[RankingService] ${message}`, data || '');
     }
+  }
+
+  // ========== MÉTODO PARA ATIVAR DEBUG ==========
+  public enableDebug(): void {
+    this.debugMode = true;
+  }
+
+  public disableDebug(): void {
+    this.debugMode = false;
   }
 }

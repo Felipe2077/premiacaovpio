@@ -27,17 +27,23 @@ interface PlanningCellCardProps {
   criterion: Criterion;
   cellData: EntradaResultadoDetalhado | null;
   isLoadingMatrixData: boolean;
-  competitionPeriodId: number; // <<< NOVA PROP: ID do período de planejamento atual
+  competitionPeriodId: number;
   onEdit: () => void;
   onCalculate: () => void;
   onAcceptSuggestion: (
-    // <<< NOVA PROP
     criterionId: number,
     sectorId: number | null,
     competitionPeriodId: number, // Passaremos o ID do período
     suggestedValue: number,
     defaultSettingsApplied: RegrasAplicadasPadrao // Passa as regras que geraram a sugestão
   ) => void;
+
+  onOpenHistory?: (data: {
+    criterionId: number;
+    sectorId: number;
+    criterionName: string;
+    sectorName: string;
+  }) => void;
 }
 
 const PlanningCellSkeleton: React.FC = () => {
@@ -69,10 +75,11 @@ export function PlanningCellCard({
   criterion,
   cellData,
   isLoadingMatrixData,
-  competitionPeriodId, // <<< RECEBE A NOVA PROP
+  competitionPeriodId,
   onEdit,
   onCalculate,
   onAcceptSuggestion,
+  onOpenHistory,
 }: PlanningCellCardProps) {
   if (isLoadingMatrixData || !cellData) {
     return <PlanningCellSkeleton />;
@@ -283,6 +290,16 @@ export function PlanningCellCard({
               <Button
                 variant='ghost'
                 size='icon'
+                onClick={() => {
+                  if (onOpenHistory && cellData) {
+                    onOpenHistory({
+                      criterionId: criterion.id,
+                      sectorId: cellData.setorId,
+                      criterionName: criterion.nome,
+                      sectorName: cellData.setorNome || 'Setor', // fallback se não tiver
+                    });
+                  }
+                }}
                 className='text-gray-500 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700/40'
               >
                 <History className='h-4 w-4' />

@@ -8,6 +8,7 @@ import { CompetitionPeriodEntity } from '@/entity/competition-period.entity';
 import { CriterionEntity } from '@/entity/criterion.entity';
 import { AuditLogService } from '@/modules/audit/audit.service';
 import { ExpurgoService } from '@/modules/expurgos/expurgo.service';
+import { HistoryService } from '@/modules/historical/history.service';
 import { ParameterService } from '@/modules/parameters/parameter.service';
 import { CompetitionPeriodService } from '@/modules/periods/period.service';
 import { RankingService } from '@/modules/ranking/ranking.service';
@@ -20,6 +21,7 @@ import {
   FindExpurgosDto,
   UpdateParameterDto,
 } from '../../../packages/shared-types/src/index';
+
 import { SectorEntity } from './entity/sector.entity';
 import { UserEntity } from './entity/user.entity';
 import { CriterionCalculationSettingsService } from './modules/parameters/criterion-calculation-settings.service';
@@ -36,6 +38,7 @@ const auditLogService = new AuditLogService();
 const expurgoService = new ExpurgoService();
 const competitionPeriodService = new CompetitionPeriodService();
 const periodRepository = AppDataSource.getRepository(CompetitionPeriodEntity);
+const historyService = new HistoryService();
 
 // Função start async
 const start = async () => {
@@ -1124,6 +1127,85 @@ const start = async () => {
     // --- FIM ROTAS EXPURGOS ---
 
     registerHistoricalResultsRoutes(fastify);
+    fastify.get('/api/history/criterion-sector', async (request, reply) => {
+      fastify.log.info('Recebida requisição GET /api/history/criterion-sector');
+
+      try {
+        const query = request.query as {
+          criterionId?: string;
+          sectorId?: string;
+          limit?: string;
+        };
+
+        // Validação de parâmetros obrigatórios
+        if (!query.criterionId || !query.sectorId) {
+          fastify.log.warn('Parâmetros obrigatórios ausentes:', query);
+          return reply.status(400).send({
+            error: 'Parâmetros criterionId e sectorId são obrigatórios',
+          });
+        }
+
+        // Conversão e validação de tipos
+        const criterionId = parseInt(query.criterionId, 10);
+        const sectorId = parseInt(query.sectorId, 10);
+        const limit = query.limit ? parseInt(query.limit, 10) : 24;
+
+        if (isNaN(criterionId) || isNaN(sectorId)) {
+          fastify.log.warn('IDs inválidos:', {
+            criterionId: query.criterionId,
+            sectorId: query.sectorId,
+          });
+          return reply.status(400).send({
+            error: 'criterionId e sectorId devem ser números válidos',
+          });
+        }
+
+        if (limit && (isNaN(limit) || limit < 1 || limit > 100)) {
+          return reply.status(400).send({
+            error: 'limit deve ser um número entre 1 e 100',
+          });
+        }
+
+        fastify.log.info(
+          `Buscando histórico: criterionId=${criterionId}, sectorId=${sectorId}, limit=${limit}`
+        );
+
+        // Garantir que AppDataSource está inicializado
+        if (!AppDataSource.isInitialized) {
+          await AppDataSource.initialize();
+        }
+
+        // Chamar o service
+        const historyData = await historyService.getCriterionSectorHistory(
+          criterionId,
+          sectorId,
+          limit
+        );
+
+        fastify.log.info(
+          `Histórico retornado: ${historyData.timeline.length} entradas, período: ${historyData.summary.timeSpan}`
+        );
+
+        reply.send(historyData);
+      } catch (error: any) {
+        fastify.log.error(`Erro ao buscar histórico: ${error.message}`, error);
+
+        // Tratamento de erros específicos
+        if (error.message.includes('não encontrado')) {
+          reply.status(404).send({ error: error.message });
+        } else if (
+          error.message.includes('critério') ||
+          error.message.includes('setor')
+        ) {
+          reply.status(400).send({ error: error.message });
+        } else {
+          reply.status(500).send({
+            error:
+              'Erro interno ao buscar histórico. Tente novamente mais tarde.',
+          });
+        }
+      }
+    });
 
     // --- Fim das Rotas ---
 

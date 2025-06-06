@@ -156,3 +156,42 @@
     min-width: 800px; /* Mais espaço em telas maiores */
   }
 }
+
+/* Adicione essas animações ao seu arquivo global.css existente */
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%) skewX(-12deg);
+  }
+  100% {
+    transform: translateX(200%) skewX(-12deg);
+  }
+}
+
+@keyframes celebrate {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
+}
+
+.animate-celebrate {
+  animation: celebrate 0.6s ease-in-out;
+}
+
+/* Configuração adicional para Tailwind */
+.animate-bounce {
+  animation: bounce 0.6s ease-in-out;
+}
+
+/* Smooth transitions para barras de progresso */
+.progress-bar {
+  transition: width 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+}

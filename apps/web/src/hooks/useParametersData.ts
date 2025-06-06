@@ -403,7 +403,7 @@ export function useParametersData(selectedPeriod?: string) {
         criterioId: result.criterioId,
         criterioNome: result.criterioNome,
         setorId: result.setorId,
-        setorNome: result.setorNome, // ✅ ADICIONAR ESTA LINHA
+        setorNome: result.setorNome,
         valorRealizado: result.valorRealizado,
         valorMeta: result.valorMeta,
         percentualAtingimento: result.percentualAtingimento,

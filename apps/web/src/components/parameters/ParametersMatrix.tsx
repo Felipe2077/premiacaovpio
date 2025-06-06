@@ -8,6 +8,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { useParametersProgress } from './hooks/useParametersProgress';
+
 import {
   Tooltip,
   TooltipContent,
@@ -40,6 +42,7 @@ import {
 import React, { useMemo, useState } from 'react'; // Corrigido React.useMemo
 import { Button } from '../ui/button'; // Se usar botões aqui
 import { PlanningCellCard } from './PlanningCellCard';
+import { SectorProgressIndicator } from './progress/SectorProgressIndicator';
 
 // Interface CompetitionPeriod local (se diferente da importada)
 // Se for igual à do hook useParametersData, não precisa redefinir.
@@ -84,6 +87,40 @@ interface ParametersMatrixProps {
     suggestedValue: number,
     defaultSettingsApplied: RegrasAplicadasPadrao | null
   ) => void;
+  onOpenHistory?: (data: {
+    criterionId: number;
+    sectorId: number;
+    criterionName: string;
+    sectorName: string;
+  }) => void;
+}
+
+interface ParameterData {
+  criterioId: number;
+  criterioNome: string;
+  setorId: number;
+  setorNome: string;
+  isMetaDefinida: boolean;
+  metaDefinidaValor: number | null;
+  metaPropostaPadrao: number | null;
+  metaAnteriorValor: number | null;
+  metaAnteriorPeriodo: string | null;
+  regrasAplicadasPadrao: string | null;
+  periodo: string;
+}
+
+interface ParameterMatrixProps {
+  data: ParameterData[];
+  isLoading: boolean;
+  onAcceptSuggestion: (
+    criterioId: number,
+    setorId: number,
+    valor: number
+  ) => void;
+  onEditParameter: (criterioId: number, setorId: number) => void;
+  onDeleteParameter: (criterioId: number, setorId: number) => void;
+  onResetParameter: (criterioId: number, setorId: number) => void;
+  period: string;
 }
 
 const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
@@ -95,7 +132,7 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
   isLoadingMatrixData, // Renomeado
   periodoAtual,
   sectors,
-  // fetchHistoricalData, // Removido das props se não mais usado aqui diretamente
+  onOpenHistory,
   onAcceptSuggestion,
 }) => {
   const [sortConfig, setSortConfig] = useState<{
@@ -137,6 +174,11 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
     return sortableCriteria;
   }, [uniqueCriteria, sortConfig]);
 
+  const { progressData, isLoading: progressLoading } = useParametersProgress(
+    resultsBySector,
+    uniqueCriteria
+  );
+
   if (isLoadingMatrixData && !periodoAtual) {
     // Mostra loading principal se ainda não tem período
     return (
@@ -167,7 +209,7 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
     return (
       <div className='flex justify-center items-center p-8 min-h-[200px] border rounded-md bg-muted/10'>
         <div className='text-muted-foreground'>
-          Nenhum dado de resultado encontrado para os setores no período{' '}
+          Nenhum dado de resultado encontrado para os setores no período
           {periodoAtual.mesAno}.
         </div>
       </div>
@@ -302,6 +344,7 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
             onCalculate={handleCalculateInCard}
             onAcceptSuggestion={onAcceptSuggestion}
             competitionPeriodId={periodoAtual.id}
+            onOpenHistory={onOpenHistory}
           />
         );
       }
@@ -395,7 +438,6 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
               periodoAtual &&
               isPlanejamento && ( // Editar só em planejamento
                 <TooltipProvider>
-                  {' '}
                   <Tooltip delayDuration={200}>
                     <TooltipTrigger asChild>
                       <Button
@@ -423,7 +465,6 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
               periodoAtual &&
               isPlanejamento && ( // Calcular (modal) só em planejamento
                 <TooltipProvider>
-                  {' '}
                   <Tooltip delayDuration={200}>
                     <TooltipTrigger asChild>
                       <Button
@@ -448,12 +489,22 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
                 </TooltipProvider>
               )}
             <TooltipProvider>
-              {' '}
               <Tooltip delayDuration={200}>
                 <TooltipTrigger asChild>
                   <Button
                     variant='ghost'
                     size='icon'
+                    onClick={() => {
+                      if (onOpenHistory) {
+                        onOpenHistory({
+                          criterionId: criterionFromLoop.id,
+                          sectorId: parseInt(sectorIdStr),
+                          criterionName: criterionFromLoop.nome,
+                          sectorName:
+                            currentSector?.nome || `Setor ${sectorIdStr}`,
+                        });
+                      }
+                    }}
                     className='text-gray-500 hover:text-gray-600'
                   >
                     <History className='h-4 w-4' />
@@ -485,10 +536,6 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
     <div className='space-y-4'>
       <div className='flex justify-between items-center'>
         <div>
-          <h3 className='text-lg font-semibold'>
-            Matriz de Parâmetros{' '}
-            {periodoAtual?.mesAno && `- ${periodoAtual.mesAno}`}
-          </h3>
           <p className='text-sm text-muted-foreground'>
             {isPlanejamento &&
               'Fase de Planejamento - Defina as metas para o próximo período.'}
@@ -502,7 +549,7 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
           </p>
         </div>
         <div className='text-sm text-muted-foreground'>
-          {resultsBySector ? Object.keys(resultsBySector).length : 0} setores •{' '}
+          {resultsBySector ? Object.keys(resultsBySector).length : 0} setores •
           {uniqueCriteria?.length || 0} critérios
         </div>
       </div>
@@ -525,7 +572,30 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
                       key={sectorId}
                       className='font-semibold text-center min-w-[220px] px-2'
                     >
-                      {(sectorData as any).setorNome}
+                      {/* Nome do setor */}
+                      <div className='pb-1'>
+                        {(sectorData as any).setorNome}
+                      </div>
+
+                      {/* ✅ Indicador de progresso só em PLANEJAMENTO */}
+                      {isPlanejamento && (
+                        <SectorProgressIndicator
+                          setorNome={(sectorData as any).setorNome}
+                          definidas={
+                            progressData[(sectorData as any).setorNome]
+                              ?.definidas || 0
+                          }
+                          total={
+                            progressData[(sectorData as any).setorNome]
+                              ?.total || 0
+                          }
+                          percentual={
+                            progressData[(sectorData as any).setorNome]
+                              ?.percentual || 0
+                          }
+                          isLoading={progressLoading || isLoadingMatrixData}
+                        />
+                      )}
                     </TableHead>
                   )
                 )}
@@ -554,7 +624,7 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = ({
                           )}
                           {criterion.sentido_melhor && (
                             <p className='text-xs'>
-                              Sentido:{' '}
+                              Sentido:
                               {criterion.sentido_melhor === 'MAIOR'
                                 ? 'Maior é melhor'
                                 : 'Menor é melhor'}

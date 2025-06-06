@@ -65,7 +65,7 @@ async function runEtlOrchestratorTest() {
     // -----------------------------------------
 
     const etlService = new EtlService(); // AGORA instancia o EtlService
-    const targetPeriodMesAno = '2025-05'; // Mês que populamos nas tabelas RAW
+    const targetPeriodMesAno = '2025-06'; // Mês que populamos nas tabelas RAW
 
     console.log(
       `[Test Orchestrator] Processando dados para o período: ${targetPeriodMesAno}`

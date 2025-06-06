@@ -2,10 +2,12 @@
 'use client';
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 
 // Componentes
 import CalculationModal from '@/components/parameters/CalculationModal';
+import { HistoryModal } from '@/components/parameters/HistoryModal';
 import {
   CreateDialog,
   EditDialog,
@@ -36,6 +38,7 @@ import { ParametersAPI } from '@/services/parameters.api';
 
 export default function ParametersPage() {
   const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
 
   // Hook de dados
   const {
@@ -70,6 +73,11 @@ export default function ParametersPage() {
     selectedPeriodMesAno: selectedPeriod?.mesAno,
   });
 
+  // Verificar se está montado (para SSR)
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   // Inicialização do período
   useEffect(() => {
     if (periods.length > 0 && !selectedPeriodId) {
@@ -97,6 +105,18 @@ export default function ParametersPage() {
     const periodId = parseInt(value);
     setSelectedPeriodId(periodId);
   };
+
+  const handleOpenHistory = useCallback(
+    (data: {
+      criterionId: number;
+      sectorId: number;
+      criterionName: string;
+      sectorName: string;
+    }) => {
+      modals.openHistoryModal(data);
+    },
+    [modals]
+  );
 
   const handleRefresh = async () => {
     if (selectedPeriod?.mesAno) {
@@ -308,6 +328,7 @@ export default function ParametersPage() {
               fetchHistoricalData={ParametersAPI.fetchHistoricalData}
               onAcceptSuggestion={handleAcceptSuggestion}
               isLoadingMatrixData={isLoading}
+              onOpenHistory={handleOpenHistory}
             />
           </CardContent>
         </Card>
@@ -360,6 +381,21 @@ export default function ParametersPage() {
           fetchHistoricalData={ParametersAPI.fetchHistoricalData}
         />
       )}
+
+      {isMounted &&
+        modals.historyModalOpen &&
+        modals.historyData &&
+        createPortal(
+          <HistoryModal
+            isOpen={modals.historyModalOpen}
+            onClose={modals.closeHistoryModal}
+            criterionId={modals.historyData.criterionId}
+            sectorId={modals.historyData.sectorId}
+            criterionName={modals.historyData.criterionName}
+            sectorName={modals.historyData.sectorName}
+          />,
+          document.body
+        )}
     </div>
   );
 }

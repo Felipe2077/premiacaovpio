@@ -7,18 +7,22 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import PerformanceTable from '@/components/competition/PerformanceTable';
 import PointsTable from '@/components/competition/PointsTable';
 import RankingTable from '@/components/competition/RankingTable';
-import { useCompetitionData } from '@/hooks/useCompetitionData'; // <-- IMPORTAR HOOK
+import { useCompetitionData } from '@/hooks/useCompetitionData';
 
 export default function HomePage() {
   const {
     rankingData,
-    // detailedResults, // Não precisamos passar para DetailedResultsTable se ele já está em resultsBySector
     activeCriteria,
     resultsBySector,
     uniqueCriteria,
     isLoading, // Estado de loading combinado
     error, // Estado de erro combinado
   } = useCompetitionData();
+
+  console.log('[homepage]: rankingData', rankingData);
+  console.log('[homepage]: activeCriteria', activeCriteria);
+  console.log('[homepage]: resultsBySector', resultsBySector);
+  console.log('[homepage]: uniqueCriteria', uniqueCriteria);
 
   console.log(useCompetitionData());
 
