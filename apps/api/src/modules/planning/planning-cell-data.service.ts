@@ -249,7 +249,11 @@ export class PlanningCellDataService {
           effectiveCalculationMethod
         ),
         adjustmentPercentage: parseFloat(effectiveAdjustmentPercentage) || 0,
-        roundingMethod: effectiveRoundingMethod,
+        roundingMethod: effectiveRoundingMethod as
+          | 'up'
+          | 'down'
+          | 'nearest'
+          | 'none',
         roundingDecimalPlaces: parseInt(effectiveDecimalPlacesStr, 10),
       };
 

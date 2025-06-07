@@ -1,61 +1,121 @@
+// packages/shared-types/src/dto/expurgo.dto.ts (ATUALIZADO)
 import { ExpurgoStatus } from '../enums/expurgo-status.enum';
 
 /**
  * DTO para criação de nova solicitação de expurgo
  */
 export interface CreateExpurgoDto {
+  /** ID do período de competição */
   competitionPeriodId: number;
+
+  /** ID do setor onde ocorreu o evento */
   sectorId: number;
+
+  /** ID do critério afetado pelo evento */
   criterionId: number;
-  dataEvento: string; // YYYY-MM-DD
+
+  /** Data em que ocorreu o evento (formato YYYY-MM-DD) */
+  dataEvento: string;
+
+  /** Descrição detalhada do evento que justifica o expurgo */
   descricaoEvento: string;
+
+  /** Justificativa do solicitante para o expurgo */
   justificativaSolicitacao: string;
-  valorAjusteNumerico: number; // O valor a ser expurgado (ex: -1 para uma quebra, ou o KM para KM Ociosa)
+
+  /**
+   * Valor numérico do ajuste a ser aplicado
+   * Negativo para reduzir (ex: -1 quebra, -5 km ociosa)
+   * Positivo para aumentar (casos raros)
+   */
+  valorAjusteNumerico: number;
 }
 
+/**
+ * DTO para aprovação ou rejeição de expurgo
+ */
 export interface ApproveRejectExpurgoDto {
+  /** Justificativa do aprovador/rejeitador para a decisão */
   justificativaAprovacaoOuRejeicao: string;
 }
 
+/**
+ * DTO para filtros de busca de expurgos
+ */
 export interface FindExpurgosDto {
+  /** Filtrar por período de competição específico */
   competitionPeriodId?: number;
+
+  /** Filtrar por setor específico */
   sectorId?: number;
+
+  /** Filtrar por critério específico */
   criterionId?: number;
+
+  /** Filtrar por status do expurgo */
   status?: ExpurgoStatus;
+
+  /** Filtrar por data do evento - início do range (YYYY-MM-DD) */
   dataEventoInicio?: string;
+
+  /** Filtrar por data do evento - fim do range (YYYY-MM-DD) */
   dataEventoFim?: string;
+
+  /** Filtrar por quem solicitou */
+  registradoPorUserId?: number;
+
+  /** Filtrar por quem aprovou/rejeitou */
+  aprovadoPorUserId?: number;
 }
 
+/**
+ * DTO de resposta completa para expurgo (com relações populadas)
+ */
 export interface ExpurgoResponseDto {
   id: number;
+
+  // Dados do evento
   dataEvento: string;
   descricaoEvento: string;
   justificativaSolicitacao: string;
   valorAjusteNumerico: number;
   status: ExpurgoStatus;
+
+  // Relações - Período
   competitionPeriodId: number;
   competitionPeriod?: {
     id: number;
     mesAno: string;
     status: string;
+    dataInicio: string;
+    dataFim: string;
   };
+
+  // Relações - Setor
   sectorId: number;
   sector?: {
     id: number;
     nome: string;
   };
+
+  // Relações - Critério
   criterionId: number;
   criterion?: {
     id: number;
     nome: string;
     unidade_medida?: string;
+    sentido_melhor?: string;
   };
+
+  // Auditoria - Solicitação
   registradoPorUserId: number;
   registradoPor?: {
     id: number;
     nome: string;
     email: string;
   };
+
+  // Auditoria - Aprovação/Rejeição
   aprovadoPorUserId?: number | null;
   aprovadoPor?: {
     id: number;
@@ -64,6 +124,8 @@ export interface ExpurgoResponseDto {
   } | null;
   aprovadoEm?: Date | string | null;
   justificativaAprovacao?: string | null;
+
+  // Timestamps
   createdAt: Date | string;
   updatedAt: Date | string;
 }

@@ -1,20 +1,23 @@
 {
   "extends": "../../packages/typescript-config/base.json",
   "compilerOptions": {
-    "outDir": "./dist", // Pasta de saída do build JS
-    "rootDir": "./src", // Pasta raiz do código TS
-    "experimentalDecorators": true, // Habilita decorators (TypeORM)
-    "emitDecoratorMetadata": true, // Habilita metadados (TypeORM)
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
     "strictPropertyInitialization": false,
     "baseUrl": ".",
+
+    // 🎯 CORREÇÃO MÍNIMA: Apenas mudar o path do shared-types
     "paths": {
       "@/*": ["src/*"],
-      "@sistema-premiacao/shared-types": ["../../packages/shared-types/src"],
+      "@sistema-premiacao/shared-types": ["../../packages/shared-types/dist"],
       "@sistema-premiacao/shared-calculation-utils": [
         "../../packages/shared-calculation-utils/src"
       ]
     }
   },
-  "include": ["src/**/*"], // Inclui todos os arquivos TS da pasta src
-  "exclude": ["node_modules", "dist"] // Exclui pastas
+
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
 }

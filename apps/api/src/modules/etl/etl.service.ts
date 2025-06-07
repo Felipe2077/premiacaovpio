@@ -4,6 +4,7 @@ import 'reflect-metadata';
 import { Between, Repository } from 'typeorm'; // Adicionado MoreThanOrEqual
 import { MySqlEtlService } from './mysql-etl.service';
 import { OracleEtlService } from './oracle-etl.service';
+import { ExpurgoStatus } from '@sistema-premiacao/shared-types';
 
 // Entidades RAW
 import { RawMySqlOcorrenciaHorariaEntity } from '@/entity/raw-data/raw-mysql-ocorrencia-horaria.entity';
@@ -322,7 +323,7 @@ export class EtlService {
                   where: {
                     criterionId: criterion.id, // ID do critério "KM OCIOSA"
                     sectorId: sector.id,
-                    status: 'APROVADO',
+                    status: ExpurgoStatus.APROVADO,
                     dataEvento: Between(dataInicio, dataFim), // Expurgos do período
                   },
                 });
@@ -419,7 +420,7 @@ export class EtlService {
               where: {
                 criterionId: criterion.id,
                 sectorId: sector.id,
-                status: 'APROVADO',
+                status: ExpurgoStatus.APROVADO,
                 dataEvento: Between(dataInicio, dataFim),
               },
             });
