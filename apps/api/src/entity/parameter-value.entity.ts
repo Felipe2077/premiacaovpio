@@ -1,8 +1,8 @@
-// apps/api/src/entity/parameter-value.entity.ts (COM RELAÇÕES)
+// apps/api/src/entity/parameter-value.entity.ts (COM VERSIONAMENTO)
 import {
   Column,
   CreateDateColumn,
-  Entity, // << IMPORTANTE
+  Entity,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -29,9 +29,13 @@ export class ParameterValueEntity {
   @Column({ type: 'date', nullable: true })
   dataFimEfetivo!: string | null;
 
+  // ⭐ NOVO: Campo de versionamento
+  @Column({ type: 'int', default: 1 })
+  versao!: number;
+
   // --- RELAÇÃO COM CRITERION ---
-  @Column({ type: 'int', nullable: true }) // Tornando nullable: true para consistência, já que a relação é opcional
-  criterionId?: number | null; // Permitir null aqui se a relação for opcional
+  @Column({ type: 'int', nullable: true })
+  criterionId?: number | null;
 
   @ManyToOne(() => CriterionEntity, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'criterionId' })
@@ -40,7 +44,7 @@ export class ParameterValueEntity {
 
   // --- RELAÇÃO COM SECTOR ---
   @Column({ type: 'int', nullable: true })
-  sectorId?: number | null; // Já estava nullable e permitindo null, PERFEITO
+  sectorId?: number | null;
 
   @ManyToOne(() => SectorEntity, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'sectorId' })
@@ -51,8 +55,8 @@ export class ParameterValueEntity {
   // --------------------------
 
   // --- RELAÇÃO COM USER (createdBy) ---
-  @Column({ type: 'int', nullable: true }) // Tornando nullable: true por consistência
-  createdByUserId?: number | null; // Permitir null se o usuário for deletado ou não obrigatório
+  @Column({ type: 'int', nullable: true })
+  createdByUserId?: number | null;
 
   @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'createdByUserId' })
@@ -72,12 +76,11 @@ export class ParameterValueEntity {
   @JoinColumn({ name: 'previousVersionId' })
   previousVersion?: ParameterValueEntity | null;
 
-  // --- PROPRIEDADE E RELAÇÃO FALTANDO PARA COMPETITION PERIOD ---
-  // Adicione estas linhas:
-  @Column({ type: 'int' }) // Não pode ser nulo, uma meta sempre pertence a um período
+  // --- RELAÇÃO COM COMPETITION PERIOD ---
+  @Column({ type: 'int' })
   competitionPeriodId!: number;
 
-  @ManyToOne(() => CompetitionPeriodEntity, { onDelete: 'CASCADE' }) // Ou 'RESTRICT'/'SET NULL' dependendo da regra
+  @ManyToOne(() => CompetitionPeriodEntity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'competitionPeriodId' })
   competitionPeriod!: CompetitionPeriodEntity;
 

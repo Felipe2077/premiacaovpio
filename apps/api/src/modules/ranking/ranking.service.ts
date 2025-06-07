@@ -726,43 +726,6 @@ export class RankingService {
       },
     });
 
-    console.log('=== DEBUG PERFORMANCE DATA ===');
-    console.log(
-      `Query: metricDate=${context.targetDate}, competitionPeriodId=${context.competitionPeriod.id}`
-    );
-    console.log(`Resultados encontrados: ${data.length}`);
-
-    // Mostrar primeiros 5 resultados para debug
-    console.log(
-      'Primeiros resultados:',
-      data.slice(0, 5).map((d) => ({
-        id: d.id,
-        sectorId: d.sectorId,
-        criterionId: d.criterionId,
-        valor: d.valor,
-        metricDate: d.metricDate,
-        competitionPeriodId: d.competitionPeriodId,
-      }))
-    );
-
-    // Verificar especificamente GAMA + ATRASO
-    const gamaAtraso = data.find(
-      (d) => d.sectorId === 1 && d.criterionId === 1
-    );
-    console.log(
-      'GAMA + ATRASO específico:',
-      gamaAtraso
-        ? {
-            valor: gamaAtraso.valor,
-            metricDate: gamaAtraso.metricDate,
-            sectorId: gamaAtraso.sectorId,
-            criterionId: gamaAtraso.criterionId,
-          }
-        : 'NÃO ENCONTRADO'
-    );
-
-    console.log('=== FIM DEBUG PERFORMANCE ===');
-
     this.log(
       `Performance data query: metricDate=${context.targetDate}, ` +
         `competitionPeriodId=${context.competitionPeriod.id}, ` +

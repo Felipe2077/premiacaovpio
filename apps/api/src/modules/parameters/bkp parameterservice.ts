@@ -1,4 +1,4 @@
-// apps/api/src/modules/parameters/parameter.service.ts - PARTE 1/4
+// apps/api/src/modules/parameters/parameter.service.ts
 import { AppDataSource } from '@/database/data-source';
 import { CompetitionPeriodEntity } from '@/entity/competition-period.entity';
 import { CriterionEntity } from '@/entity/criterion.entity';
@@ -627,7 +627,7 @@ export class ParameterService {
   }
 
   /**
-   * Atualiza performance_data DENTRO da transação
+   * Atualiza performance_data DENTRO da transação - NOVO MÉTODO
    */
   private async updatePerformanceDataInTransaction(
     performanceDataRepo: Repository<PerformanceDataEntity>,
@@ -646,17 +646,25 @@ export class ParameterService {
       return;
     }
 
+    console.log(`[DEBUG updatePerformanceDataInTransaction] Iniciando com:`, {
+      criterionId,
+      sectorId,
+      competitionPeriodId,
+      targetValue: numericTargetValue,
+    });
+
     try {
+      // 1. BUSCAR registro existente usando UPDATE direto (mais seguro)
       const updateQuery = `
-        UPDATE performance_data 
-        SET "targetValue" = $1 
-        WHERE "criterionId" = $2 
-          AND "competitionPeriodId" = $3 
-          AND (
-            ($4::INTEGER IS NULL AND "sectorId" IS NULL) OR 
-            ("sectorId" = $4)
-          )
-      `;
+      UPDATE performance_data 
+      SET "targetValue" = $1 
+      WHERE "criterionId" = $2 
+        AND "competitionPeriodId" = $3 
+        AND (
+          ($4::INTEGER IS NULL AND "sectorId" IS NULL) OR 
+          ("sectorId" = $4)
+        )
+    `;
 
       const updateParams = [
         numericTargetValue,
@@ -665,18 +673,35 @@ export class ParameterService {
         sectorId || null,
       ];
 
+      console.log(
+        `[DEBUG updatePerformanceDataInTransaction] Executando UPDATE:`,
+        {
+          query: updateQuery,
+          params: updateParams,
+        }
+      );
+
       const updateResult = await performanceDataRepo.query(
         updateQuery,
         updateParams
       );
+      console.log(
+        `[DEBUG updatePerformanceDataInTransaction] UPDATE result:`,
+        updateResult
+      );
 
-      // Se não atualizou nenhum registro, INSERIR novo
+      // 2. Se não atualizou nenhum registro, INSERIR novo
       if (updateResult[1] === 0) {
+        // [1] é o número de linhas afetadas no PostgreSQL
+        console.log(
+          `[DEBUG updatePerformanceDataInTransaction] Nenhum registro atualizado, criando novo...`
+        );
+
         const insertQuery = `
-          INSERT INTO performance_data ("criterionId", "competitionPeriodId", "sectorId", "metricDate", "targetValue", "valor")
-          VALUES ($1, $2, $3, $4, $5, $6)
-          RETURNING id
-        `;
+        INSERT INTO performance_data ("criterionId", "competitionPeriodId", "sectorId", "metricDate", "targetValue", "valor")
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id
+      `;
 
         const insertParams = [
           criterionId,
@@ -687,7 +712,30 @@ export class ParameterService {
           null,
         ];
 
-        await performanceDataRepo.query(insertQuery, insertParams);
+        console.log(
+          `[DEBUG updatePerformanceDataInTransaction] Executando INSERT:`,
+          {
+            query: insertQuery,
+            params: insertParams,
+          }
+        );
+
+        const insertResult = await performanceDataRepo.query(
+          insertQuery,
+          insertParams
+        );
+        console.log(
+          `[DEBUG updatePerformanceDataInTransaction] INSERT result:`,
+          insertResult
+        );
+        console.log(
+          `[DEBUG updatePerformanceDataInTransaction] Novo registro criado com ID:`,
+          insertResult[0]?.id
+        );
+      } else {
+        console.log(
+          `[DEBUG updatePerformanceDataInTransaction] ${updateResult[1]} registro(s) atualizado(s)`
+        );
       }
 
       console.log(
@@ -774,6 +822,104 @@ export class ParameterService {
     });
 
     return parameterRepo.save(newParameter);
+  }
+
+  /**
+   * Atualiza/Cria entrada em performance_data
+   */
+
+  private async updatePerformanceData(
+    performanceDataRepo: Repository<PerformanceDataEntity>,
+    criterionId: number,
+    sectorId: number | undefined | null,
+    competitionPeriodId: number,
+    competitionPeriod: CompetitionPeriodEntity,
+    targetValue: number
+  ): Promise<void> {
+    const numericTargetValue = parseFloat(String(targetValue));
+
+    if (isNaN(numericTargetValue)) {
+      console.warn(
+        `[ParameterService] Valor "${targetValue}" não é numérico. Performance_data não atualizada.`
+      );
+      return;
+    }
+
+    console.log(`[DEBUG updatePerformanceData] Buscando registro existente:`, {
+      criterionId,
+      sectorId,
+      competitionPeriodId,
+    });
+
+    // Construir condição WHERE explicitamente
+    const whereCondition: any = {
+      criterionId: criterionId,
+      competitionPeriodId: competitionPeriodId,
+    };
+
+    // Tratar sectorId de forma explícita
+    if (sectorId === null || sectorId === undefined) {
+      whereCondition.sectorId = IsNull();
+    } else {
+      whereCondition.sectorId = sectorId;
+    }
+
+    console.log(
+      `[DEBUG updatePerformanceData] Condição WHERE:`,
+      whereCondition
+    );
+
+    let performanceEntry = await performanceDataRepo.findOne({
+      where: whereCondition,
+    });
+
+    console.log(
+      `[DEBUG updatePerformanceData] Registro encontrado:`,
+      performanceEntry?.id || 'NENHUM'
+    );
+
+    if (performanceEntry) {
+      // ATUALIZAR registro existente
+      console.log(
+        `[DEBUG updatePerformanceData] Atualizando registro existente ID: ${performanceEntry.id}`
+      );
+      performanceEntry.targetValue = numericTargetValue;
+      await performanceDataRepo.save(performanceEntry);
+    } else {
+      // CRIAR novo registro - SEM especificar ID
+      console.log(`[DEBUG updatePerformanceData] Criando novo registro`);
+
+      const newEntryData: Partial<PerformanceDataEntity> = {
+        criterionId: criterionId,
+        competitionPeriodId: competitionPeriodId,
+        metricDate: this.formatDate(competitionPeriod.dataInicio),
+        targetValue: numericTargetValue,
+        valor: null,
+        // ❌ NÃO incluir 'id' aqui - deixar o auto-increment funcionar
+      };
+
+      // Adicionar sectorId apenas se não for null/undefined
+      if (sectorId !== null && sectorId !== undefined) {
+        newEntryData.sectorId = sectorId;
+      }
+      // Se sectorId for null/undefined, deixar como undefined para que o TypeORM trate
+
+      console.log(
+        `[DEBUG updatePerformanceData] Dados para criação:`,
+        newEntryData
+      );
+
+      performanceEntry = performanceDataRepo.create(newEntryData);
+      await performanceDataRepo.save(performanceEntry);
+
+      console.log(
+        `[DEBUG updatePerformanceData] Novo registro criado com ID: ${performanceEntry.id}`
+      );
+    }
+
+    console.log(
+      `[ParameterService] Performance_data atualizada com targetValue: ${numericTargetValue}`
+    );
   }
 
   /**
@@ -1022,12 +1168,8 @@ export class ParameterService {
     });
   }
 
-  // =====================================
-  // ⭐ MÉTODO UPDATEPARAMETER CORRIGIDO ⭐
-  // =====================================
-
   /**
-   * Atualiza parâmetro com versionamento por timestamp (CORRIGIDO)
+   * Atualiza parâmetro com versionamento
    */
   async updateParameter(
     id: number,
@@ -1047,19 +1189,40 @@ export class ParameterService {
       );
     }
 
-    // Validações básicas
     this.validateUpdateParameter(oldParameter, data);
 
-    // ⭐ NOVA LÓGICA: Versionamento por timestamp
-    return this.executeParameterVersioningByTimestamp(
+    const newParamDataInicioEfetivo = data.dataInicioEfetivo
+      ? this.formatDate(data.dataInicioEfetivo)
+      : this.formatDate(new Date());
+
+    this.validateNewStartDate(oldParameter, newParamDataInicioEfetivo);
+
+    // Calcular data de fim do parâmetro antigo
+    const oldParamEndDateStr = data.dataFimEfetivoAnterior
+      ? this.formatDate(data.dataFimEfetivoAnterior)
+      : this.calculatePreviousDayDate(newParamDataInicioEfetivo);
+
+    this.validateOldParameterEndDate(oldParameter, oldParamEndDateStr);
+
+    // Preparar dados para versionamento
+    const versioningData = this.prepareVersioningData(
       oldParameter,
       data,
+      actingUser,
+      newParamDataInicioEfetivo,
+      oldParamEndDateStr
+    );
+
+    // Executar versionamento em transação
+    return this.executeParameterVersioning(
+      oldParameter,
+      versioningData,
       actingUser
     );
   }
 
   /**
-   * Valida dados para atualização de parâmetro (SIMPLIFICADA)
+   * Valida dados para atualização de parâmetro
    */
   private validateUpdateParameter(
     oldParameter: ParameterValueEntity,
@@ -1098,157 +1261,153 @@ export class ParameterService {
   }
 
   /**
-   * ⭐ NOVA IMPLEMENTAÇÃO: Executa versionamento usando timestamp
+   * Valida nova data de início do parâmetro
    */
-  private async executeParameterVersioningByTimestamp(
+  private validateNewStartDate(
+    oldParameter: ParameterValueEntity,
+    newStartDate: string
+  ): void {
+    const periodStart = this.formatDate(
+      oldParameter.competitionPeriod!.dataInicio
+    );
+    const periodEnd = this.formatDate(oldParameter.competitionPeriod!.dataFim);
+
+    if (
+      new Date(newStartDate) < new Date(periodStart) ||
+      new Date(newStartDate) > new Date(periodEnd)
+    ) {
+      throw new Error(
+        `Nova data de início (${newStartDate}) deve estar dentro do período ` +
+          `de competição (${periodStart} a ${periodEnd}).`
+      );
+    }
+  }
+
+  /**
+   * Calcula data do dia anterior
+   */
+  private calculatePreviousDayDate(dateStr: string): string {
+    const date = new Date(dateStr);
+    date.setUTCDate(date.getUTCDate() - 1);
+    return this.formatDate(date);
+  }
+
+  /**
+   * Valida data de fim do parâmetro antigo
+   */
+  private validateOldParameterEndDate(
+    oldParameter: ParameterValueEntity,
+    endDate: string
+  ): void {
+    if (new Date(endDate) < new Date(oldParameter.dataInicioEfetivo)) {
+      throw new Error(
+        `Data de fim calculada (${endDate}) não pode ser anterior ` +
+          `à data de início do parâmetro (${oldParameter.dataInicioEfetivo}).`
+      );
+    }
+  }
+
+  /**
+   * Prepara dados para versionamento
+   */
+  private prepareVersioningData(
     oldParameter: ParameterValueEntity,
     data: UpdateParameterDto,
+    actingUser: UserEntity,
+    newStartDate: string,
+    oldEndDate: string
+  ) {
+    // Atualizar parâmetro antigo
+    oldParameter.dataFimEfetivo = oldEndDate;
+    oldParameter.justificativa =
+      `${oldParameter.justificativa || ''} ` +
+      `(Versionado em ${new Date().toISOString()} por ${actingUser.nome}. ` +
+      `Nova just.: ${data.justificativa})`.trim();
+
+    // Dados do novo parâmetro
+    const newParameterData: DeepPartial<ParameterValueEntity> = {
+      nomeParametro: data.nomeParametro || oldParameter.nomeParametro,
+      valor: data.valor !== undefined ? String(data.valor) : oldParameter.valor,
+      dataInicioEfetivo: newStartDate,
+      dataFimEfetivo: null,
+      criterionId: oldParameter.criterionId,
+      sectorId: oldParameter.sectorId,
+      competitionPeriodId: oldParameter.competitionPeriodId,
+      justificativa: data.justificativa,
+      createdByUserId: actingUser.id,
+      previousVersionId: oldParameter.id,
+      metadata: data.metadata || oldParameter.metadata,
+    };
+
+    const isValueChanged =
+      data.valor !== undefined && String(data.valor) !== oldParameter.valor;
+    const newValue =
+      data.valor !== undefined ? String(data.valor) : oldParameter.valor;
+
+    return { newParameterData, isValueChanged, newValue };
+  }
+
+  /**
+   * Executa versionamento de parâmetro em transação
+   */
+  private async executeParameterVersioning(
+    oldParameter: ParameterValueEntity,
+    versioningData: any,
     actingUser: UserEntity
   ): Promise<ParameterValueEntity> {
     let savedNewParameter!: ParameterValueEntity;
 
     await AppDataSource.manager.transaction(
       async (transactionalEntityManager) => {
-        const parameterRepoTx =
-          transactionalEntityManager.getRepository(ParameterValueEntity);
-
-        // 1. ⭐ CALCULAR PRÓXIMA VERSÃO
-        const nextVersion = await this.calculateNextVersion(
-          parameterRepoTx,
-          oldParameter.criterionId!,
-          oldParameter.sectorId,
-          oldParameter.competitionPeriodId
-        );
-
-        // 2. ⭐ EXPIRAR PARÂMETRO ATUAL (timestamp exato)
-        const timestampExpiracao = new Date().toISOString();
-        oldParameter.dataFimEfetivo =
-          timestampExpiracao.split('T')[0] ||
-          timestampExpiracao.substring(0, 10);
-        oldParameter.justificativa = this.buildVersioningJustification(
-          oldParameter.justificativa,
-          data.justificativa!,
-          actingUser.nome,
-          timestampExpiracao
-        );
-
+        // 1. Expirar parâmetro antigo
         await transactionalEntityManager.save(
           ParameterValueEntity,
           oldParameter
         );
         console.log(
-          `[ParameterService] Parâmetro antigo ID ${oldParameter.id} expirado em ${timestampExpiracao}`
+          `[ParameterService] Parâmetro antigo ID ${oldParameter.id} expirado`
         );
 
-        // 3. ⭐ CRIAR NOVO PARÂMETRO (MESMA dataInicioEfetivo!)
-        const newParameterData: DeepPartial<ParameterValueEntity> = {
-          nomeParametro: data.nomeParametro || oldParameter.nomeParametro,
-          valor:
-            data.valor !== undefined ? String(data.valor) : oldParameter.valor,
-          dataInicioEfetivo: oldParameter.dataInicioEfetivo, // ⭐ MESMA DATA!
-          dataFimEfetivo: null,
-          versao: nextVersion, // ⭐ NOVA VERSÃO
-          criterionId: oldParameter.criterionId,
-          sectorId: oldParameter.sectorId,
-          competitionPeriodId: oldParameter.competitionPeriodId,
-          justificativa: data.justificativa,
-          createdByUserId: actingUser.id,
-          previousVersionId: oldParameter.id,
-          metadata: data.metadata || oldParameter.metadata,
-        };
-
+        // 2. Criar novo parâmetro versionado
         const newEntityInstance = transactionalEntityManager.create(
           ParameterValueEntity,
-          newParameterData
+          versioningData.newParameterData
         );
         savedNewParameter = await transactionalEntityManager.save(
           ParameterValueEntity,
           newEntityInstance
         );
-
         console.log(
-          `[ParameterService] Novo parâmetro versionado - ID: ${savedNewParameter.id}, Versão: ${nextVersion}`
+          `[ParameterService] Novo parâmetro versionado ID: ${savedNewParameter.id}`
         );
 
-        // 4. ⭐ ATUALIZAR PERFORMANCE_DATA SE VALOR ALTERADO
-        const isValueChanged =
-          data.valor !== undefined && String(data.valor) !== oldParameter.valor;
-        if (isValueChanged) {
+        // 3. Atualizar performance_data se valor foi alterado
+        if (versioningData.isValueChanged) {
           await this.updatePerformanceDataForValueChange(
             transactionalEntityManager,
             oldParameter,
-            String(data.valor)
+            versioningData.newValue
           );
         }
       }
     );
 
-    // 5. Registrar auditoria
+    // Registrar auditoria
     await this.auditLogService.createLog({
       userId: actingUser.id,
       userName: actingUser.nome,
-      actionType: 'META_VERSIONADA_TIMESTAMP',
+      actionType: 'META_VERSIONADA',
       entityType: 'ParameterValueEntity',
       entityId: savedNewParameter.id.toString(),
       details: {
         oldParameterId: oldParameter.id,
-        oldVersion: oldParameter.versao || 1,
-        newVersion: savedNewParameter.versao,
         newParameter: savedNewParameter,
-        changeTimestamp: new Date().toISOString(),
       },
-      justification: data.justificativa!,
+      justification: versioningData.newParameterData.justificativa,
       competitionPeriodId: savedNewParameter.competitionPeriodId,
     });
 
     return savedNewParameter;
-  }
-
-  /**
-   * ⭐ NOVO: Calcula próxima versão para uma combinação critério/setor/período
-   */
-  private async calculateNextVersion(
-    parameterRepo: Repository<ParameterValueEntity>,
-    criterionId: number,
-    sectorId: number | null | undefined,
-    competitionPeriodId: number
-  ): Promise<number> {
-    const maxVersionResult = await parameterRepo
-      .createQueryBuilder('param')
-      .select('MAX(param.versao)', 'maxVersao')
-      .where('param.criterionId = :criterionId', { criterionId })
-      .andWhere('param.competitionPeriodId = :competitionPeriodId', {
-        competitionPeriodId,
-      })
-      .andWhere(
-        sectorId !== null && sectorId !== undefined
-          ? 'param.sectorId = :sectorId'
-          : 'param.sectorId IS NULL',
-        sectorId !== null && sectorId !== undefined ? { sectorId } : {}
-      )
-      .getRawOne();
-
-    const currentMaxVersion = maxVersionResult?.maxVersao || 0;
-    const nextVersion = currentMaxVersion + 1;
-
-    console.log(
-      `[ParameterService] Calculando próxima versão - Atual: ${currentMaxVersion}, Próxima: ${nextVersion}`
-    );
-
-    return nextVersion;
-  }
-
-  /**
-   * ⭐ NOVO: Constrói justificativa para versionamento
-   */
-  private buildVersioningJustification(
-    oldJustificativa: string | undefined,
-    newJustificativa: string,
-    userName: string,
-    timestamp: string
-  ): string {
-    const baseText = oldJustificativa || '';
-    return `${baseText} (Versionado em ${timestamp} por ${userName}. Nova just.: ${newJustificativa})`.trim();
   }
 
   /**
@@ -1459,8 +1618,7 @@ export class ParameterService {
         '(param.id = :parameterId OR param.previousVersionId = :parameterId)',
         { parameterId }
       )
-      .orderBy('param.versao', 'DESC')
-      .addOrderBy('param.createdAt', 'DESC');
+      .orderBy('param.dataInicioEfetivo', 'DESC');
 
     return queryBuilder.getMany();
   }

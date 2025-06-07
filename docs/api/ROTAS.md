@@ -1085,24 +1085,6 @@ GET /api/expurgos/1
 
 ---
 
-#### 3. Sistema de Expurgos Não Funcional
-
-**Rotas Afetadas**: Todas as rotas de `/api/expurgos/*`
-
-**Problemas**:
-
-- Lista sempre vazia
-- Criação falha por campos obrigatórios
-- IDs não encontrados
-
-**Investigação Necessária**:
-
-- Verificar DTO `CreateExpurgoDto` completo
-- Conferir se há dados de expurgo no banco
-- Validar mapeamento de entidades
-
----
-
 #### 4. Validação de Período em Parâmetros
 
 **Comportamento**: Metas só podem ser alteradas em períodos com status `PLANEJAMENTO`.

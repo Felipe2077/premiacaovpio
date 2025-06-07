@@ -23,6 +23,7 @@ export const useModals = () => {
     null
   );
 
+  // ⭐ MANTIDO: newMetaValue para compatibilidade
   const [newMetaValue, setNewMetaValue] = useState<string>('');
 
   const openEditModal = (
@@ -80,10 +81,10 @@ export const useModals = () => {
     editData,
     createData,
     calculateData,
-    newMetaValue,
+    newMetaValue, // ⭐ ADICIONADO DE VOLTA
 
     // Setters
-    setNewMetaValue,
+    setNewMetaValue, // ⭐ ADICIONADO DE VOLTA
     setEditModalOpen,
     setCreateModalOpen,
     setCalculationModalOpen,

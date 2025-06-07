@@ -58,3 +58,31 @@ export interface CriterionCalculationSettingsDto {
   roundingMethod?: 'nearest' | 'up' | 'down';
   roundingDecimalPlaces?: number;
 }
+
+export interface EditData {
+  parameterId: number;
+  criterionId: number;
+  criterioNome: string;
+  setorId: number | null;
+  setorNome: string;
+  currentValue: number | null; // Valor atual da meta
+  dataInicioEfetivo: string; // Data atual de início
+  nomeParametro: string; // Nome atual do parâmetro
+}
+
+export interface CreateData {
+  criterionId: number;
+  criterioNome: string;
+  setorId: number | null;
+  setorNome: string;
+  competitionPeriodId: number;
+}
+
+export interface CalculateData {
+  criterioId: number;
+  criterioNome: string;
+  setorId: number | null;
+  setorNome: string;
+  competitionPeriodId: number;
+  competitionPeriodDate: string;
+}

@@ -18,7 +18,6 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { ResultData } from '@/hooks/useParametersData';
 import { UpdateParameterFormValues } from '@/hooks/useParametersMutations';
 import { UseFormReturn } from 'react-hook-form';
 
@@ -27,7 +26,8 @@ interface EditParameterModalProps {
   onOpenChange: (open: boolean) => void;
   form: UseFormReturn<UpdateParameterFormValues>;
   onSubmit: (data: UpdateParameterFormValues) => void;
-  selectedItem: ResultData | null;
+  criterionName: string;
+  sectorName: string;
   selectedPeriod: string;
   isSubmitting: boolean;
 }
@@ -37,7 +37,8 @@ export function EditParameterModal({
   onOpenChange,
   form,
   onSubmit,
-  selectedItem,
+  criterionName,
+  sectorName,
   selectedPeriod,
   isSubmitting,
 }: EditParameterModalProps) {
@@ -46,8 +47,7 @@ export function EditParameterModal({
       <DialogContent className='sm:max-w-[500px]'>
         <DialogHeader>
           <DialogTitle>
-            Editar Meta: {selectedItem?.criterioNome} -{' '}
-            {selectedItem?.setorNome}
+            Editar Meta: {criterionName} - {sectorName}
           </DialogTitle>
           <DialogDescription>
             Atualize o valor da meta para o período {selectedPeriod}. Uma
@@ -104,12 +104,15 @@ export function EditParameterModal({
               name='justificativa'
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Justificativa</FormLabel>
+                  <FormLabel>
+                    Justificativa <span className='text-red-500'>*</span>
+                  </FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder='Informe o motivo da alteração...'
+                      placeholder='Informe o motivo da alteração da meta...'
                       {...field}
                       rows={3}
+                      className='resize-none'
                     />
                   </FormControl>
                   <FormMessage />
@@ -122,6 +125,7 @@ export function EditParameterModal({
                 type='button'
                 variant='outline'
                 onClick={() => onOpenChange(false)}
+                disabled={isSubmitting}
               >
                 Cancelar
               </Button>

@@ -501,6 +501,44 @@ export function useParametersData(selectedPeriod?: string) {
     return uniqueCriteriaArray;
   }, [results, criteria]);
 
+  const fetchParameterByCriteriaSector = useCallback(
+    async (
+      criterionId: number,
+      sectorId: number,
+      periodId: number
+    ): Promise<any | null> => {
+      try {
+        const timestamp = new Date().getTime();
+        const response = await fetch(
+          `${API_BASE_URL}/api/parameters?period=${getPeriodById(periodId)?.mesAno}&criterionId=${criterionId}&sectorId=${sectorId}&_t=${timestamp}`
+        );
+
+        if (!response.ok) {
+          console.warn(
+            `Erro ${response.status} ao buscar parâmetro específico`
+          );
+          return null;
+        }
+
+        const data = await response.json();
+
+        // A API retorna um array, pegar o primeiro (deveria ser único)
+        if (Array.isArray(data) && data.length > 0) {
+          return data[0];
+        }
+
+        console.warn(
+          'Nenhum parâmetro encontrado para os critérios especificados'
+        );
+        return null;
+      } catch (error) {
+        console.error('Erro ao buscar parâmetro específico:', error);
+        return null;
+      }
+    },
+    [periods] // Dependência para acessar getPeriodById
+  );
+
   // Efeito para carregar dados iniciais
   useEffect(() => {
     fetchAllData(selectedPeriod);
@@ -543,5 +581,6 @@ export function useParametersData(selectedPeriod?: string) {
     getSectorById,
     getFilteredResults,
     fetchCriterionCalculationSettings,
+    fetchParameterByCriteriaSector,
   };
 }

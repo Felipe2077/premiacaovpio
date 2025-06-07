@@ -21,6 +21,11 @@ import { useCalculationActions } from '@/hooks/useCalculationActions';
 import { useCalculationSettingsNew as useCalculationSettings } from '@/hooks/useCalculationSettingsNew';
 import { useModals } from '@/hooks/useModals';
 import { useParametersData } from '@/hooks/useParametersData';
+import {
+  CreateParameterFormValues,
+  UpdateParameterFormValues,
+  useParametersMutations,
+} from '@/hooks/useParametersMutations';
 
 // Tipos
 import {
@@ -51,6 +56,7 @@ export default function ParametersPage() {
     fetchAllData,
     getPeriodById,
     fetchCriterionCalculationSettings,
+    fetchParameterByCriteriaSector,
   } = useParametersData();
 
   // Hook de modais
@@ -72,6 +78,11 @@ export default function ParametersPage() {
     fetchResults,
     selectedPeriodMesAno: selectedPeriod?.mesAno,
   });
+
+  // Hook para mutations
+  const { updateMutation, createMutation } = useParametersMutations(
+    selectedPeriod?.mesAno || ''
+  );
 
   // Verificar se está montado (para SSR)
   useEffect(() => {
@@ -159,22 +170,64 @@ export default function ParametersPage() {
   );
 
   const handleEditMeta = useCallback(
-    (
+    async (
       criterion: Criterion,
       sector: Sector | null,
       currentParameterValue: string | number | null
     ) => {
-      modals.openEditModal(
-        {
+      if (!selectedPeriod) {
+        toast.error('Período não selecionado');
+        return;
+      }
+
+      if (selectedPeriod.status !== 'PLANEJAMENTO') {
+        toast.error('Metas só podem ser editadas na fase de PLANEJAMENTO.');
+        return;
+      }
+
+      try {
+        // Buscar o parâmetro específico com ID usando os IDs do critério e setor
+        const parameter = await fetchParameterByCriteriaSector(
+          criterion.id,
+          sector?.id || 0, // Se sector for null, usar 0 como fallback
+          selectedPeriod.id
+        );
+
+        if (!parameter) {
+          toast.error('Parâmetro não encontrado para edição.');
+          return;
+        }
+
+        console.log('[DEBUG] Parâmetro encontrado para edição:', parameter);
+
+        // Preparar dados para o modal
+        const editData = {
+          parameterId: parameter.id,
           criterionId: criterion.id,
           criterioNome: criterion.nome,
-          setorId: sector ? sector.id : null,
-          setorNome: sector ? sector.nome : 'Geral',
-        },
-        currentParameterValue
-      );
+          setorId: sector?.id || 0,
+          setorNome: sector?.nome || 'Geral',
+          currentValue: currentParameterValue,
+          dataInicioEfetivo:
+            parameter.dataInicioEfetivo || selectedPeriod.dataInicio,
+          nomeParametro: parameter.nomeParametro,
+        };
+
+        console.log('[DEBUG] Dados preparados para edição:', editData);
+
+        // Abrir modal com valor atual
+        modals.openEditModal(
+          editData,
+          currentParameterValue?.toString() ||
+            parameter.valor?.toString() ||
+            '0'
+        );
+      } catch (error) {
+        console.error('Erro ao preparar edição:', error);
+        toast.error('Erro ao carregar dados para edição.');
+      }
     },
-    [modals]
+    [selectedPeriod, fetchParameterByCriteriaSector, modals]
   );
 
   const handleCreateMeta = useCallback(
@@ -194,26 +247,109 @@ export default function ParametersPage() {
     [modals]
   );
 
-  const handleSaveEdit = async () => {
-    if (!modals.editData || modals.newMetaValue === '') return;
+  // Handler para salvar edição
+  const handleSaveEdit = async (
+    justificativa: string,
+    nomeParametro?: string,
+    dataInicioEfetivo?: string
+  ) => {
+    if (!modals.editData || !justificativa.trim()) {
+      toast.error('Justificativa é obrigatória.');
+      return;
+    }
 
-    // TODO: Implementar chamada à API para salvar meta editada
-    // await updateParameter(...);
+    if (!modals.newMetaValue || modals.newMetaValue.trim() === '') {
+      toast.error('Valor da meta é obrigatório.');
+      return;
+    }
 
-    toast.success('Meta atualizada com sucesso! (Simulado)');
-    if (selectedPeriod?.mesAno) await fetchResults(selectedPeriod.mesAno);
-    modals.closeEditModal();
+    if (!selectedPeriod) {
+      toast.error('Período não selecionado.');
+      return;
+    }
+
+    // ⭐ CORREÇÃO PRINCIPAL: Usar data do período atual para evitar conflito
+    const dataInicioFinal = dataInicioEfetivo || selectedPeriod.dataInicio;
+
+    // Validar se a data está dentro do período
+    const periodoInicio = new Date(selectedPeriod.dataInicio);
+    const periodoFim = new Date(selectedPeriod.dataFim);
+    const dataInicio = new Date(dataInicioFinal);
+
+    if (dataInicio < periodoInicio || dataInicio > periodoFim) {
+      toast.error(
+        `Data de início deve estar entre ${selectedPeriod.dataInicio} e ${selectedPeriod.dataFim}`
+      );
+      return;
+    }
+
+    const updateData: UpdateParameterFormValues = {
+      id: modals.editData.parameterId || 0,
+      valor: parseFloat(modals.newMetaValue) || 0,
+      dataInicioEfetivo: dataInicioFinal,
+      justificativa: justificativa.trim(),
+      nomeParametro: nomeParametro || modals.editData.nomeParametro || '',
+    };
+
+    console.log('[DEBUG] Dados enviados para atualização:', updateData);
+
+    try {
+      await updateMutation.mutateAsync(updateData);
+      modals.closeEditModal();
+
+      // Recarregar dados
+      if (selectedPeriod?.mesAno) {
+        await fetchResults(selectedPeriod.mesAno);
+      }
+    } catch (error) {
+      console.error('Erro ao salvar edição:', error);
+    }
   };
 
-  const handleSaveCreate = async () => {
-    if (!modals.createData || modals.newMetaValue === '') return;
+  // Handler para salvar criação
+  const handleSaveCreate = async (
+    justificativa: string,
+    nomeParametro?: string,
+    dataInicioEfetivo?: string
+  ) => {
+    if (!modals.createData || !justificativa.trim()) {
+      toast.error('Justificativa é obrigatória.');
+      return;
+    }
 
-    // TODO: Implementar chamada à API para criar nova meta
-    // await createParameter(...);
+    if (!modals.newMetaValue || modals.newMetaValue.trim() === '') {
+      toast.error('Valor da meta é obrigatório.');
+      return;
+    }
 
-    toast.success('Meta criada com sucesso! (Simulado)');
-    if (selectedPeriod?.mesAno) await fetchResults(selectedPeriod.mesAno);
-    modals.closeCreateModal();
+    if (!selectedPeriod) {
+      toast.error('Período não selecionado.');
+      return;
+    }
+
+    const createData: CreateParameterFormValues = {
+      competitionPeriodId: modals.createData.competitionPeriodId,
+      criterionId: modals.createData.criterionId,
+      sectorId: modals.createData.setorId || 0,
+      valor: parseFloat(modals.newMetaValue) || 0,
+      dataInicioEfetivo: dataInicioEfetivo || selectedPeriod.dataInicio,
+      justificativa: justificativa.trim(),
+      nomeParametro:
+        nomeParametro ||
+        `META_${modals.createData.criterioNome.replace(/\s+/g, '_')}_SETOR${modals.createData.setorId}`,
+    };
+
+    try {
+      await createMutation.mutateAsync(createData);
+      modals.closeCreateModal();
+
+      // Recarregar dados
+      if (selectedPeriod?.mesAno) {
+        await fetchResults(selectedPeriod.mesAno);
+      }
+    } catch (error) {
+      console.error('Erro ao criar meta:', error);
+    }
   };
 
   const handleAcceptSuggestion = useCallback(
@@ -268,6 +404,14 @@ export default function ParametersPage() {
       );
     },
     [calculationActions, modals]
+  );
+
+  // Handler para onChange do valor da meta
+  const handleMetaValueChange = useCallback(
+    (value: string) => {
+      modals.setNewMetaValue(value);
+    },
+    [modals]
   );
 
   // Estados de loading
@@ -340,7 +484,7 @@ export default function ParametersPage() {
         onOpenChange={modals.setEditModalOpen}
         editData={modals.editData}
         newMetaValue={modals.newMetaValue}
-        onMetaValueChange={modals.setNewMetaValue}
+        onMetaValueChange={handleMetaValueChange}
         onSave={handleSaveEdit}
       />
 
@@ -349,7 +493,7 @@ export default function ParametersPage() {
         onOpenChange={modals.setCreateModalOpen}
         createData={modals.createData}
         newMetaValue={modals.newMetaValue}
-        onMetaValueChange={modals.setNewMetaValue}
+        onMetaValueChange={handleMetaValueChange}
         onSave={handleSaveCreate}
       />
 
