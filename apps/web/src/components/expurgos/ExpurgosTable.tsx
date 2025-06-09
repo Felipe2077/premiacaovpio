@@ -37,9 +37,10 @@ import {
   User,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import AttachmentsModal from './attachments/AttachmentsModal';
 import ApproveExpurgoModal from './modals/ApproveExpurgoModal';
+import ExpurgoDetailsModal from './modals/ExpurgoDetailsModal';
 import RejectExpurgoModal from './modals/RejectExpurgoModal';
 
 // ===================================
@@ -365,7 +366,7 @@ const AnexosCell: React.FC<AnexosCellProps> = ({
 
 interface AcoesCellProps {
   expurgo: ExpurgoData;
-  onView: (id: number) => void;
+  onView: (expurgo: ExpurgoData) => void;
   onApprove: (expurgo: ExpurgoData) => void;
   onReject: (expurgo: ExpurgoData) => void;
   onViewAttachments: (expurgo: ExpurgoData) => void;
@@ -426,7 +427,7 @@ const AcoesCell: React.FC<AcoesCellProps> = ({
                 variant='outline'
                 size='sm'
                 className='h-7 w-7 p-0 text-blue-600 border-blue-200 hover:bg-blue-50 hover:border-blue-300'
-                onClick={() => onView(expurgo.id)}
+                onClick={() => onView(expurgo)}
               >
                 <Eye className='h-3 w-3' />
               </Button>
@@ -446,7 +447,7 @@ const AcoesCell: React.FC<AcoesCellProps> = ({
           </DropdownMenuTrigger>
           <DropdownMenuContent align='end' className='w-44'>
             <DropdownMenuItem
-              onClick={() => onView(expurgo.id)}
+              onClick={() => onView(expurgo)}
               className='flex items-center space-x-2 cursor-pointer'
             >
               <Eye className='h-4 w-4' />
@@ -489,6 +490,11 @@ const useExpurgoModals = () => {
     expurgo: null,
   });
 
+  const [detailsModal, setDetailsModal] = useState<ModalState>({
+    open: false,
+    expurgo: null,
+  });
+
   const openApproveModal = (expurgo: ExpurgoData) => {
     setApproveModal({ open: true, expurgo });
   };
@@ -513,11 +519,20 @@ const useExpurgoModals = () => {
     setAttachmentsModal({ open: false, expurgo: null });
   };
 
+  const openDetailsModal = (expurgo: ExpurgoData) => {
+    setDetailsModal({ open: true, expurgo });
+  };
+
+  const closeDetailsModal = () => {
+    setDetailsModal({ open: false, expurgo: null });
+  };
+
   return {
     // Estados
     approveModal,
     rejectModal,
     attachmentsModal,
+    detailsModal,
     // Actions
     openApproveModal,
     closeApproveModal,
@@ -525,6 +540,8 @@ const useExpurgoModals = () => {
     closeRejectModal,
     openAttachmentsModal,
     closeAttachmentsModal,
+    openDetailsModal,
+    closeDetailsModal,
   };
 };
 
@@ -537,20 +554,41 @@ export default function ExpurgosTable({
   loading = false,
   error = null,
 }: ExpurgosTableProps) {
+  console.log('Dados recebidos pela tabela:', expurgos);
+
   // ===================================
   // HOOKS E ESTADOS
   // ===================================
+  // <-- 2. CRIAR UMA VERSÃO "LIMPA" DOS DADOS USANDO useMemo
+  // Isso garante que os dados sejam convertidos para os tipos corretos (números)
+  // assim que chegam ao componente, e de forma otimizada.
+
+  const sanitizedExpurgos = useMemo(() => {
+    if (!expurgos) return [];
+    return expurgos.map((expurgo) => ({
+      ...expurgo,
+      // Converte strings em números. Se a conversão falhar, usa 0 como padrão.
+      valorSolicitado: parseFloat(String(expurgo.valorSolicitado)) || 0,
+      // Faz o mesmo para valorAprovado, mas preserva o 'null' se for o caso.
+      valorAprovado: expurgo.valorAprovado
+        ? parseFloat(String(expurgo.valorAprovado))
+        : null,
+    }));
+  }, [expurgos]);
 
   const {
     approveModal,
     rejectModal,
     attachmentsModal,
+    detailsModal,
     openApproveModal,
     closeApproveModal,
     openRejectModal,
     closeRejectModal,
     openAttachmentsModal,
     closeAttachmentsModal,
+    openDetailsModal,
+    closeDetailsModal,
   } = useExpurgoModals();
 
   const {
@@ -563,9 +601,8 @@ export default function ExpurgosTable({
   // HANDLERS DE AÇÕES (ORQUESTRAÇÃO)
   // ===================================
 
-  const handleViewExpurgo = (id: number) => {
-    console.log('Visualizar expurgo', id);
-    // Implementar navegação ou modal de visualização
+  const handleViewExpurgo = (expurgo: ExpurgoData) => {
+    openDetailsModal(expurgo);
   };
 
   const handleConfirmApprove = async (data: {
@@ -625,7 +662,7 @@ export default function ExpurgosTable({
   // ===================================
 
   // Ordenar expurgos do mais recente para o mais antigo
-  const sortedExpurgos = ExpurgoSortHelper.sortByMostRecent(expurgos);
+  const sortedExpurgos = ExpurgoSortHelper.sortByMostRecent(sanitizedExpurgos);
 
   // ===================================
   // RENDER PRINCIPAL
@@ -756,6 +793,31 @@ export default function ExpurgosTable({
           onOpenChange={closeAttachmentsModal}
           expurgo={attachmentsModal.expurgo}
           readOnly={false}
+        />
+
+        <ExpurgoDetailsModal
+          open={detailsModal.open}
+          onOpenChange={closeDetailsModal}
+          expurgo={detailsModal.expurgo}
+          onViewAttachments={() => {
+            if (detailsModal.expurgo) {
+              closeDetailsModal();
+              openAttachmentsModal(detailsModal.expurgo);
+            }
+          }}
+          onApprove={() => {
+            if (detailsModal.expurgo) {
+              closeDetailsModal();
+              openApproveModal(detailsModal.expurgo);
+            }
+          }}
+          onReject={() => {
+            if (detailsModal.expurgo) {
+              closeDetailsModal();
+              openRejectModal(detailsModal.expurgo);
+            }
+          }}
+          canManage={true}
         />
       </div>
 
