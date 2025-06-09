@@ -1,4 +1,4 @@
-// apps/api/src/modules/expurgos/expurgo.service.ts (MÉTODO CONVERTTORESPONSEDTO PÚBLICO)
+// apps/api/src/modules/expurgos/expurgo.service.ts (REFATORADO PARA NOVAS REGRAS)
 
 import { AppDataSource } from '@/database/data-source';
 import { CompetitionPeriodEntity } from '@/entity/competition-period.entity';
@@ -10,20 +10,25 @@ import {
 import { SectorEntity } from '@/entity/sector.entity';
 import { UserEntity } from '@/entity/user.entity';
 import {
-  ApproveRejectExpurgoDto,
+  ApproveExpurgoDto,
   CreateExpurgoDto,
   ExpurgoResponseDto,
+  ExpurgoStatisticsDto,
   FindExpurgosDto,
-  validateApproveRejectExpurgo,
+  RejectExpurgoDto,
+  validateApproveExpurgo,
   validateCreateExpurgo,
+  validateRejectExpurgo,
 } from '@sistema-premiacao/shared-types';
 import 'reflect-metadata';
 import { Between, FindOptionsWhere, Repository } from 'typeorm';
 import { AuditLogService } from '../audit/audit.service';
+import { ExpurgoAttachmentService } from './expurgo-attachment.service';
 
 /**
  * Serviço responsável pela gestão completa de expurgos
- * Implementa o workflow: Solicitação → Análise → Aprovação/Rejeição
+ * Implementa o workflow: Solicitação → Análise → Aprovação/Rejeição (com valores flexíveis)
+ * Integrado com sistema de anexos e validação de roles
  */
 export class ExpurgoService {
   private readonly expurgoRepo: Repository<ExpurgoEventEntity>;
@@ -32,6 +37,7 @@ export class ExpurgoService {
   private readonly sectorRepo: Repository<SectorEntity>;
   private readonly userRepo: Repository<UserEntity>;
   private readonly auditLogService: AuditLogService;
+  private readonly attachmentService: ExpurgoAttachmentService;
 
   // Critérios elegíveis para expurgo
   private readonly ELIGIBLE_CRITERIA = [
@@ -40,6 +46,8 @@ export class ExpurgoService {
     'KM OCIOSA',
     'FALTA FUNC',
     'ATRASO',
+    'PEÇAS',
+    'PNEUS',
   ];
 
   constructor() {
@@ -49,9 +57,10 @@ export class ExpurgoService {
     this.sectorRepo = AppDataSource.getRepository(SectorEntity);
     this.userRepo = AppDataSource.getRepository(UserEntity);
     this.auditLogService = new AuditLogService();
+    this.attachmentService = new ExpurgoAttachmentService();
 
     console.log(
-      '[ExpurgoService] Serviço inicializado com repositórios configurados.'
+      '[ExpurgoService] Serviço inicializado com repositórios e serviços configurados.'
     );
   }
 
@@ -113,6 +122,42 @@ export class ExpurgoService {
   }
 
   /**
+   * 🆕 Valida permissões baseadas em roles (preparado para quando roles estiverem implementadas)
+   */
+  private async validateUserPermissions(
+    user: UserEntity,
+    action: 'REQUEST' | 'APPROVE' | 'REJECT',
+    targetSectorId?: number
+  ): Promise<void> {
+    // TODO: Implementar validação real quando sistema de roles estiver funcionando
+
+    // Regras futuras:
+    // - REQUEST: Usuário deve ter role GERENTE e estar associado ao setor
+    // - APPROVE/REJECT: Usuário deve ter role DIRETOR
+
+    console.log(
+      `[ExpurgoService] Validando permissões: User ${user.id}, Action: ${action}, Setor: ${targetSectorId}`
+    );
+
+    // Por enquanto, apenas log - implementação completa virá quando roles estiverem funcionando
+
+    // Exemplo de validação futura:
+    // if (action === 'REQUEST') {
+    //   const userSector = await this.getUserSector(user.id);
+    //   if (userSector?.id !== targetSectorId) {
+    //     throw new Error('Usuário só pode solicitar expurgos para seu próprio setor');
+    //   }
+    // }
+
+    // if (action === 'APPROVE' || action === 'REJECT') {
+    //   const hasDirectorRole = await this.userHasRole(user.id, 'DIRETOR');
+    //   if (!hasDirectorRole) {
+    //     throw new Error('Apenas diretores podem aprovar/rejeitar expurgos');
+    //   }
+    // }
+  }
+
+  /**
    * Valida entidades relacionadas e suas regras de negócio
    */
   private async validateRelatedEntities(data: {
@@ -138,12 +183,12 @@ export class ExpurgoService {
       );
     }
 
-    // Validar se período permite expurgos (não pode estar fechado há muito tempo)
+    // Validar se período permite expurgos
     if (period.status === 'FECHADA') {
+      // Permitir, mas registrar warning
       console.warn(
-        `[ExpurgoService] Tentativa de expurgo em período fechado: ${period.mesAno}`
+        `[ExpurgoService] Expurgo solicitado para período fechado: ${period.mesAno}`
       );
-      // Permitir por enquanto, mas registrar warning
     }
 
     // Buscar setor
@@ -181,13 +226,29 @@ export class ExpurgoService {
     return { period, sector, criterion };
   }
 
+  /**
+   * 🆕 Determina status baseado no valor aprovado vs solicitado
+   */
+  private determineApprovalStatus(
+    valorSolicitado: number,
+    valorAprovado: number
+  ): ExpurgoStatus {
+    const solicitadoAbs = Math.abs(valorSolicitado);
+    const aprovadoAbs = Math.abs(valorAprovado);
+
+    if (aprovadoAbs >= solicitadoAbs) {
+      return ExpurgoStatus.APROVADO; // Aprovação integral
+    } else {
+      return ExpurgoStatus.APROVADO_PARCIAL; // Aprovação parcial
+    }
+  }
+
   // =====================================
   // MÉTODO PÚBLICO PARA CONVERSÃO
   // =====================================
 
   /**
-   * ⭐ MÉTODO TORNADO PÚBLICO
-   * Converte entity para DTO de resposta
+   * Converte entity para DTO de resposta (ATUALIZADO)
    */
   public convertToResponseDto(entity: ExpurgoEventEntity): ExpurgoResponseDto {
     return {
@@ -219,7 +280,11 @@ export class ExpurgoService {
       descricaoEvento: entity.descricaoEvento,
       justificativaSolicitacao: entity.justificativaSolicitacao,
       status: entity.status,
-      valorAjusteNumerico: entity.valorAjusteNumerico,
+
+      // 🆕 VALORES SEPARADOS
+      valorSolicitado: entity.valorSolicitado,
+      valorAprovado: entity.valorAprovado,
+
       registradoPorUserId: entity.registradoPorUserId,
       registradoPor: entity.registradoPor
         ? {
@@ -238,17 +303,41 @@ export class ExpurgoService {
         : undefined,
       aprovadoEm: entity.aprovadoEm,
       justificativaAprovacao: entity.justificativaAprovacao,
+
+      // 🆕 DADOS DE ANEXOS
+      anexos: entity.anexos?.map((anexo) => ({
+        id: anexo.id,
+        originalFileName: anexo.originalFileName,
+        fileSize: anexo.fileSize,
+        mimeType: anexo.mimeType,
+        uploadedAt: anexo.uploadedAt,
+        uploadedBy: anexo.uploadedBy
+          ? {
+              id: anexo.uploadedBy.id,
+              nome: anexo.uploadedBy.nome,
+            }
+          : undefined,
+        description: anexo.description,
+        downloadUrl: `/api/expurgos/anexos/${anexo.id}/download`, // URL para download
+      })),
+      quantidadeAnexos: entity.getQuantidadeAnexos(),
+
+      // 🆕 CAMPOS CALCULADOS
+      percentualAprovacao: entity.getPercentualAprovacao(),
+      valorEfetivo: entity.getValorEfetivo(),
+      houveReducao: entity.houveReducaoValor(),
+
       createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,
     };
   }
 
   // =====================================
-  // MÉTODOS PÚBLICOS - CRUD
+  // MÉTODOS PÚBLICOS - CRUD ATUALIZADOS
   // =====================================
 
   /**
-   * Solicita um novo expurgo
+   * Solicita um novo expurgo (ATUALIZADO)
    */
   async requestExpurgo(
     data: CreateExpurgoDto,
@@ -257,12 +346,19 @@ export class ExpurgoService {
     console.log(
       `[ExpurgoService] Usuário ${requestingUser.id} (${requestingUser.nome}) ` +
         `solicitando expurgo:`,
-      { ...data, valorAjusteNumerico: data.valorAjusteNumerico }
+      { ...data, valorSolicitado: data.valorSolicitado }
     );
 
     try {
       // Validar dados de entrada
       const validatedData = validateCreateExpurgo(data);
+
+      // 🆕 Validar permissões do usuário
+      await this.validateUserPermissions(
+        requestingUser,
+        'REQUEST',
+        validatedData.sectorId
+      );
 
       // Validar entidades relacionadas
       const { period, sector, criterion } = await this.validateRelatedEntities({
@@ -299,7 +395,7 @@ export class ExpurgoService {
         dataEvento: this.formatDate(validatedData.dataEvento),
         descricaoEvento: validatedData.descricaoEvento.trim(),
         justificativaSolicitacao: validatedData.justificativaSolicitacao.trim(),
-        valorAjusteNumerico: validatedData.valorAjusteNumerico,
+        valorSolicitado: validatedData.valorSolicitado, // 🆕 CAMPO ATUALIZADO
         status: ExpurgoStatus.PENDENTE,
         registradoPorUserId: requestingUser.id,
       });
@@ -317,7 +413,7 @@ export class ExpurgoService {
           criterionName: criterion.nome,
           sectorName: sector.nome,
           periodMesAno: period.mesAno,
-          valorAjuste: validatedData.valorAjusteNumerico,
+          valorSolicitado: validatedData.valorSolicitado, // 🆕 ATUALIZADO
           dataEvento: validatedData.dataEvento,
         },
         justification: validatedData.justificativaSolicitacao,
@@ -343,21 +439,24 @@ export class ExpurgoService {
   }
 
   /**
-   * Aprova um expurgo pendente
+   * 🆕 Aprova um expurgo com valor customizado
    */
-  async approveExpurgo(
+  async approveExpurgoWithValue(
     expurgoId: number,
-    dto: ApproveRejectExpurgoDto,
+    dto: ApproveExpurgoDto,
     approvingUser: UserEntity
   ): Promise<ExpurgoResponseDto> {
     console.log(
       `[ExpurgoService] Usuário ${approvingUser.id} (${approvingUser.nome}) ` +
-        `aprovando expurgo ID: ${expurgoId}`
+        `aprovando expurgo ID: ${expurgoId} com valor: ${dto.valorAprovado}`
     );
 
     try {
       // Validar dados de entrada
-      const validatedData = validateApproveRejectExpurgo(dto);
+      const validatedData = validateApproveExpurgo(dto);
+
+      // 🆕 Validar permissões do usuário
+      await this.validateUserPermissions(approvingUser, 'APPROVE');
 
       // Buscar expurgo
       const expurgo = await this.findExpurgoById(expurgoId);
@@ -373,18 +472,35 @@ export class ExpurgoService {
         );
       }
 
-      // Validar se não é auto-aprovação (regra de negócio)
+      // Validar se não é auto-aprovação
       if (expurgo.registradoPorUserId === approvingUser.id) {
         throw new Error(
           'Usuário não pode aprovar expurgo solicitado por ele mesmo.'
         );
       }
 
-      // Atualizar status e dados de aprovação
-      expurgo.status = ExpurgoStatus.APROVADO;
+      // 🆕 Validar valor aprovado vs solicitado
+      const valorSolicitadoAbs = Math.abs(expurgo.valorSolicitado);
+      const valorAprovadoAbs = Math.abs(validatedData.valorAprovado);
+
+      if (valorAprovadoAbs > valorSolicitadoAbs) {
+        throw new Error(
+          `Valor aprovado (${valorAprovadoAbs}) não pode ser maior que o valor solicitado (${valorSolicitadoAbs})`
+        );
+      }
+
+      // 🆕 Determinar status baseado nos valores
+      const newStatus = this.determineApprovalStatus(
+        expurgo.valorSolicitado,
+        validatedData.valorAprovado
+      );
+
+      // Atualizar expurgo
+      expurgo.status = newStatus;
+      expurgo.valorAprovado = validatedData.valorAprovado; // 🆕 CAMPO NOVO
       expurgo.aprovadoPorUserId = approvingUser.id;
       expurgo.justificativaAprovacao =
-        validatedData.justificativaAprovacaoOuRejeicao.trim();
+        validatedData.justificativaAprovacao.trim();
       expurgo.aprovadoEm = new Date();
 
       const updatedExpurgo = await this.expurgoRepo.save(expurgo);
@@ -393,23 +509,28 @@ export class ExpurgoService {
       await this.auditLogService.createLog({
         userId: approvingUser.id,
         userName: approvingUser.nome,
-        actionType: 'EXPURGO_APROVADO',
+        actionType:
+          newStatus === ExpurgoStatus.APROVADO
+            ? 'EXPURGO_APROVADO_INTEGRAL'
+            : 'EXPURGO_APROVADO_PARCIAL',
         entityType: 'ExpurgoEventEntity',
         entityId: updatedExpurgo.id.toString(),
         details: {
           originalSolicitante: expurgo.registradoPor?.nome || 'Desconhecido',
           criterionName: expurgo.criterion?.nome || 'Desconhecido',
           sectorName: expurgo.sector?.nome || 'Desconhecido',
-          valorAjuste: expurgo.valorAjusteNumerico,
+          valorSolicitado: expurgo.valorSolicitado,
+          valorAprovado: validatedData.valorAprovado,
+          percentualAprovacao: updatedExpurgo.getPercentualAprovacao(),
           dataEvento: expurgo.dataEvento,
         },
-        justification: validatedData.justificativaAprovacaoOuRejeicao,
+        justification: validatedData.justificativaAprovacao,
         competitionPeriodId: expurgo.competitionPeriodId,
       });
 
       console.log(
-        `[ExpurgoService] Expurgo ID ${updatedExpurgo.id} APROVADO por ` +
-          `${approvingUser.nome}`
+        `[ExpurgoService] Expurgo ID ${updatedExpurgo.id} ${newStatus} por ` +
+          `${approvingUser.nome} - Valor: ${validatedData.valorAprovado}/${expurgo.valorSolicitado}`
       );
 
       return this.convertToResponseDto(updatedExpurgo);
@@ -423,11 +544,11 @@ export class ExpurgoService {
   }
 
   /**
-   * Rejeita um expurgo pendente
+   * 🆕 Rejeita um expurgo
    */
   async rejectExpurgo(
     expurgoId: number,
-    dto: ApproveRejectExpurgoDto,
+    dto: RejectExpurgoDto,
     rejectingUser: UserEntity
   ): Promise<ExpurgoResponseDto> {
     console.log(
@@ -437,7 +558,10 @@ export class ExpurgoService {
 
     try {
       // Validar dados de entrada
-      const validatedData = validateApproveRejectExpurgo(dto);
+      const validatedData = validateRejectExpurgo(dto);
+
+      // 🆕 Validar permissões do usuário
+      await this.validateUserPermissions(rejectingUser, 'REJECT');
 
       // Buscar expurgo
       const expurgo = await this.findExpurgoById(expurgoId);
@@ -457,7 +581,7 @@ export class ExpurgoService {
       expurgo.status = ExpurgoStatus.REJEITADO;
       expurgo.aprovadoPorUserId = rejectingUser.id;
       expurgo.justificativaAprovacao =
-        validatedData.justificativaAprovacaoOuRejeicao.trim();
+        validatedData.justificativaRejeicao.trim();
       expurgo.aprovadoEm = new Date();
 
       const updatedExpurgo = await this.expurgoRepo.save(expurgo);
@@ -473,10 +597,10 @@ export class ExpurgoService {
           originalSolicitante: expurgo.registradoPor?.nome || 'Desconhecido',
           criterionName: expurgo.criterion?.nome || 'Desconhecido',
           sectorName: expurgo.sector?.nome || 'Desconhecido',
-          valorAjuste: expurgo.valorAjusteNumerico,
+          valorSolicitado: expurgo.valorSolicitado,
           dataEvento: expurgo.dataEvento,
         },
-        justification: validatedData.justificativaAprovacaoOuRejeicao,
+        justification: validatedData.justificativaRejeicao,
         competitionPeriodId: expurgo.competitionPeriodId,
       });
 
@@ -496,7 +620,7 @@ export class ExpurgoService {
   }
 
   /**
-   * Busca expurgo por ID com todas as relações
+   * Busca expurgo por ID com todas as relações (ATUALIZADO)
    */
   async findExpurgoById(id: number): Promise<ExpurgoEventEntity | null> {
     console.log(`[ExpurgoService] Buscando expurgo por ID: ${id}`);
@@ -509,12 +633,14 @@ export class ExpurgoService {
         'criterion',
         'registradoPor',
         'aprovadoPor',
+        'anexos', // 🆕 INCLUIR ANEXOS
+        'anexos.uploadedBy', // 🆕 INCLUIR DADOS DO UPLOADER
       ],
     });
   }
 
   /**
-   * Busca expurgos com filtros
+   * Busca expurgos com filtros (ATUALIZADO)
    */
   async findExpurgos(
     filters: FindExpurgosDto = {}
@@ -524,7 +650,7 @@ export class ExpurgoService {
     try {
       const whereClause: FindOptionsWhere<ExpurgoEventEntity> = {};
 
-      // Aplicar filtros
+      // Aplicar filtros existentes
       if (filters.competitionPeriodId) {
         whereClause.competitionPeriodId = filters.competitionPeriodId;
       }
@@ -541,6 +667,15 @@ export class ExpurgoService {
         whereClause.status = filters.status;
       }
 
+      // 🆕 NOVOS FILTROS
+      if (filters.registradoPorUserId) {
+        whereClause.registradoPorUserId = filters.registradoPorUserId;
+      }
+
+      if (filters.aprovadoPorUserId) {
+        whereClause.aprovadoPorUserId = filters.aprovadoPorUserId;
+      }
+
       // Filtro por range de datas
       if (filters.dataEventoInicio && filters.dataEventoFim) {
         whereClause.dataEvento = Between(
@@ -551,20 +686,60 @@ export class ExpurgoService {
         whereClause.dataEvento = filters.dataEventoInicio;
       }
 
-      const expurgos = await this.expurgoRepo.find({
-        where: whereClause,
-        relations: [
-          'competitionPeriod',
-          'sector',
-          'criterion',
-          'registradoPor',
-          'aprovadoPor',
-        ],
-        order: {
-          dataEvento: 'DESC',
-          createdAt: 'DESC',
-        },
+      const queryBuilder = this.expurgoRepo
+        .createQueryBuilder('expurgo')
+        .leftJoinAndSelect('expurgo.competitionPeriod', 'period')
+        .leftJoinAndSelect('expurgo.sector', 'sector')
+        .leftJoinAndSelect('expurgo.criterion', 'criterion')
+        .leftJoinAndSelect('expurgo.registradoPor', 'registradoPor')
+        .leftJoinAndSelect('expurgo.aprovadoPor', 'aprovadoPor')
+        .leftJoinAndSelect('expurgo.anexos', 'anexos') // 🆕 INCLUIR ANEXOS
+        .leftJoinAndSelect('anexos.uploadedBy', 'anexoUploader'); // 🆕 DADOS DO UPLOADER
+
+      // Aplicar filtros WHERE
+      Object.entries(whereClause).forEach(([key, value]) => {
+        if (value !== undefined) {
+          if (key === 'dataEvento' && typeof value === 'object') {
+            // Filtro Between para datas
+            queryBuilder.andWhere(
+              `expurgo.${key} BETWEEN :startDate AND :endDate`,
+              {
+                startDate: (value as any).from,
+                endDate: (value as any).to,
+              }
+            );
+          } else {
+            queryBuilder.andWhere(`expurgo.${key} = :${key}`, { [key]: value });
+          }
+        }
       });
+
+      // 🆕 FILTROS ESPECIAIS
+      if (filters.comAnexos !== undefined) {
+        if (filters.comAnexos) {
+          queryBuilder.andWhere('anexos.id IS NOT NULL');
+        } else {
+          queryBuilder.andWhere('anexos.id IS NULL');
+        }
+      }
+
+      if (filters.valorMinimoSolicitado !== undefined) {
+        queryBuilder.andWhere('ABS(expurgo.valorSolicitado) >= :valorMinimo', {
+          valorMinimo: Math.abs(filters.valorMinimoSolicitado),
+        });
+      }
+
+      if (filters.valorMaximoSolicitado !== undefined) {
+        queryBuilder.andWhere('ABS(expurgo.valorSolicitado) <= :valorMaximo', {
+          valorMaximo: Math.abs(filters.valorMaximoSolicitado),
+        });
+      }
+
+      queryBuilder
+        .orderBy('expurgo.dataEvento', 'DESC')
+        .addOrderBy('expurgo.createdAt', 'DESC');
+
+      const expurgos = await queryBuilder.getMany();
 
       console.log(`[ExpurgoService] Encontrados ${expurgos.length} expurgos`);
 
@@ -576,66 +751,65 @@ export class ExpurgoService {
   }
 
   // =====================================
-  // MÉTODOS DE RELATÓRIOS E ESTATÍSTICAS
+  // 🆕 MÉTODOS PARA ANEXOS
   // =====================================
 
   /**
-   * Busca expurgos por período de competição
+   * Faz upload de anexo para um expurgo
    */
-  async findExpurgosByPeriod(
-    periodMesAno: string
-  ): Promise<ExpurgoResponseDto[]> {
-    console.log(
-      `[ExpurgoService] Buscando expurgos para período: ${periodMesAno}`
+  async uploadAttachment(
+    expurgoId: number,
+    file: any, // Será tipado conforme implementação do upload
+    uploadingUser: UserEntity,
+    description?: string
+  ): Promise<any> {
+    return this.attachmentService.uploadAttachment(
+      expurgoId,
+      file,
+      uploadingUser,
+      description
     );
-
-    const period = await this.periodRepo.findOne({
-      where: { mesAno: periodMesAno },
-    });
-
-    if (!period) {
-      throw new Error(`Período ${periodMesAno} não encontrado.`);
-    }
-
-    return this.findExpurgos({ competitionPeriodId: period.id });
   }
 
   /**
-   * Busca expurgos aprovados por período (para aplicação no cálculo)
+   * Remove anexo de um expurgo
    */
-  async findApprovedExpurgosByPeriod(
-    periodMesAno: string
-  ): Promise<ExpurgoResponseDto[]> {
-    console.log(
-      `[ExpurgoService] Buscando expurgos APROVADOS para período: ${periodMesAno}`
+  async deleteAttachment(
+    attachmentId: number,
+    deletingUser: UserEntity,
+    reason: string
+  ): Promise<void> {
+    return this.attachmentService.deleteAttachment(
+      attachmentId,
+      deletingUser,
+      reason
     );
-
-    const period = await this.periodRepo.findOne({
-      where: { mesAno: periodMesAno },
-    });
-
-    if (!period) {
-      throw new Error(`Período ${periodMesAno} não encontrado.`);
-    }
-
-    return this.findExpurgos({
-      competitionPeriodId: period.id,
-      status: ExpurgoStatus.APROVADO,
-    });
   }
 
   /**
-   * Estatísticas de expurgos por período
+   * Busca anexos de um expurgo
    */
-  async getExpurgoStatistics(periodMesAno?: string): Promise<{
-    total: number;
-    pendentes: number;
-    aprovados: number;
-    rejeitados: number;
-    byCriterion: Record<string, number>;
-    bySector: Record<string, number>;
-    valorTotalAjustes: number;
-  }> {
+  async getExpurgoAttachments(expurgoId: number) {
+    return this.attachmentService.findAttachmentsByExpurgo(expurgoId);
+  }
+
+  /**
+   * Obtém caminho do arquivo para download
+   */
+  async getAttachmentDownloadPath(attachmentId: number): Promise<string> {
+    return this.attachmentService.getFilePathForDownload(attachmentId);
+  }
+
+  // =====================================
+  // MÉTODOS DE RELATÓRIOS E ESTATÍSTICAS (ATUALIZADOS)
+  // =====================================
+
+  /**
+   * Estatísticas de expurgos por período (ATUALIZADA)
+   */
+  async getExpurgoStatistics(
+    periodMesAno?: string
+  ): Promise<ExpurgoStatisticsDto> {
     console.log(
       `[ExpurgoService] Gerando estatísticas${periodMesAno ? ` para ${periodMesAno}` : ''}`
     );
@@ -656,41 +830,120 @@ export class ExpurgoService {
 
     const expurgos = await this.findExpurgos(filters);
 
-    const stats = {
+    const stats: ExpurgoStatisticsDto = {
+      periodo: periodMesAno,
       total: expurgos.length,
       pendentes: expurgos.filter((e) => e.status === ExpurgoStatus.PENDENTE)
         .length,
       aprovados: expurgos.filter((e) => e.status === ExpurgoStatus.APROVADO)
         .length,
+      aprovadosParciais: expurgos.filter(
+        (e) => e.status === ExpurgoStatus.APROVADO_PARCIAL
+      ).length, // 🆕
       rejeitados: expurgos.filter((e) => e.status === ExpurgoStatus.REJEITADO)
         .length,
-      byCriterion: {} as Record<string, number>,
-      bySector: {} as Record<string, number>,
-      valorTotalAjustes: 0,
+      bySector: {},
+      byCriterion: {},
+      valorTotalSolicitado: 0,
+      valorTotalAprovado: 0,
+      percentualAprovacaoGeral: 0,
+      totalAnexos: 0, // 🆕
+      expurgosComAnexos: 0, // 🆕
     };
 
     // Calcular estatísticas detalhadas
     expurgos.forEach((expurgo) => {
-      // Por critério
-      const criterionName = expurgo.criterion?.nome || 'Desconhecido';
-      stats.byCriterion[criterionName] =
-        (stats.byCriterion[criterionName] || 0) + 1;
-
       // Por setor
       const sectorName = expurgo.sector?.nome || 'Desconhecido';
-      stats.bySector[sectorName] = (stats.bySector[sectorName] || 0) + 1;
+      if (!stats.bySector[sectorName]) {
+        stats.bySector[sectorName] = {
+          total: 0,
+          pendentes: 0,
+          aprovados: 0,
+          rejeitados: 0,
+          valorTotalSolicitado: 0,
+          valorTotalAprovado: 0,
+        };
+      }
 
-      // Valor total de ajustes (apenas aprovados)
-      if (expurgo.status === ExpurgoStatus.APROVADO) {
-        stats.valorTotalAjustes += Math.abs(expurgo.valorAjusteNumerico);
+      stats.bySector[sectorName].total++;
+      stats.bySector[sectorName].valorTotalSolicitado += Math.abs(
+        expurgo.valorSolicitado
+      );
+
+      switch (expurgo.status) {
+        case ExpurgoStatus.PENDENTE:
+          stats.bySector[sectorName].pendentes++;
+          break;
+        case ExpurgoStatus.APROVADO:
+        case ExpurgoStatus.APROVADO_PARCIAL:
+          stats.bySector[sectorName].aprovados++;
+          if (expurgo.valorAprovado) {
+            stats.bySector[sectorName].valorTotalAprovado += Math.abs(
+              expurgo.valorAprovado
+            );
+          }
+          break;
+        case ExpurgoStatus.REJEITADO:
+          stats.bySector[sectorName].rejeitados++;
+          break;
+      }
+
+      // Por critério
+      const criterionName = expurgo.criterion?.nome || 'Desconhecido';
+      if (!stats.byCriterion[criterionName]) {
+        stats.byCriterion[criterionName] = {
+          total: 0,
+          valorTotalSolicitado: 0,
+          valorTotalAprovado: 0,
+        };
+      }
+
+      stats.byCriterion[criterionName].total++;
+      stats.byCriterion[criterionName].valorTotalSolicitado += Math.abs(
+        expurgo.valorSolicitado
+      );
+
+      if (
+        expurgo.status === ExpurgoStatus.APROVADO ||
+        expurgo.status === ExpurgoStatus.APROVADO_PARCIAL
+      ) {
+        if (expurgo.valorAprovado) {
+          stats.byCriterion[criterionName].valorTotalAprovado += Math.abs(
+            expurgo.valorAprovado
+          );
+        }
+      }
+
+      // Totais gerais
+      stats.valorTotalSolicitado += Math.abs(expurgo.valorSolicitado);
+      if (
+        expurgo.status === ExpurgoStatus.APROVADO ||
+        expurgo.status === ExpurgoStatus.APROVADO_PARCIAL
+      ) {
+        if (expurgo.valorAprovado) {
+          stats.valorTotalAprovado += Math.abs(expurgo.valorAprovado);
+        }
+      }
+
+      // 🆕 Estatísticas de anexos
+      if (expurgo.quantidadeAnexos && expurgo.quantidadeAnexos > 0) {
+        stats.totalAnexos += expurgo.quantidadeAnexos;
+        stats.expurgosComAnexos++;
       }
     });
+
+    // Calcular percentual de aprovação geral
+    if (stats.valorTotalSolicitado > 0) {
+      stats.percentualAprovacaoGeral =
+        (stats.valorTotalAprovado / stats.valorTotalSolicitado) * 100;
+    }
 
     return stats;
   }
 
   // =====================================
-  // MÉTODOS DE MANUTENÇÃO
+  // MÉTODOS DE MANUTENÇÃO (MANTIDOS)
   // =====================================
 
   /**
@@ -744,7 +997,7 @@ export class ExpurgoService {
   }
 
   /**
-   * Valida consistência dos dados de expurgo
+   * Valida consistência dos dados de expurgo (ATUALIZADA)
    */
   async validateExpurgoData(): Promise<{
     inconsistencies: Array<{
@@ -786,12 +1039,47 @@ export class ExpurgoService {
         });
       }
 
-      // Verificar valores
-      if (expurgo.valorAjusteNumerico === 0) {
+      // 🆕 Verificar valores (atualizado para nova estrutura)
+      if (expurgo.valorSolicitado === 0) {
         inconsistencies.push({
           expurgoId: expurgo.id,
-          issue: 'Valor de ajuste é zero',
+          issue: 'Valor solicitado é zero',
         });
+      }
+
+      // 🆕 Verificar consistência valor aprovado vs status
+      if (
+        expurgo.isAprovado() &&
+        (!expurgo.valorAprovado || expurgo.valorAprovado === 0)
+      ) {
+        inconsistencies.push({
+          expurgoId: expurgo.id,
+          issue: 'Status aprovado mas sem valor aprovado válido',
+        });
+      }
+
+      // 🆕 Verificar se valor aprovado não é maior que solicitado
+      if (
+        expurgo.valorAprovado &&
+        Math.abs(expurgo.valorAprovado) > Math.abs(expurgo.valorSolicitado)
+      ) {
+        inconsistencies.push({
+          expurgoId: expurgo.id,
+          issue: 'Valor aprovado maior que valor solicitado',
+        });
+      }
+
+      // 🆕 Verificar consistência do status APROVADO_PARCIAL
+      if (expurgo.status === ExpurgoStatus.APROVADO_PARCIAL) {
+        if (
+          !expurgo.valorAprovado ||
+          Math.abs(expurgo.valorAprovado) >= Math.abs(expurgo.valorSolicitado)
+        ) {
+          inconsistencies.push({
+            expurgoId: expurgo.id,
+            issue: 'Status APROVADO_PARCIAL mas valor aprovado >= solicitado',
+          });
+        }
       }
 
       // Verificar aprovações órfãs
@@ -807,5 +1095,286 @@ export class ExpurgoService {
       inconsistencies,
       totalChecked: allExpurgos.length,
     };
+  }
+
+  // =====================================
+  // 🆕 MÉTODOS AUXILIARES PARA ROLES (PREPARAÇÃO FUTURA)
+  // =====================================
+
+  /**
+   * 🆕 Busca setor associado ao usuário (preparado para quando roles estiverem implementadas)
+   */
+  private async getUserSector(userId: number): Promise<SectorEntity | null> {
+    // TODO: Implementar quando tabela de associação user-sector existir
+    // Por enquanto retorna null
+
+    // Exemplo futuro:
+    // const userSector = await this.userSectorRepo.findOne({
+    //   where: { userId },
+    //   relations: ['sector']
+    // });
+    // return userSector?.sector || null;
+
+    return null;
+  }
+
+  /**
+   * 🆕 Verifica se usuário tem role específica (preparado para quando roles estiverem implementadas)
+   */
+  private async userHasRole(
+    userId: number,
+    roleName: string
+  ): Promise<boolean> {
+    // TODO: Implementar quando sistema de roles estiver funcionando
+    // Por enquanto retorna true (sem validação)
+
+    // Exemplo futuro:
+    // const userRoles = await this.userRepo.findOne({
+    //   where: { id: userId },
+    //   relations: ['roles']
+    // });
+    // return userRoles?.roles.some(role => role.nome === roleName) || false;
+
+    return true;
+  }
+
+  /**
+   * 🆕 Busca expurgos por setor do usuário logado
+   */
+  async findExpurgosByUserSector(
+    userId: number,
+    filters: Omit<FindExpurgosDto, 'sectorId'> = {}
+  ): Promise<ExpurgoResponseDto[]> {
+    console.log(
+      `[ExpurgoService] Buscando expurgos do setor do usuário ${userId}`
+    );
+
+    // TODO: Quando associação user-sector estiver implementada
+    const userSector = await this.getUserSector(userId);
+
+    if (!userSector) {
+      console.warn(
+        `[ExpurgoService] Usuário ${userId} não tem setor associado`
+      );
+      return [];
+    }
+
+    return this.findExpurgos({
+      ...filters,
+      sectorId: userSector.id,
+    });
+  }
+
+  /**
+   * 🆕 Busca expurgos pendentes para aprovação (role DIRETOR)
+   */
+  async findPendingExpurgosForApproval(
+    approvingUserId: number,
+    filters: FindExpurgosDto = {}
+  ): Promise<ExpurgoResponseDto[]> {
+    console.log(
+      `[ExpurgoService] Buscando expurgos pendentes para aprovação pelo usuário ${approvingUserId}`
+    );
+
+    // TODO: Validar se usuário tem role DIRETOR
+    const hasDirectorRole = await this.userHasRole(approvingUserId, 'DIRETOR');
+
+    if (!hasDirectorRole) {
+      throw new Error(
+        'Usuário não tem permissão para visualizar expurgos pendentes de aprovação'
+      );
+    }
+
+    return this.findExpurgos({
+      ...filters,
+      status: ExpurgoStatus.PENDENTE,
+    });
+  }
+
+  // =====================================
+  // 🆕 MÉTODOS DE BUSCA AVANÇADA
+  // =====================================
+
+  /**
+   * 🆕 Busca expurgos com estatísticas resumidas
+   */
+  async findExpurgosWithSummary(filters: FindExpurgosDto = {}): Promise<{
+    expurgos: ExpurgoResponseDto[];
+    summary: {
+      total: number;
+      porStatus: Record<string, number>;
+      valorTotalSolicitado: number;
+      valorTotalAprovado: number;
+      percentualAprovacao: number;
+    };
+  }> {
+    const expurgos = await this.findExpurgos(filters);
+
+    const summary = {
+      total: expurgos.length,
+      porStatus: {} as Record<string, number>,
+      valorTotalSolicitado: 0,
+      valorTotalAprovado: 0,
+      percentualAprovacao: 0,
+    };
+
+    expurgos.forEach((expurgo) => {
+      // Contagem por status
+      const status = expurgo.status;
+      summary.porStatus[status] = (summary.porStatus[status] || 0) + 1;
+
+      // Valores
+      summary.valorTotalSolicitado += Math.abs(expurgo.valorSolicitado);
+
+      if (
+        expurgo.valorAprovado &&
+        (expurgo.status === ExpurgoStatus.APROVADO ||
+          expurgo.status === ExpurgoStatus.APROVADO_PARCIAL)
+      ) {
+        summary.valorTotalAprovado += Math.abs(expurgo.valorAprovado);
+      }
+    });
+
+    // Percentual de aprovação
+    if (summary.valorTotalSolicitado > 0) {
+      summary.percentualAprovacao =
+        (summary.valorTotalAprovado / summary.valorTotalSolicitado) * 100;
+    }
+
+    return { expurgos, summary };
+  }
+
+  /**
+   * 🆕 Busca expurgos com impacto significativo (valores altos)
+   */
+  async findHighImpactExpurgos(
+    thresholdValue: number = 50,
+    periodMesAno?: string
+  ): Promise<ExpurgoResponseDto[]> {
+    console.log(
+      `[ExpurgoService] Buscando expurgos com impacto >= ${thresholdValue}`
+    );
+
+    const filters: FindExpurgosDto = {
+      valorMinimoSolicitado: thresholdValue,
+    };
+
+    if (periodMesAno) {
+      const period = await this.periodRepo.findOne({
+        where: { mesAno: periodMesAno },
+      });
+
+      if (period) {
+        filters.competitionPeriodId = period.id;
+      }
+    }
+
+    const expurgos = await this.findExpurgos(filters);
+
+    // Ordenar por valor solicitado (maior primeiro)
+    return expurgos.sort(
+      (a, b) => Math.abs(b.valorSolicitado) - Math.abs(a.valorSolicitado)
+    );
+  }
+
+  /**
+   * 🆕 Relatório de eficiência de aprovação por critério
+   */
+  async getApprovalEfficiencyByCriterion(periodMesAno?: string): Promise<
+    Array<{
+      criterionId: number;
+      criterionName: string;
+      totalSolicitados: number;
+      totalAprovados: number;
+      percentualAprovacao: number;
+      valorMedioSolicitado: number;
+      valorMedioAprovado: number;
+      eficienciaAprovacao: number; // % do valor aprovado vs solicitado
+    }>
+  > {
+    const filters: FindExpurgosDto = {};
+
+    if (periodMesAno) {
+      const period = await this.periodRepo.findOne({
+        where: { mesAno: periodMesAno },
+      });
+
+      if (period) {
+        filters.competitionPeriodId = period.id;
+      }
+    }
+
+    const expurgos = await this.findExpurgos(filters);
+
+    // Agrupar por critério
+    const groupedByCriterion: Record<
+      number,
+      {
+        criterionName: string;
+        expurgos: ExpurgoResponseDto[];
+      }
+    > = {};
+
+    expurgos.forEach((expurgo) => {
+      if (!groupedByCriterion[expurgo.criterionId]) {
+        groupedByCriterion[expurgo.criterionId] = {
+          criterionName: expurgo.criterion?.nome || 'Desconhecido',
+          expurgos: [],
+        };
+      }
+      groupedByCriterion[expurgo.criterionId]!.expurgos.push(expurgo);
+    });
+
+    // Calcular estatísticas por critério
+    return Object.entries(groupedByCriterion)
+      .map(([criterionIdStr, data]) => {
+        const criterionId = parseInt(criterionIdStr);
+        const { criterionName, expurgos: criterionExpurgos } = data;
+
+        const aprovados = criterionExpurgos.filter(
+          (e) =>
+            e.status === ExpurgoStatus.APROVADO ||
+            e.status === ExpurgoStatus.APROVADO_PARCIAL
+        );
+
+        const totalValorSolicitado = criterionExpurgos.reduce(
+          (sum, e) => sum + Math.abs(e.valorSolicitado),
+          0
+        );
+        const totalValorAprovado = aprovados.reduce(
+          (sum, e) => sum + Math.abs(e.valorAprovado || 0),
+          0
+        );
+
+        const percentualAprovacao =
+          criterionExpurgos.length > 0
+            ? (aprovados.length / criterionExpurgos.length) * 100
+            : 0;
+
+        const valorMedioSolicitado =
+          criterionExpurgos.length > 0
+            ? totalValorSolicitado / criterionExpurgos.length
+            : 0;
+
+        const valorMedioAprovado =
+          aprovados.length > 0 ? totalValorAprovado / aprovados.length : 0;
+
+        const eficienciaAprovacao =
+          totalValorSolicitado > 0
+            ? (totalValorAprovado / totalValorSolicitado) * 100
+            : 0;
+
+        return {
+          criterionId,
+          criterionName,
+          totalSolicitados: criterionExpurgos.length,
+          totalAprovados: aprovados.length,
+          percentualAprovacao: Number(percentualAprovacao.toFixed(2)),
+          valorMedioSolicitado: Number(valorMedioSolicitado.toFixed(2)),
+          valorMedioAprovado: Number(valorMedioAprovado.toFixed(2)),
+          eficienciaAprovacao: Number(eficienciaAprovacao.toFixed(2)),
+        };
+      })
+      .sort((a, b) => b.eficienciaAprovacao - a.eficienciaAprovacao);
   }
 }

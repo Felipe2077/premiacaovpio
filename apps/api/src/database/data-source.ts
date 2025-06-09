@@ -11,6 +11,7 @@ import { FinalRankingEntity } from '../entity/calculation/final-ranking.entity';
 import { CompetitionPeriodEntity } from '../entity/competition-period.entity';
 import { CriterionCalculationSettingsEntity } from '../entity/criterion-calculation-settings.entity';
 import { CriterionEntity } from '../entity/criterion.entity';
+import { ExpurgoAttachmentEntity } from '../entity/expurgo-attachment.entity';
 import { ExpurgoEventEntity } from '../entity/expurgo-event.entity';
 import { ParameterValueEntity } from '../entity/parameter-value.entity';
 import { PerformanceDataEntity } from '../entity/performance-data.entity';
@@ -84,6 +85,7 @@ export const AppDataSource = new DataSource({
     CriterionScoreEntity,
     FinalRankingEntity,
     CriterionCalculationSettingsEntity,
+    ExpurgoAttachmentEntity,
   ],
   migrations: [],
   subscribers: [],

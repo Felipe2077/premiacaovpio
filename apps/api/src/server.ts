@@ -12,11 +12,15 @@ import { HistoryService } from '@/modules/historical/history.service';
 import { ParameterService } from '@/modules/parameters/parameter.service';
 import { CompetitionPeriodService } from '@/modules/periods/period.service';
 import { RankingService } from '@/modules/ranking/ranking.service';
+import multipart from '@fastify/multipart';
 import {
+  ApproveExpurgoDto,
   CalculateParameterDto,
   CreateParameterDto,
+  RejectExpurgoDto,
   UpdateParameterDto,
 } from '@sistema-premiacao/shared-types';
+import * as fs from 'fs';
 
 import { SectorEntity } from './entity/sector.entity';
 import { UserEntity } from './entity/user.entity';
@@ -49,6 +53,12 @@ const start = async () => {
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     });
     fastify.log.info('Plugin CORS registrado.');
+
+    await fastify.register(multipart, {
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB
+      },
+    });
 
     // Inicializar DB
     if (!AppDataSource.isInitialized) {
@@ -930,14 +940,13 @@ const start = async () => {
     });
     // apps/api/src/server.ts - SEÇÃO DE ROTAS DE EXPURGO CORRIGIDAS
 
-    // === ROTAS PARA GESTÃO DE EXPURGOS (CORRIGIDAS) ===
+    // === ROTAS DE EXPURGO ATUALIZADAS ===
 
-    // 1. Listar Expurgos (com filtros melhorados)
+    // 1. Listar Expurgos (MANTIDA - já funcional)
     fastify.get('/api/expurgos', async (request, reply) => {
       console.log('[API] GET /api/expurgos - Iniciando busca de expurgos...');
 
       try {
-        // Tipar query params de forma mais robusta
         const queryParams = request.query as {
           competitionPeriodId?: string;
           sectorId?: string;
@@ -945,14 +954,19 @@ const start = async () => {
           status?: string;
           dataEventoInicio?: string;
           dataEventoFim?: string;
-          periodMesAno?: string; // Novo: buscar por mesAno diretamente
+          periodMesAno?: string;
+          registradoPorUserId?: string; // 🆕
+          aprovadoPorUserId?: string; // 🆕
+          comAnexos?: string; // 🆕
+          valorMinimoSolicitado?: string; // 🆕
+          valorMaximoSolicitado?: string; // 🆕
         };
 
         console.log('[API] Query params recebidos:', queryParams);
 
         const filters: any = {};
 
-        // Converter IDs numéricos
+        // Converter IDs numéricos (mantidos os existentes)
         if (queryParams.competitionPeriodId) {
           const periodId = parseInt(queryParams.competitionPeriodId, 10);
           if (isNaN(periodId)) {
@@ -963,7 +977,7 @@ const start = async () => {
           filters.competitionPeriodId = periodId;
         }
 
-        // Suporte para busca por mesAno (ex: ?periodMesAno=2025-06)
+        // Suporte para busca por mesAno (mantido)
         if (queryParams.periodMesAno && !filters.competitionPeriodId) {
           const period = await AppDataSource.getRepository(
             CompetitionPeriodEntity
@@ -973,10 +987,6 @@ const start = async () => {
             filters.competitionPeriodId = period.id;
             console.log(
               `[API] Convertido mesAno ${queryParams.periodMesAno} para periodId ${period.id}`
-            );
-          } else {
-            console.warn(
-              `[API] Período ${queryParams.periodMesAno} não encontrado`
             );
           }
         }
@@ -1001,9 +1011,59 @@ const start = async () => {
           filters.criterionId = criterionId;
         }
 
-        // Validar status
+        // 🆕 NOVOS FILTROS
+        if (queryParams.registradoPorUserId) {
+          const userId = parseInt(queryParams.registradoPorUserId, 10);
+          if (isNaN(userId)) {
+            return reply.status(400).send({
+              error: 'registradoPorUserId deve ser um número válido',
+            });
+          }
+          filters.registradoPorUserId = userId;
+        }
+
+        if (queryParams.aprovadoPorUserId) {
+          const userId = parseInt(queryParams.aprovadoPorUserId, 10);
+          if (isNaN(userId)) {
+            return reply.status(400).send({
+              error: 'aprovadoPorUserId deve ser um número válido',
+            });
+          }
+          filters.aprovadoPorUserId = userId;
+        }
+
+        if (queryParams.comAnexos !== undefined) {
+          filters.comAnexos = queryParams.comAnexos === 'true';
+        }
+
+        if (queryParams.valorMinimoSolicitado) {
+          const valor = parseFloat(queryParams.valorMinimoSolicitado);
+          if (isNaN(valor)) {
+            return reply.status(400).send({
+              error: 'valorMinimoSolicitado deve ser um número válido',
+            });
+          }
+          filters.valorMinimoSolicitado = valor;
+        }
+
+        if (queryParams.valorMaximoSolicitado) {
+          const valor = parseFloat(queryParams.valorMaximoSolicitado);
+          if (isNaN(valor)) {
+            return reply.status(400).send({
+              error: 'valorMaximoSolicitado deve ser um número válido',
+            });
+          }
+          filters.valorMaximoSolicitado = valor;
+        }
+
+        // Validar status (incluindo novo status)
         if (queryParams.status) {
-          const validStatuses = ['PENDENTE', 'APROVADO', 'REJEITADO'];
+          const validStatuses = [
+            'PENDENTE',
+            'APROVADO',
+            'APROVADO_PARCIAL',
+            'REJEITADO',
+          ];
           if (!validStatuses.includes(queryParams.status.toUpperCase())) {
             return reply.status(400).send({
               error: `Status deve ser um de: ${validStatuses.join(', ')}`,
@@ -1012,7 +1072,7 @@ const start = async () => {
           filters.status = queryParams.status.toUpperCase();
         }
 
-        // Filtros de data
+        // Filtros de data (mantidos)
         if (queryParams.dataEventoInicio) {
           if (!/^\d{4}-\d{2}-\d{2}$/.test(queryParams.dataEventoInicio)) {
             return reply.status(400).send({
@@ -1033,7 +1093,6 @@ const start = async () => {
 
         console.log('[API] Filtros processados:', filters);
 
-        // Garantir inicialização do AppDataSource
         if (!AppDataSource.isInitialized) {
           await AppDataSource.initialize();
         }
@@ -1050,7 +1109,7 @@ const start = async () => {
       }
     });
 
-    // 2. Buscar Expurgo específico por ID
+    // 2. Buscar Expurgo específico por ID (MANTIDA)
     fastify.get('/api/expurgos/:id', async (request, reply) => {
       const params = request.params as { id: string };
       const expurgoId = parseInt(params.id, 10);
@@ -1076,7 +1135,6 @@ const start = async () => {
           });
         }
 
-        // ⭐ CORREÇÃO: Usar o método público convertToResponseDto
         const expurgoDto = expurgoService.convertToResponseDto(expurgo);
 
         console.log(`[API] Expurgo ${expurgoId} encontrado`);
@@ -1089,7 +1147,7 @@ const start = async () => {
       }
     });
 
-    // 3. Solicitar novo Expurgo (CORRIGIDO)
+    // 3. Solicitar novo Expurgo (ATUALIZADA)
     fastify.post('/api/expurgos/request', async (request, reply) => {
       console.log(
         '[API] POST /api/expurgos/request - Dados recebidos:',
@@ -1097,7 +1155,6 @@ const start = async () => {
       );
 
       try {
-        // Validar se body existe
         if (!request.body || typeof request.body !== 'object') {
           return reply.status(400).send({
             error: 'Body da requisição é obrigatório e deve ser um objeto JSON',
@@ -1114,7 +1171,7 @@ const start = async () => {
           'dataEvento',
           'descricaoEvento',
           'justificativaSolicitacao',
-          'valorAjusteNumerico',
+          'valorSolicitado', // 🆕 ATUALIZADO
         ];
 
         const missingFields = requiredFields.filter(
@@ -1130,7 +1187,7 @@ const start = async () => {
           });
         }
 
-        // Validações de tipo
+        // Validações de tipo (atualizadas)
         if (
           !Number.isInteger(data.competitionPeriodId) ||
           data.competitionPeriodId <= 0
@@ -1176,12 +1233,19 @@ const start = async () => {
           });
         }
 
+        // 🆕 Validação atualizada
         if (
-          typeof data.valorAjusteNumerico !== 'number' ||
-          !isFinite(data.valorAjusteNumerico)
+          typeof data.valorSolicitado !== 'number' ||
+          !isFinite(data.valorSolicitado)
         ) {
           return reply.status(400).send({
-            error: 'valorAjusteNumerico deve ser um número válido',
+            error: 'valorSolicitado deve ser um número válido',
+          });
+        }
+
+        if (data.valorSolicitado === 0) {
+          return reply.status(400).send({
+            error: 'valorSolicitado não pode ser zero',
           });
         }
 
@@ -1193,7 +1257,7 @@ const start = async () => {
           dataEvento: data.dataEvento,
           descricaoEvento: data.descricaoEvento.trim(),
           justificativaSolicitacao: data.justificativaSolicitacao.trim(),
-          valorAjusteNumerico: data.valorAjusteNumerico,
+          valorSolicitado: data.valorSolicitado, // 🆕 ATUALIZADO
         };
 
         // Usuário mock (temporário até autenticação)
@@ -1217,7 +1281,6 @@ const start = async () => {
       } catch (error: any) {
         console.error('[API] Erro em POST /api/expurgos/request:', error);
 
-        // Determinar código de status apropriado
         let statusCode = 500;
         if (
           error.message.includes('não encontrado') ||
@@ -1232,7 +1295,7 @@ const start = async () => {
         ) {
           statusCode = 400;
         } else if (error.message.includes('já existe um expurgo pendente')) {
-          statusCode = 409; // Conflict
+          statusCode = 409;
         }
 
         reply.status(statusCode).send({
@@ -1241,7 +1304,7 @@ const start = async () => {
       }
     });
 
-    // 4. Aprovar Expurgo
+    // 4. 🆕 Aprovar Expurgo com Valor Customizado
     fastify.post('/api/expurgos/:id/approve', async (request, reply) => {
       const params = request.params as { id: string };
       const expurgoId = parseInt(params.id, 10);
@@ -1255,7 +1318,6 @@ const start = async () => {
       }
 
       try {
-        // Validar body
         if (!request.body || typeof request.body !== 'object') {
           return reply.status(400).send({
             error: 'Body da requisição é obrigatório',
@@ -1264,20 +1326,44 @@ const start = async () => {
 
         const dto = request.body as any;
 
-        if (
-          !dto.justificativaAprovacaoOuRejeicao ||
-          typeof dto.justificativaAprovacaoOuRejeicao !== 'string' ||
-          dto.justificativaAprovacaoOuRejeicao.trim().length < 10
-        ) {
+        // 🆕 Validação para novo formato de aprovação
+        if (!dto.valorAprovado || typeof dto.valorAprovado !== 'number') {
           return reply.status(400).send({
-            error:
-              'justificativaAprovacaoOuRejeicao é obrigatória e deve ter pelo menos 10 caracteres',
+            error: 'valorAprovado é obrigatório e deve ser um número',
           });
         }
 
-        const approveDto = {
-          justificativaAprovacaoOuRejeicao:
-            dto.justificativaAprovacaoOuRejeicao.trim(),
+        if (
+          !dto.justificativaAprovacao ||
+          typeof dto.justificativaAprovacao !== 'string'
+        ) {
+          return reply.status(400).send({
+            error: 'justificativaAprovacao é obrigatória',
+          });
+        }
+
+        if (dto.valorAprovado === 0) {
+          return reply.status(400).send({
+            error: 'valorAprovado não pode ser zero',
+          });
+        }
+
+        if (!isFinite(dto.valorAprovado)) {
+          return reply.status(400).send({
+            error: 'valorAprovado deve ser um número válido',
+          });
+        }
+
+        if (dto.justificativaAprovacao.trim().length < 10) {
+          return reply.status(400).send({
+            error: 'justificativaAprovacao deve ter pelo menos 10 caracteres',
+          });
+        }
+
+        const approveDto: ApproveExpurgoDto = {
+          valorAprovado: dto.valorAprovado,
+          justificativaAprovacao: dto.justificativaAprovacao.trim(),
+          observacoes: dto.observacoes ? dto.observacoes.trim() : undefined,
         };
 
         // Usuário mock (temporário até autenticação)
@@ -1291,13 +1377,15 @@ const start = async () => {
           await AppDataSource.initialize();
         }
 
-        const approvedExpurgo = await expurgoService.approveExpurgo(
+        const approvedExpurgo = await expurgoService.approveExpurgoWithValue(
           expurgoId,
           approveDto,
           mockApprovingUser
         );
 
-        console.log(`[API] Expurgo ${expurgoId} aprovado com sucesso`);
+        console.log(
+          `[API] Expurgo ${expurgoId} aprovado com sucesso - Valor: ${dto.valorAprovado}`
+        );
         reply.send(approvedExpurgo);
       } catch (error: any) {
         console.error(
@@ -1314,10 +1402,14 @@ const start = async () => {
         } else if (
           error.message.includes('não pode ser aprovado') ||
           error.message.includes('não pode aprovar') ||
-          error.message.includes('Status atual')
+          error.message.includes('Status atual') ||
+          error.message.includes('não pode ser maior')
         ) {
-          statusCode = 409; // Conflict
-        } else if (error.message.includes('obrigatória')) {
+          statusCode = 409;
+        } else if (
+          error.message.includes('obrigatória') ||
+          error.message.includes('deve ser')
+        ) {
           statusCode = 400;
         }
 
@@ -1327,7 +1419,7 @@ const start = async () => {
       }
     });
 
-    // 5. Rejeitar Expurgo
+    // 5. 🆕 Rejeitar Expurgo (Atualizada)
     fastify.post('/api/expurgos/:id/reject', async (request, reply) => {
       const params = request.params as { id: string };
       const expurgoId = parseInt(params.id, 10);
@@ -1341,7 +1433,6 @@ const start = async () => {
       }
 
       try {
-        // Validar body
         if (!request.body || typeof request.body !== 'object') {
           return reply.status(400).send({
             error: 'Body da requisição é obrigatório',
@@ -1351,19 +1442,19 @@ const start = async () => {
         const dto = request.body as any;
 
         if (
-          !dto.justificativaAprovacaoOuRejeicao ||
-          typeof dto.justificativaAprovacaoOuRejeicao !== 'string' ||
-          dto.justificativaAprovacaoOuRejeicao.trim().length < 10
+          !dto.justificativaRejeicao ||
+          typeof dto.justificativaRejeicao !== 'string' ||
+          dto.justificativaRejeicao.trim().length < 10
         ) {
           return reply.status(400).send({
             error:
-              'justificativaAprovacaoOuRejeicao é obrigatória e deve ter pelo menos 10 caracteres',
+              'justificativaRejeicao é obrigatória e deve ter pelo menos 10 caracteres',
           });
         }
 
-        const rejectDto = {
-          justificativaAprovacaoOuRejeicao:
-            dto.justificativaAprovacaoOuRejeicao.trim(),
+        const rejectDto: RejectExpurgoDto = {
+          justificativaRejeicao: dto.justificativaRejeicao.trim(),
+          observacoes: dto.observacoes ? dto.observacoes.trim() : undefined,
         };
 
         // Usuário mock (temporário até autenticação)
@@ -1401,7 +1492,7 @@ const start = async () => {
           error.message.includes('não pode ser rejeitado') ||
           error.message.includes('Status atual')
         ) {
-          statusCode = 409; // Conflict
+          statusCode = 409;
         } else if (error.message.includes('obrigatória')) {
           statusCode = 400;
         }
@@ -1412,12 +1503,14 @@ const start = async () => {
       }
     });
 
-    // 6. NOVO: Cancelar Expurgo (pelo próprio solicitante)
-    fastify.post('/api/expurgos/:id/cancel', async (request, reply) => {
+    // === 🆕 NOVAS ROTAS PARA ANEXOS ===
+
+    // 6. Upload de Anexo
+    fastify.post('/api/expurgos/:id/anexos/upload', async (request, reply) => {
       const params = request.params as { id: string };
       const expurgoId = parseInt(params.id, 10);
 
-      console.log(`[API] POST /api/expurgos/${expurgoId}/cancel`);
+      console.log(`[API] POST /api/expurgos/${expurgoId}/anexos/upload`);
 
       if (isNaN(expurgoId) || expurgoId <= 0) {
         return reply.status(400).send({
@@ -1426,47 +1519,78 @@ const start = async () => {
       }
 
       try {
-        // Validar body
-        if (!request.body || typeof request.body !== 'object') {
+        // Verificar se é um upload multipart
+        if (!request.isMultipart()) {
           return reply.status(400).send({
-            error: 'Body da requisição é obrigatório',
+            error:
+              'Requisição deve ser multipart/form-data para upload de arquivo',
           });
         }
-
-        const dto = request.body as any;
-
-        if (
-          !dto.reason ||
-          typeof dto.reason !== 'string' ||
-          dto.reason.trim().length < 10
-        ) {
-          return reply.status(400).send({
-            error: 'reason é obrigatório e deve ter pelo menos 10 caracteres',
-          });
-        }
-
-        // Usuário mock (temporário até autenticação)
-        const mockCancelingUser = {
-          id: 2,
-          nome: 'Usuário Solicitante (Mock)',
-          email: 'solicitante@mock.com',
-        } as UserEntity;
 
         if (!AppDataSource.isInitialized) {
           await AppDataSource.initialize();
         }
 
-        const canceledExpurgo = await expurgoService.cancelExpurgo(
+        // Processar upload
+        const data = await request.file();
+
+        if (!data) {
+          return reply.status(400).send({
+            error: 'Nenhum arquivo foi enviado',
+          });
+        }
+
+        // Converter stream para buffer
+        const buffer = await data.toBuffer();
+
+        // Criar objeto file compatível com o serviço
+        const fileData = {
+          originalname: data.filename,
+          buffer: buffer,
+          mimetype: data.mimetype,
+          size: buffer.length,
+        };
+
+        // Extrair descrição dos fields (se houver)
+        const fields = data.fields;
+        const description =
+          fields && (fields as any).description
+            ? (fields as any).description.value
+            : undefined;
+
+        // Usuário mock (temporário até autenticação)
+        const mockUploadingUser = {
+          id: 2,
+          nome: 'Usuário Uploader (Mock)',
+          email: 'uploader@mock.com',
+        } as UserEntity;
+
+        const result = await expurgoService.uploadAttachment(
           expurgoId,
-          mockCancelingUser,
-          dto.reason.trim()
+          fileData,
+          mockUploadingUser,
+          description
         );
 
-        console.log(`[API] Expurgo ${expurgoId} cancelado com sucesso`);
-        reply.send(canceledExpurgo);
+        console.log(
+          `[API] Anexo enviado com sucesso para expurgo ${expurgoId} - ID: ${result.attachment.id}`
+        );
+
+        reply.status(201).send({
+          success: true,
+          attachment: {
+            id: result.attachment.id,
+            originalFileName: result.attachment.originalFileName,
+            fileSize: result.attachment.fileSize,
+            mimeType: result.attachment.mimeType,
+            uploadedAt: result.attachment.uploadedAt,
+            description: result.attachment.description,
+            downloadUrl: `/api/expurgos/anexos/${result.attachment.id}/download`,
+          },
+        });
       } catch (error: any) {
         console.error(
-          `[API] Erro em POST /api/expurgos/${expurgoId}/cancel:`,
+          `[API] Erro em POST /api/expurgos/${expurgoId}/anexos/upload:`,
           error
         );
 
@@ -1474,24 +1598,235 @@ const start = async () => {
         if (error.message.includes('não encontrado')) {
           statusCode = 404;
         } else if (
-          error.message.includes('não pode cancelar') ||
-          error.message.includes('não pode ser cancelado') ||
-          error.message.includes('Apenas o solicitante')
+          error.message.includes('muito grande') ||
+          error.message.includes('não permitido') ||
+          error.message.includes('não é possível enviar')
         ) {
-          statusCode = 403; // Forbidden
-        } else if (error.message.includes('obrigatório')) {
           statusCode = 400;
         }
 
         reply.status(statusCode).send({
-          error: error.message || 'Erro interno ao cancelar expurgo.',
+          error: error.message || 'Erro interno ao fazer upload do anexo.',
         });
       }
     });
 
-    // 7. NOVO: Estatísticas de Expurgos
-    fastify.get('/api/expurgos/statistics', async (request, reply) => {
-      console.log('[API] GET /api/expurgos/statistics');
+    // 7. Listar Anexos de um Expurgo
+    fastify.get('/api/expurgos/:id/anexos', async (request, reply) => {
+      const params = request.params as { id: string };
+      const expurgoId = parseInt(params.id, 10);
+
+      console.log(`[API] GET /api/expurgos/${expurgoId}/anexos`);
+
+      if (isNaN(expurgoId) || expurgoId <= 0) {
+        return reply.status(400).send({
+          error: 'ID do expurgo deve ser um número positivo',
+        });
+      }
+
+      try {
+        if (!AppDataSource.isInitialized) {
+          await AppDataSource.initialize();
+        }
+
+        const anexos = await expurgoService.getExpurgoAttachments(expurgoId);
+
+        const anexosFormatados = anexos.map((anexo) => ({
+          id: anexo.id,
+          originalFileName: anexo.originalFileName,
+          fileSize: anexo.fileSize,
+          mimeType: anexo.mimeType,
+          uploadedAt: anexo.uploadedAt,
+          uploadedBy: anexo.uploadedBy
+            ? {
+                id: anexo.uploadedBy.id,
+                nome: anexo.uploadedBy.nome,
+              }
+            : undefined,
+          description: anexo.description,
+          downloadUrl: `/api/expurgos/anexos/${anexo.id}/download`,
+          isImage: anexo.isImage(),
+          isPdf: anexo.isPdf(),
+          formattedSize: anexo.getFormattedFileSize(),
+        }));
+
+        console.log(
+          `[API] Encontrados ${anexosFormatados.length} anexos para expurgo ${expurgoId}`
+        );
+        reply.send(anexosFormatados);
+      } catch (error: any) {
+        console.error(
+          `[API] Erro em GET /api/expurgos/${expurgoId}/anexos:`,
+          error
+        );
+        reply.status(500).send({
+          error: error.message || 'Erro interno ao buscar anexos.',
+        });
+      }
+    });
+
+    // 8. Download de Anexo
+    fastify.get(
+      '/api/expurgos/anexos/:attachmentId/download',
+      async (request, reply) => {
+        const params = request.params as { attachmentId: string };
+        const attachmentId = parseInt(params.attachmentId, 10);
+
+        console.log(`[API] GET /api/expurgos/anexos/${attachmentId}/download`);
+
+        if (isNaN(attachmentId) || attachmentId <= 0) {
+          return reply.status(400).send({
+            error: 'ID do anexo deve ser um número positivo',
+          });
+        }
+
+        try {
+          if (!AppDataSource.isInitialized) {
+            await AppDataSource.initialize();
+          }
+
+          // Buscar informações do anexo
+          const attachmentService = new (
+            await import('./modules/expurgos/expurgo-attachment.service')
+          ).ExpurgoAttachmentService();
+          const attachment =
+            await attachmentService.findAttachmentById(attachmentId);
+
+          if (!attachment) {
+            return reply.status(404).send({
+              error: `Anexo com ID ${attachmentId} não encontrado.`,
+            });
+          }
+
+          // Obter caminho do arquivo
+          const filePath =
+            await expurgoService.getAttachmentDownloadPath(attachmentId);
+
+          // Verificar se arquivo existe
+          try {
+            await fs.promises.access(filePath);
+          } catch {
+            return reply.status(404).send({
+              error: 'Arquivo físico não encontrado.',
+            });
+          }
+
+          // Configurar headers para download
+          reply.header(
+            'Content-Disposition',
+            `attachment; filename="${attachment.originalFileName}"`
+          );
+          reply.header('Content-Type', attachment.mimeType);
+          reply.header('Content-Length', attachment.fileSize.toString());
+
+          // Enviar arquivo
+          const fileStream = fs.createReadStream(filePath);
+          reply.send(fileStream);
+
+          console.log(
+            `[API] Download iniciado para anexo ${attachmentId}: ${attachment.originalFileName}`
+          );
+        } catch (error: any) {
+          console.error(
+            `[API] Erro em GET /api/expurgos/anexos/${attachmentId}/download:`,
+            error
+          );
+
+          let statusCode = 500;
+          if (error.message.includes('não encontrado')) {
+            statusCode = 404;
+          }
+
+          reply.status(statusCode).send({
+            error: error.message || 'Erro interno ao fazer download do anexo.',
+          });
+        }
+      }
+    );
+
+    // 9. Deletar Anexo
+    fastify.delete(
+      '/api/expurgos/anexos/:attachmentId',
+      async (request, reply) => {
+        const params = request.params as { attachmentId: string };
+        const attachmentId = parseInt(params.attachmentId, 10);
+
+        console.log(`[API] DELETE /api/expurgos/anexos/${attachmentId}`);
+
+        if (isNaN(attachmentId) || attachmentId <= 0) {
+          return reply.status(400).send({
+            error: 'ID do anexo deve ser um número positivo',
+          });
+        }
+
+        try {
+          if (!request.body || typeof request.body !== 'object') {
+            return reply.status(400).send({
+              error: 'Body da requisição é obrigatório',
+            });
+          }
+
+          const dto = request.body as any;
+
+          if (
+            !dto.reason ||
+            typeof dto.reason !== 'string' ||
+            dto.reason.trim().length < 10
+          ) {
+            return reply.status(400).send({
+              error: 'reason é obrigatório e deve ter pelo menos 10 caracteres',
+            });
+          }
+
+          // Usuário mock (temporário até autenticação)
+          const mockDeletingUser = {
+            id: 2,
+            nome: 'Usuário Deletor (Mock)',
+            email: 'deletor@mock.com',
+          } as UserEntity;
+
+          if (!AppDataSource.isInitialized) {
+            await AppDataSource.initialize();
+          }
+
+          await expurgoService.deleteAttachment(
+            attachmentId,
+            mockDeletingUser,
+            dto.reason.trim()
+          );
+
+          console.log(`[API] Anexo ${attachmentId} removido com sucesso`);
+          reply.send({ success: true, message: 'Anexo removido com sucesso' });
+        } catch (error: any) {
+          console.error(
+            `[API] Erro em DELETE /api/expurgos/anexos/${attachmentId}:`,
+            error
+          );
+
+          let statusCode = 500;
+          if (error.message.includes('não encontrado')) {
+            statusCode = 404;
+          } else if (
+            error.message.includes('não pode remover') ||
+            error.message.includes('Apenas o usuário')
+          ) {
+            statusCode = 403;
+          } else if (error.message.includes('obrigatório')) {
+            statusCode = 400;
+          }
+
+          reply.status(statusCode).send({
+            error: error.message || 'Erro interno ao remover anexo.',
+          });
+        }
+      }
+    );
+
+    // === 🆕 ROTAS DE RELATÓRIOS E ESTATÍSTICAS AVANÇADAS ===
+
+    // 10. Estatísticas Avançadas
+    fastify.get('/api/expurgos/statistics/advanced', async (request, reply) => {
+      console.log('[API] GET /api/expurgos/statistics/advanced');
 
       try {
         const queryParams = request.query as { period?: string };
@@ -1505,41 +1840,158 @@ const start = async () => {
         );
 
         console.log(
-          `[API] Estatísticas geradas para período: ${queryParams.period || 'todos'}`
+          `[API] Estatísticas avançadas geradas para período: ${queryParams.period || 'todos'}`
         );
         reply.send(stats);
       } catch (error: any) {
-        console.error('[API] Erro em GET /api/expurgos/statistics:', error);
+        console.error(
+          '[API] Erro em GET /api/expurgos/statistics/advanced:',
+          error
+        );
         reply.status(500).send({
-          error: error.message || 'Erro interno ao gerar estatísticas.',
+          error:
+            error.message || 'Erro interno ao gerar estatísticas avançadas.',
         });
       }
     });
 
-    // 8. NOVO: Validar Consistência dos Dados
-    fastify.get('/api/expurgos/validate', async (request, reply) => {
-      console.log('[API] GET /api/expurgos/validate');
+    // 11. Expurgos com Resumo
+    fastify.get('/api/expurgos/with-summary', async (request, reply) => {
+      console.log('[API] GET /api/expurgos/with-summary');
 
       try {
+        // Usar mesmos filtros da rota principal
+        const queryParams = request.query as {
+          competitionPeriodId?: string;
+          sectorId?: string;
+          criterionId?: string;
+          status?: string;
+          periodMesAno?: string;
+        };
+
+        // Processar filtros (reutilizar lógica da rota principal)
+        const filters: any = {};
+
+        if (queryParams.competitionPeriodId) {
+          filters.competitionPeriodId = parseInt(
+            queryParams.competitionPeriodId,
+            10
+          );
+        }
+
+        if (queryParams.periodMesAno && !filters.competitionPeriodId) {
+          const period = await AppDataSource.getRepository(
+            CompetitionPeriodEntity
+          ).findOne({ where: { mesAno: queryParams.periodMesAno } });
+          if (period) {
+            filters.competitionPeriodId = period.id;
+          }
+        }
+
+        if (queryParams.sectorId) {
+          filters.sectorId = parseInt(queryParams.sectorId, 10);
+        }
+
+        if (queryParams.criterionId) {
+          filters.criterionId = parseInt(queryParams.criterionId, 10);
+        }
+
+        if (queryParams.status) {
+          filters.status = queryParams.status.toUpperCase();
+        }
+
         if (!AppDataSource.isInitialized) {
           await AppDataSource.initialize();
         }
 
-        const validation = await expurgoService.validateExpurgoData();
+        const result = await expurgoService.findExpurgosWithSummary(filters);
 
         console.log(
-          `[API] Validação concluída: ${validation.inconsistencies.length} inconsistências encontradas`
+          `[API] Expurgos com resumo: ${result.expurgos.length} expurgos, resumo calculado`
         );
-        reply.send(validation);
+        reply.send(result);
       } catch (error: any) {
-        console.error('[API] Erro em GET /api/expurgos/validate:', error);
+        console.error('[API] Erro em GET /api/expurgos/with-summary:', error);
         reply.status(500).send({
-          error: error.message || 'Erro interno ao validar dados.',
+          error: error.message || 'Erro interno ao buscar expurgos com resumo.',
         });
       }
     });
 
-    // === FIM DAS ROTAS DE EXPURGO ===
+    // 12. Expurgos de Alto Impacto
+    fastify.get('/api/expurgos/high-impact', async (request, reply) => {
+      console.log('[API] GET /api/expurgos/high-impact');
+
+      try {
+        const queryParams = request.query as {
+          threshold?: string;
+          period?: string;
+        };
+
+        const threshold = queryParams.threshold
+          ? parseFloat(queryParams.threshold)
+          : 50;
+
+        if (isNaN(threshold) || threshold <= 0) {
+          return reply.status(400).send({
+            error: 'threshold deve ser um número positivo',
+          });
+        }
+
+        if (!AppDataSource.isInitialized) {
+          await AppDataSource.initialize();
+        }
+
+        const expurgos = await expurgoService.findHighImpactExpurgos(
+          threshold,
+          queryParams.period
+        );
+
+        console.log(
+          `[API] Encontrados ${expurgos.length} expurgos de alto impacto (>= ${threshold})`
+        );
+        reply.send(expurgos);
+      } catch (error: any) {
+        console.error('[API] Erro em GET /api/expurgos/high-impact:', error);
+        reply.status(500).send({
+          error:
+            error.message || 'Erro interno ao buscar expurgos de alto impacto.',
+        });
+      }
+    });
+
+    // 13. Relatório de Eficiência por Critério
+    fastify.get('/api/expurgos/efficiency-report', async (request, reply) => {
+      console.log('[API] GET /api/expurgos/efficiency-report');
+
+      try {
+        const queryParams = request.query as { period?: string };
+
+        if (!AppDataSource.isInitialized) {
+          await AppDataSource.initialize();
+        }
+
+        const report = await expurgoService.getApprovalEfficiencyByCriterion(
+          queryParams.period
+        );
+
+        console.log(
+          `[API] Relatório de eficiência gerado: ${report.length} critérios analisados`
+        );
+        reply.send(report);
+      } catch (error: any) {
+        console.error(
+          '[API] Erro em GET /api/expurgos/efficiency-report:',
+          error
+        );
+        reply.status(500).send({
+          error:
+            error.message || 'Erro interno ao gerar relatório de eficiência.',
+        });
+      }
+    });
+
+    // === FIM DAS NOVAS ROTAS DE EXPURGO ===
 
     registerHistoricalResultsRoutes(fastify);
     fastify.get('/api/history/criterion-sector', async (request, reply) => {

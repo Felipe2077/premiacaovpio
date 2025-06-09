@@ -1,3 +1,5 @@
+// packages/shared-types/src/dto/expurgo.dto.ts (ATUALIZADO PARA NOVA ESTRUTURA)
+
 import { ExpurgoStatus } from '../enums/expurgo-status.enum';
 
 /**
@@ -10,13 +12,42 @@ export interface CreateExpurgoDto {
   dataEvento: string; // YYYY-MM-DD
   descricaoEvento: string;
   justificativaSolicitacao: string;
-  valorAjusteNumerico: number; // O valor a ser expurgado (ex: -1 para uma quebra, ou o KM para KM Ociosa)
+  valorSolicitado: number; // 🆕 RENOMEADO: valorAjusteNumerico -> valorSolicitado
+
+  // 🆕 CAMPOS PARA ANEXOS (opcionais na criação inicial)
+  anexos?: File[]; // Para frontend
+  anexoIds?: number[]; // Para casos onde anexos já foram enviados separadamente
 }
 
+/**
+ * 🆕 DTO para aprovação com valor customizado
+ */
+export interface ApproveExpurgoDto {
+  valorAprovado: number; // Valor que será efetivamente aprovado
+  justificativaAprovacao: string;
+  observacoes?: string; // Campo opcional para observações adicionais
+}
+
+/**
+ * DTO para rejeição de expurgo
+ */
+export interface RejectExpurgoDto {
+  justificativaRejeicao: string;
+  observacoes?: string;
+}
+
+/**
+ * 🆕 DTO genérico para aprovação/rejeição (para compatibilidade)
+ */
 export interface ApproveRejectExpurgoDto {
   justificativaAprovacaoOuRejeicao: string;
+  valorAprovado?: number; // Opcional para aprovação
+  observacoes?: string;
 }
 
+/**
+ * DTO para busca/filtro de expurgos
+ */
 export interface FindExpurgosDto {
   competitionPeriodId?: number;
   sectorId?: number;
@@ -24,15 +55,46 @@ export interface FindExpurgosDto {
   status?: ExpurgoStatus;
   dataEventoInicio?: string;
   dataEventoFim?: string;
+  registradoPorUserId?: number; // 🆕 Filtro por solicitante
+  aprovadoPorUserId?: number; // 🆕 Filtro por aprovador
+  comAnexos?: boolean; // 🆕 Filtro por expurgos com anexos
+  valorMinimoSolicitado?: number; // 🆕 Filtros por valor
+  valorMaximoSolicitado?: number;
 }
 
+/**
+ * 🆕 DTO para dados de anexo
+ */
+export interface ExpurgoAttachmentDto {
+  id: number;
+  originalFileName: string;
+  fileSize: number;
+  mimeType: string;
+  uploadedAt: Date | string;
+  uploadedBy?: {
+    id: number;
+    nome: string;
+  };
+  description?: string;
+  downloadUrl?: string; // URL para download
+}
+
+/**
+ * DTO de resposta completa do expurgo
+ */
 export interface ExpurgoResponseDto {
   id: number;
   dataEvento: string;
   descricaoEvento: string;
   justificativaSolicitacao: string;
-  valorAjusteNumerico: number;
+
+  // 🆕 VALORES SEPARADOS
+  valorSolicitado: number;
+  valorAprovado?: number | null;
+
   status: ExpurgoStatus;
+
+  // Relacionamentos
   competitionPeriodId: number;
   competitionPeriod?: {
     id: number;
@@ -50,26 +112,94 @@ export interface ExpurgoResponseDto {
     nome: string;
     unidade_medida?: string;
   };
+
+  // Auditoria
   registradoPorUserId: number;
   registradoPor?: {
     id: number;
     nome: string;
     email: string;
+    role?: string; // 🆕 Campo role
   };
   aprovadoPorUserId?: number | null;
   aprovadoPor?: {
     id: number;
     nome: string;
     email: string;
+    role?: string; // 🆕 Campo role
   } | null;
   aprovadoEm?: Date | string | null;
   justificativaAprovacao?: string | null;
+
+  // 🆕 ANEXOS
+  anexos?: ExpurgoAttachmentDto[];
+  quantidadeAnexos?: number;
+
+  // 🆕 CAMPOS CALCULADOS
+  percentualAprovacao?: number | null;
+  valorEfetivo?: number; // Valor que será aplicado no cálculo
+  houveReducao?: boolean;
+
+  // Timestamps
   createdAt: Date | string;
   updatedAt: Date | string;
 }
 
+/**
+ * 🆕 DTO para upload de anexos
+ */
+export interface UploadExpurgoAttachmentDto {
+  expurgoId: number;
+  description?: string;
+  file: File; // Para frontend
+}
+
+/**
+ * 🆕 DTO para estatísticas de expurgos
+ */
+export interface ExpurgoStatisticsDto {
+  periodo?: string;
+  total: number;
+  pendentes: number;
+  aprovados: number;
+  aprovadosParciais: number;
+  rejeitados: number;
+
+  // Por setor
+  bySector: Record<
+    string,
+    {
+      total: number;
+      pendentes: number;
+      aprovados: number;
+      rejeitados: number;
+      valorTotalSolicitado: number;
+      valorTotalAprovado: number;
+    }
+  >;
+
+  // Por critério
+  byCriterion: Record<
+    string,
+    {
+      total: number;
+      valorTotalSolicitado: number;
+      valorTotalAprovado: number;
+    }
+  >;
+
+  // Totais financeiros
+  valorTotalSolicitado: number;
+  valorTotalAprovado: number;
+  percentualAprovacaoGeral: number;
+
+  // 🆕 Anexos
+  totalAnexos: number;
+  expurgosComAnexos: number;
+}
+
 // ============================================
-// 🔧 FUNÇÕES DE VALIDAÇÃO
+// 🔧 FUNÇÕES DE VALIDAÇÃO ATUALIZADAS
 // ============================================
 
 /**
@@ -90,7 +220,7 @@ export function validateCreateExpurgo(data: unknown): CreateExpurgoDto {
     'dataEvento',
     'descricaoEvento',
     'justificativaSolicitacao',
-    'valorAjusteNumerico',
+    'valorSolicitado', // 🆕 ATUALIZADO
   ];
 
   for (const field of requiredFields) {
@@ -147,16 +277,16 @@ export function validateCreateExpurgo(data: unknown): CreateExpurgoDto {
     );
   }
 
-  // Validação de valor numérico
+  // 🆕 Validação do valorSolicitado
   if (
-    typeof dto.valorAjusteNumerico !== 'number' ||
-    !isFinite(dto.valorAjusteNumerico)
+    typeof dto.valorSolicitado !== 'number' ||
+    !isFinite(dto.valorSolicitado)
   ) {
-    throw new Error('valorAjusteNumerico deve ser um número válido');
+    throw new Error('valorSolicitado deve ser um número válido');
   }
 
-  if (dto.valorAjusteNumerico === 0) {
-    throw new Error('valorAjusteNumerico não pode ser zero');
+  if (dto.valorSolicitado === 0) {
+    throw new Error('valorSolicitado não pode ser zero');
   }
 
   return {
@@ -166,57 +296,86 @@ export function validateCreateExpurgo(data: unknown): CreateExpurgoDto {
     dataEvento: dataEventoStr,
     descricaoEvento: (dto.descricaoEvento as string).trim(),
     justificativaSolicitacao: (dto.justificativaSolicitacao as string).trim(),
-    valorAjusteNumerico: dto.valorAjusteNumerico as number,
+    valorSolicitado: dto.valorSolicitado as number, // 🆕 ATUALIZADO
   };
 }
 
 /**
- * Valida dados para aprovação/rejeição de expurgo
+ * 🆕 Valida dados para aprovação com valor customizado
  */
-export function validateApproveRejectExpurgo(
-  data: unknown
-): ApproveRejectExpurgoDto {
+export function validateApproveExpurgo(data: unknown): ApproveExpurgoDto {
   if (!data || typeof data !== 'object') {
     throw new Error('Dados de entrada devem ser um objeto');
   }
 
   const dto = data as Record<string, unknown>;
 
-  // Validar campo obrigatório
+  // Validar campos obrigatórios
+  if (!dto.valorAprovado || typeof dto.valorAprovado !== 'number') {
+    throw new Error('valorAprovado é obrigatório e deve ser um número');
+  }
+
   if (
-    !dto.justificativaAprovacaoOuRejeicao ||
-    dto.justificativaAprovacaoOuRejeicao === ''
+    !dto.justificativaAprovacao ||
+    typeof dto.justificativaAprovacao !== 'string'
   ) {
-    throw new Error(
-      'Campo obrigatório ausente: justificativaAprovacaoOuRejeicao'
-    );
+    throw new Error('justificativaAprovacao é obrigatória');
   }
 
-  // Validar tipo e tamanho
-  if (typeof dto.justificativaAprovacaoOuRejeicao !== 'string') {
-    throw new Error('justificativaAprovacaoOuRejeicao deve ser uma string');
+  if (dto.valorAprovado === 0) {
+    throw new Error('valorAprovado não pode ser zero');
   }
 
-  const justificativa = dto.justificativaAprovacaoOuRejeicao.trim();
+  if (!isFinite(dto.valorAprovado)) {
+    throw new Error('valorAprovado deve ser um número válido');
+  }
+
+  const justificativa = (dto.justificativaAprovacao as string).trim();
   if (justificativa.length < 10) {
-    throw new Error(
-      'justificativaAprovacaoOuRejeicao deve ter pelo menos 10 caracteres'
-    );
-  }
-
-  if (justificativa.length > 1000) {
-    throw new Error(
-      'justificativaAprovacaoOuRejeicao não pode exceder 1000 caracteres'
-    );
+    throw new Error('justificativaAprovacao deve ter pelo menos 10 caracteres');
   }
 
   return {
-    justificativaAprovacaoOuRejeicao: justificativa,
+    valorAprovado: dto.valorAprovado as number,
+    justificativaAprovacao: justificativa,
+    observacoes: dto.observacoes
+      ? (dto.observacoes as string).trim()
+      : undefined,
   };
 }
 
 /**
- * Valida dados para busca de expurgos
+ * 🆕 Valida dados para rejeição
+ */
+export function validateRejectExpurgo(data: unknown): RejectExpurgoDto {
+  if (!data || typeof data !== 'object') {
+    throw new Error('Dados de entrada devem ser um objeto');
+  }
+
+  const dto = data as Record<string, unknown>;
+
+  if (
+    !dto.justificativaRejeicao ||
+    typeof dto.justificativaRejeicao !== 'string'
+  ) {
+    throw new Error('justificativaRejeicao é obrigatória');
+  }
+
+  const justificativa = (dto.justificativaRejeicao as string).trim();
+  if (justificativa.length < 10) {
+    throw new Error('justificativaRejeicao deve ter pelo menos 10 caracteres');
+  }
+
+  return {
+    justificativaRejeicao: justificativa,
+    observacoes: dto.observacoes
+      ? (dto.observacoes as string).trim()
+      : undefined,
+  };
+}
+
+/**
+ * Valida dados para busca de expurgos (atualizada)
  */
 export function validateFindExpurgos(data: unknown): FindExpurgosDto {
   if (!data) {
@@ -230,7 +389,7 @@ export function validateFindExpurgos(data: unknown): FindExpurgosDto {
   const dto = data as Record<string, unknown>;
   const result: FindExpurgosDto = {};
 
-  // Validar IDs opcionais
+  // Validações de IDs (mantidas as existentes + novas)
   if (dto.competitionPeriodId !== undefined) {
     if (
       !Number.isInteger(dto.competitionPeriodId) ||
@@ -260,7 +419,30 @@ export function validateFindExpurgos(data: unknown): FindExpurgosDto {
     result.criterionId = dto.criterionId as number;
   }
 
-  // Validar status
+  // 🆕 Validações de novos filtros
+  if (dto.registradoPorUserId !== undefined) {
+    if (
+      !Number.isInteger(dto.registradoPorUserId) ||
+      (dto.registradoPorUserId as number) <= 0
+    ) {
+      throw new Error(
+        'registradoPorUserId deve ser um número inteiro positivo'
+      );
+    }
+    result.registradoPorUserId = dto.registradoPorUserId as number;
+  }
+
+  if (dto.aprovadoPorUserId !== undefined) {
+    if (
+      !Number.isInteger(dto.aprovadoPorUserId) ||
+      (dto.aprovadoPorUserId as number) <= 0
+    ) {
+      throw new Error('aprovadoPorUserId deve ser um número inteiro positivo');
+    }
+    result.aprovadoPorUserId = dto.aprovadoPorUserId as number;
+  }
+
+  // Validar status (incluindo novo status)
   if (dto.status !== undefined) {
     if (!Object.values(ExpurgoStatus).includes(dto.status as ExpurgoStatus)) {
       throw new Error(
@@ -270,7 +452,7 @@ export function validateFindExpurgos(data: unknown): FindExpurgosDto {
     result.status = dto.status as ExpurgoStatus;
   }
 
-  // Validar datas opcionais
+  // Validações de datas (mantidas)
   if (dto.dataEventoInicio !== undefined) {
     if (
       typeof dto.dataEventoInicio !== 'string' ||
