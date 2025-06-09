@@ -77,7 +77,7 @@ export function ParametersTable({
     <Card>
       <CardHeader>
         <CardTitle>
-          Metas para o período:{' '}
+          Metas para o período:
           {selectedPeriodMesAno || 'Nenhum período selecionado'}
         </CardTitle>
         <CardDescription>

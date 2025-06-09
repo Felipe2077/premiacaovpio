@@ -477,8 +477,8 @@ export const EmptyState = ({ criterionName, sectorName }: EmptyStateProps) => {
               Nenhum histórico encontrado
             </h3>
             <p className='text-muted-foreground max-w-md'>
-              Ainda não há histórico de metas para{' '}
-              <strong>{criterionName}</strong> no setor{' '}
+              Ainda não há histórico de metas para
+              <strong>{criterionName}</strong> no setor
               <strong>{sectorName}</strong>.
             </p>
           </div>
@@ -996,7 +996,7 @@ export const HistoryChart = ({ timeline, criterion }: HistoryChartProps) => {
         <p className='font-semibold'>{label}</p>
         {payload.map((entry: any, index: number) => (
           <p key={index} style={{ color: entry.color }} className='text-sm'>
-            {entry.name}:{' '}
+            {entry.name}:
             {entry.name === 'Atingimento' ? `${entry.value}%` : entry.value}
           </p>
         ))}

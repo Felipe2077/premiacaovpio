@@ -72,7 +72,7 @@ export const EditDialog: React.FC<EditDialogProps> = ({
         <DialogHeader>
           <DialogTitle>Editar Meta</DialogTitle>
           <DialogDescription>
-            Atualize o valor da meta para {editData?.criterioNome} no setor{' '}
+            Atualize o valor da meta para {editData?.criterioNome} no setor
             {editData?.setorNome}. Uma justificativa é obrigatória para a
             alteração.
           </DialogDescription>
@@ -219,7 +219,7 @@ export const CreateDialog: React.FC<CreateDialogProps> = ({
         <DialogHeader>
           <DialogTitle>Criar Meta</DialogTitle>
           <DialogDescription>
-            Defina o valor da meta para {createData?.criterioNome} no setor{' '}
+            Defina o valor da meta para {createData?.criterioNome} no setor
             {createData?.setorNome}. Uma justificativa é obrigatória.
           </DialogDescription>
         </DialogHeader>

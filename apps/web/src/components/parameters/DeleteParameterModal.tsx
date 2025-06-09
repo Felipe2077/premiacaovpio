@@ -44,7 +44,7 @@ export function DeleteParameterModal({
       <DialogContent className='sm:max-w-[500px]'>
         <DialogHeader>
           <DialogTitle>
-            Expirar Meta: {selectedItem?.criterioNome} -{' '}
+            Expirar Meta: {selectedItem?.criterioNome} -
             {selectedItem?.setorNome}
           </DialogTitle>
           <DialogDescription>
@@ -63,15 +63,15 @@ export function DeleteParameterModal({
                   <strong>Setor:</strong> {selectedItem.setorNome}
                 </p>
                 <p>
-                  <strong>Meta Atual:</strong>{' '}
+                  <strong>Meta Atual:</strong>
                   {formatNumber(selectedItem.valorMeta)}
                 </p>
                 <p>
-                  <strong>Realizado:</strong>{' '}
+                  <strong>Realizado:</strong>
                   {formatNumber(selectedItem.valorRealizado)}
                 </p>
                 <p>
-                  <strong>% Atingimento:</strong>{' '}
+                  <strong>% Atingimento:</strong>
                   {formatPercent(selectedItem.percentualAtingimento)}
                 </p>
               </div>

@@ -421,7 +421,6 @@ export default function CalculationModal({
               <div className='space-y-2'>
                 <Label>Opções de Arredondamento</Label>
                 <div className='grid grid-cols-1 gap-4'>
-                  {' '}
                   {/* Era grid-cols-2, agora só 1 se o input de casas foi removido */}
                   <div>
                     <Label htmlFor='roundingMethod' className='text-sm'>

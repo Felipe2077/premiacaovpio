@@ -239,7 +239,7 @@ export default function PointsTable({
                               </p>
                               <p>Meta: {formatNumber(result.valorMeta)}</p>
                               <p>
-                                % Ating.:{' '}
+                                % Ating.:
                                 {formatPercent(result.percentualAtingimento)}
                               </p>
                             </TooltipContent>

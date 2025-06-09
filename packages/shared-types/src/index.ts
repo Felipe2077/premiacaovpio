@@ -76,3 +76,42 @@ export type {
   ParameterMetadata,
   UpdateParameterDto,
 } from './dto/parameter.dto';
+
+// ================================
+// 🆕 NOVAS EXPORTAÇÕES - ANEXOS
+// ================================
+
+// DTOs de Anexos
+export * from './dto/attachment.dto';
+
+// Tipos específicos de anexos
+export type {
+  AttachmentConstraints,
+  AttachmentEntity,
+  AttachmentItemProps,
+  AttachmentListProps,
+  AttachmentPreviewProps,
+  AttachmentStatistics,
+  AttachmentUploadProps,
+  FileValidationResult,
+  PreviewData,
+  UploadAttachmentDto,
+  UploadProgressDto,
+  UploadResponseDto,
+} from './dto/attachment.dto';
+
+// Enums e constantes de anexos
+export {
+  ATTACHMENT_CONSTRAINTS,
+  FileType,
+  formatFileSize,
+  getFileTypeFromMimeType,
+  validateFile,
+} from './dto/attachment.dto';
+
+// ================================
+// VERSÃO E METADADOS
+// ================================
+
+export const SHARED_TYPES_VERSION = '2.0.0'; // Incrementado para incluir anexos
+export const ATTACHMENT_FEATURE_VERSION = '1.0.0';

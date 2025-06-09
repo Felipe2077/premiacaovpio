@@ -133,14 +133,13 @@ export default function ViewAPage() {
         {isLoading && <p>Carregando dados detalhados...</p>}
         {error && (
           <p className='text-red-500'>
-            Erro ao buscar dados:{' '}
+            Erro ao buscar dados:
             {error instanceof Error ? error.message : 'Erro desconhecido'}
           </p>
         )}
 
         {criteriaData && uniqueSectors.length > 0 && (
           <div className='overflow-x-auto border rounded-md'>
-            {' '}
             {/* Adiciona borda e scroll */}
             <Table>
               <TableCaption>
@@ -151,7 +150,7 @@ export default function ViewAPage() {
                 <TableRow>
                   <TableHead className='sticky left-0 bg-background z-10 font-semibold'>
                     Critério
-                  </TableHead>{' '}
+                  </TableHead>
                   {/* Cabeçalho fixo */}
                   {uniqueSectors.map((sector) => (
                     <TableHead
@@ -208,7 +207,7 @@ export default function ViewAPage() {
                                 </p>
                                 <p>Meta: {formatNumber(result.valorMeta)}</p>
                                 <p>
-                                  % Ating.:{' '}
+                                  % Ating.:
                                   {formatPercent(result.percentualAtingimento)}
                                 </p>
                                 {/* <p>Pontos: {formatNumber(pontos)}</p> */}

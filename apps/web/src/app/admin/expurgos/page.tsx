@@ -1,7 +1,6 @@
-// apps/web/src/app/admin/expurgos/page.tsx (VERSÃO REALMENTE COMPLETA E CORRIGIDA)
 'use client';
-
-import { Badge } from '@/components/ui/badge';
+import ExpurgoModal from '@/components/expurgos/ExpurgoModal';
+import ExpurgosTable from '@/components/expurgos/ExpurgosTable';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -10,497 +9,80 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import type { ExpurgoEventEntity } from '@/entity/expurgo-event.entity'; // OK, frontend usa entidade diretamente por ora
-import { formatDate } from '@/lib/utils'; // OK
-import type { Criterio, Setor } from '@sistema-premiacao/shared-types'; // OK
-import { useQuery } from '@tanstack/react-query';
-import { Check, X } from 'lucide-react';
-import React, { useState } from 'react';
+import { useExpurgosData } from '@/hooks/useExpurgosData';
+import { useState } from 'react';
 import { toast } from 'sonner';
 
-// --- Funções de Fetch COMPLETAS ---
-
-const fetchExpurgos = async (): Promise<ExpurgoEventEntity[]> => {
-  const url = 'http://localhost:3001/api/expurgos';
-  try {
-    const res = await fetch(url);
-    if (!res.ok) {
-      const errorBody = await res.text().catch(() => `Erro ${res.status}`);
-      console.error(`Workspace failed for ${url}:`, errorBody);
-      throw new Error(`Erro ${res.status} ao buscar expurgos`);
-    }
-    const text = await res.text();
-    if (!text) {
-      return [];
-    }
-    const data = JSON.parse(text);
-    return Array.isArray(data) ? data : [];
-  } catch (error) {
-    if (error instanceof Error) throw error;
-    throw new Error('Erro desconhecido durante fetch ou parse de expurgos.');
-  }
-};
-
-const fetchActiveCriteriaSimple = async (): Promise<
-  Pick<Criterio, 'id' | 'nome' | 'index'>[]
-> => {
-  const url = 'http://localhost:3001/api/criteria/active';
-  try {
-    const res = await fetch(url);
-    if (!res.ok) {
-      const errorBody = await res.text().catch(() => `Erro ${res.status}`);
-      console.error(`Workspace failed for ${url}:`, errorBody);
-      throw new Error(`Erro ${res.status} ao buscar critérios ativos`);
-    }
-    const text = await res.text();
-    if (!text) {
-      return [];
-    }
-    const data = JSON.parse(text);
-    // Adicionar validação mínima se quiser
-    if (
-      !Array.isArray(data) ||
-      !data.every(
-        (item) =>
-          typeof item.id === 'number' &&
-          typeof item.nome ===
-            'string' /*&& (typeof item.index === 'number' || item.index === null)*/
-      )
-    ) {
-      console.error(
-        'Formato inesperado recebido de /api/criteria/active:',
-        data
-      );
-      throw new Error('Resposta inválida da API de critérios.');
-    }
-    return data;
-  } catch (error) {
-    console.error(`Workspace EXCEPTION para ${url}:`, error);
-    if (error instanceof Error) throw error;
-    throw new Error('Erro desconhecido durante fetch ou parse de critérios.');
-  }
-};
-
-const fetchActiveSectorsSimple = async (): Promise<
-  Pick<Setor, 'id' | 'nome'>[]
-> => {
-  const url = 'http://localhost:3001/api/sectors/active';
-  try {
-    const res = await fetch(url);
-    if (!res.ok) {
-      const errorBody = await res.text().catch(() => `Erro ${res.status}`);
-      console.error(`Workspace failed for ${url}:`, errorBody);
-      throw new Error(`Erro ${res.status} ao buscar setores ativos`);
-    }
-    const text = await res.text();
-    if (!text) {
-      return [];
-    }
-    const data = JSON.parse(text);
-    // Adicionar validação mínima se quiser
-    if (
-      !Array.isArray(data) ||
-      !data.every(
-        (item) => typeof item.id === 'number' && typeof item.nome === 'string'
-      )
-    ) {
-      console.error(
-        'Formato inesperado recebido de /api/sectors/active:',
-        data
-      );
-      throw new Error('Resposta inválida da API de setores.');
-    }
-    return data;
-  } catch (error) {
-    console.error(`Workspace EXCEPTION para ${url}:`, error);
-    if (error instanceof Error) throw error;
-    throw new Error('Erro desconhecido durante fetch ou parse de setores.');
-  }
-};
-// -----------------------------
-
-// --- Componente da Página ---
 export default function ExpurgosPage() {
   const [isExpurgoModalOpen, setIsExpurgoModalOpen] = useState(false);
+  const {
+    expurgos,
+    isLoadingExpurgos,
+    errorExpurgos,
+    criterios,
+    isLoadingCriterios,
+    setores,
+    isLoadingSetores,
+  } = useExpurgosData();
 
-  // Queries - AGORA COM FETCHERS COMPLETOS
-  const {
-    data: expurgos,
-    isLoading: isLoadingExpurgos,
-    error: errorExpurgos,
-  } = useQuery<ExpurgoEventEntity[]>({
-    queryKey: ['expurgos'],
-    queryFn: fetchExpurgos,
-  });
-  const {
-    data: activeCriteria,
-    isLoading: isLoadingCriteria,
-    error: errorCriteria,
-  } = useQuery({
-    queryKey: ['activeCriteriaSimple'],
-    queryFn: fetchActiveCriteriaSimple,
-    staleTime: Infinity,
-  });
-  const {
-    data: activeSectors,
-    isLoading: isLoadingSectors,
-    error: errorSectors,
-  } = useQuery({
-    queryKey: ['activeSectorsSimple'],
-    queryFn: fetchActiveSectorsSimple,
-    staleTime: Infinity,
-  });
+  // Critérios elegíveis (exemplo conforme original)
+  const eligibleCriteria = criterios?.filter((c) => [3, 4, 11].includes(c.id));
 
-  // Handler Fake COMPLETO
   const handleRegisterExpurgo = (event: React.FormEvent) => {
     event.preventDefault();
     toast.info('Registro de Expurgo enviado! (Simulação MVP)');
     setIsExpurgoModalOpen(false);
   };
 
-  // Filtra critérios elegíveis
-  const eligibleCriteria = activeCriteria?.filter((c) =>
-    [3, 4, 11].includes(c.id)
-  );
-
-  const getStatusBadgeVariant = (
-    status: ExpurgoEventEntity['status']
-  ): 'default' | 'secondary' | 'destructive' | 'outline' => {
-    switch (status) {
-      case 'APROVADO':
-      case 'APLICADO_MVP': // Tratar mock como aprovado para cor
-        return 'default'; // Verde/Azul padrão do tema
-      case 'PENDENTE':
-        return 'secondary'; // Cinza/Amarelo padrão do tema
-      case 'REJEITADO':
-        return 'destructive'; // Vermelho padrão do tema
-      default:
-        return 'outline'; // Borda simples
-    }
-  };
-  const getStatusBadgeClass = (
-    status: ExpurgoEventEntity['status']
-  ): string => {
-    switch (status) {
-      case 'APROVADO':
-      case 'APLICADO_MVP':
-        return 'bg-green-600 hover:bg-green-700 text-white dark:bg-green-700 dark:text-green-100'; // Verde
-      case 'PENDENTE':
-        return 'bg-yellow-500 hover:bg-yellow-600 text-white dark:bg-yellow-700 dark:text-yellow-100'; // Amarelo/Laranja
-      case 'REJEITADO':
-        return 'bg-red-600 hover:bg-red-700 text-white dark:bg-red-700 dark:text-red-100'; // Vermelho
-      default:
-        return '';
-    }
-  };
-
-  // Combina estados de loading e erro
-  const isLoading = isLoadingExpurgos || isLoadingCriteria || isLoadingSectors;
-  const error = errorExpurgos || errorCriteria || errorSectors;
-
   return (
-    <TooltipProvider>
-      <div>
-        {/* Toaster precisa estar em algum lugar do layout pai ou aqui */}
-        {/* <Toaster position="top-right" richColors /> */}
-        <h1 className='text-2xl font-bold'>Gestão de Expurgos</h1>
-
-        {error && (
-          <p className='text-red-500 font-semibold mb-4'>
-            Erro: {error instanceof Error ? error.message : 'Erro desconhecido'}
-          </p>
-        )}
-
-        {/* Card de Expurgos */}
-        <Card>
-          <CardHeader>
-            <div className='flex justify-between items-start sm:items-center flex-col sm:flex-row gap-2'>
-              <div>
-                <CardTitle>Expurgos Registrados (MVP)</CardTitle>
-                <CardDescription>
-                  Demonstração do registro auditado de expurgos autorizados.
-                </CardDescription>
-              </div>
-              {/* Botão e Modal */}
-              <Dialog
-                open={isExpurgoModalOpen}
-                onOpenChange={setIsExpurgoModalOpen}
-              >
-                <DialogTrigger asChild>
-                  <Button
-                    size='sm'
-                    variant='outline'
-                    disabled={isLoading}
-                    className='cursor-pointer'
-                  >
-                    Registrar Novo Expurgo
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className='sm:max-w-[500px]'>
-                  <DialogHeader>
-                    <DialogTitle>Registrar Expurgo</DialogTitle>
-                    <DialogDescription>
-                      Informe dados do evento e justificativa/autorização.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <form onSubmit={handleRegisterExpurgo}>
-                    <div className='grid gap-4 py-4'>
-                      {/* Formulário Expurgo */}
-                      <div className='grid grid-cols-4 items-center gap-4'>
-                        <Label htmlFor='exp-setor' className='text-right'>
-                          Filial
-                        </Label>
-                        <Select
-                          required
-                          name='exp-setor'
-                          disabled={!activeSectors}
-                        >
-                          <SelectTrigger className='col-span-3'>
-                            <SelectValue
-                              placeholder={
-                                isLoadingSectors
-                                  ? 'Carregando...'
-                                  : 'Selecione...'
-                              }
-                            />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {activeSectors?.map((s) => (
-                              <SelectItem key={s.id} value={String(s.id)}>
-                                {s.nome}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className='grid grid-cols-4 items-center gap-4'>
-                        <Label htmlFor='exp-crit' className='text-right'>
-                          Critério
-                        </Label>
-                        <Select
-                          required
-                          name='exp-crit'
-                          disabled={!eligibleCriteria}
-                        >
-                          <SelectTrigger className='col-span-3'>
-                            <SelectValue
-                              placeholder={
-                                isLoadingCriteria
-                                  ? 'Carregando...'
-                                  : 'Selecione elegível...'
-                              }
-                            />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {eligibleCriteria?.map((c) => (
-                              <SelectItem key={c.id} value={String(c.id)}>
-                                {c.nome}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className='grid grid-cols-4 items-center gap-4'>
-                        <Label htmlFor='exp-date' className='text-right'>
-                          Data Evento
-                        </Label>
-                        <Input
-                          id='exp-date'
-                          type='date'
-                          className='col-span-3'
-                          required
-                        />
-                      </div>
-                      <div className='grid grid-cols-4 items-center gap-4'>
-                        <Label htmlFor='exp-desc' className='text-right'>
-                          Descrição (Opc)
-                        </Label>
-                        <Textarea
-                          id='exp-desc'
-                          placeholder='Descreva o evento específico...'
-                          className='col-span-3'
-                        />
-                      </div>
-                      <div className='grid grid-cols-4 items-center gap-4'>
-                        <Label htmlFor='exp-just' className='text-right'>
-                          Justificativa
-                        </Label>
-                        <Textarea
-                          id='exp-just'
-                          placeholder='Detalhe o motivo e a autorização...'
-                          className='col-span-3'
-                          required
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button type='submit'>Registrar (Simulação)</Button>
-                    </DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
+    <div>
+      <h1 className='text-2xl font-bold'>Gestão de Expurgos</h1>
+      {errorExpurgos && (
+        <p className='text-red-500 font-semibold mb-4'>
+          Erro:
+          {errorExpurgos instanceof Error
+            ? errorExpurgos.message
+            : 'Erro desconhecido'}
+        </p>
+      )}
+      <Card>
+        <CardHeader>
+          <div className='flex justify-between items-start sm:items-center flex-col sm:flex-row gap-2'>
+            <div>
+              <CardTitle>Expurgos Registrados (MVP)</CardTitle>
+              <CardDescription>
+                Demonstração do registro auditado de expurgos autorizados.
+              </CardDescription>
             </div>
-            {/* Filtros Placeholders */}
-            <div className='flex gap-2 pt-4'>
-              <Input placeholder='Filtrar...' className='max-w-xs' disabled />
-              <Select disabled>
-                <SelectTrigger className='w-[180px]'>
-                  <SelectValue placeholder='Filtrar...' />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value='null'>...</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {/* Usa isLoading combinado para tabela */}
-            {isLoading && <p>Carregando dados...</p>}
-            {!isLoading && error && (
-              <p className='text-red-500'>
-                Falha ao carregar alguns dados necessários.
-              </p>
-            )}
-            {/* Mensagem genérica se houver erro */}
-            {/* Renderiza tabela apenas se não estiver carregando E não houver erro GERAL E tiver dados de expurgo */}
-            {!isLoading && !error && expurgos && (
-              <Table>
-                <TableCaption>
-                  Lista de eventos expurgados manualmente com autorização.
-                </TableCaption>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Data Evento</TableHead>
-                    <TableHead>Filial</TableHead>
-                    <TableHead>Critério</TableHead>
-                    <TableHead>Justificativa</TableHead>
-                    <TableHead>Registrado Por</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className='text-right'>Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {expurgos.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={6} className='text-center h-24'>
-                        Nenhum expurgo registrado.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {expurgos.map((exp) => (
-                    <TableRow key={exp.id}>
-                      <TableCell>{formatDate(exp.dataEvento)}</TableCell>
-                      <TableCell>
-                        {exp.setor?.nome ?? `ID ${exp.sectorId}`}
-                      </TableCell>
-                      <TableCell>
-                        {exp.criterio?.nome ?? `ID ${exp.criterionId}`}
-                      </TableCell>
-                      <TableCell className='text-xs max-w-[200px] truncate'>
-                        <Tooltip>
-                          <TooltipTrigger className='hover:underline cursor-help'>
-                            {exp.justificativa
-                              ? `${exp.justificativa.substring(0, 40)}...`
-                              : '-'}
-                          </TooltipTrigger>
-                          <TooltipContent>{exp.justificativa}</TooltipContent>
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell>
-                        {exp.registradoPor?.nome ??
-                          `ID ${exp.registradoPorUserId}`}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={getStatusBadgeVariant(exp.status)}
-                          className={getStatusBadgeClass(exp.status)}
-                        >
-                          {exp.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className='text-right'>
-                        {/* Mostra botões DESABILITADOS SÓ se o status for PENDENTE */}
-                        {exp.status === 'PENDENTE' && (
-                          <div className='flex gap-1 justify-end'>
-                            {/* Botão Aprovar (Fake) */}
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                {/* O ícone ou texto vai DENTRO do Botão */}
-                                <Button
-                                  variant='outline'
-                                  size='xs'
-                                  disabled
-                                  aria-label='Aprovar (desabilitado no MVP)'
-                                >
-                                  <Check className='h-4 w-4' />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                Aprovar (Funcionalidade Futura)
-                              </TooltipContent>
-                            </Tooltip>
-                            {/* Botão Rejeitar (Fake) */}
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant='destructive'
-                                  size='xs'
-                                  disabled
-                                  aria-label='Rejeitar (desabilitado no MVP)'
-                                >
-                                  <X className='h-8 w-8' />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                Rejeitar (Funcionalidade Futura)
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
-                        )}
-                        {/* Se não for PENDENTE, não mostra nada nesta coluna */}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </TooltipProvider>
+            <Button
+              size='sm'
+              variant='outline'
+              className='cursor-pointer'
+              disabled={isLoadingExpurgos}
+              onClick={() => setIsExpurgoModalOpen(true)}
+            >
+              Registrar Novo Expurgo
+            </Button>
+            <ExpurgoModal
+              open={isExpurgoModalOpen}
+              onOpenChange={setIsExpurgoModalOpen}
+              setores={setores || []}
+              criterios={eligibleCriteria || []}
+              isLoadingSetores={isLoadingSetores}
+              isLoadingCriterios={isLoadingCriterios}
+              onSubmit={handleRegisterExpurgo}
+            />
+          </div>
+          {/* Filtros Placeholders */}
+          <div className='flex gap-2 pt-4'>
+            <Input placeholder='Filtrar...' className='max-w-xs' disabled />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <ExpurgosTable expurgos={expurgos} loading={isLoadingExpurgos} />
+        </CardContent>
+      </Card>
+    </div>
   );
 }

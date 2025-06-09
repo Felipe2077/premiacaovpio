@@ -179,8 +179,8 @@ const EmptyState = ({
         <div className='space-y-2'>
           <h3 className='text-lg font-semibold'>Nenhum histórico encontrado</h3>
           <p className='text-muted-foreground max-w-md'>
-            Ainda não há histórico de metas para{' '}
-            <strong>{criterionName}</strong> no setor{' '}
+            Ainda não há histórico de metas para
+            <strong>{criterionName}</strong> no setor
             <strong>{sectorName}</strong>.
           </p>
         </div>

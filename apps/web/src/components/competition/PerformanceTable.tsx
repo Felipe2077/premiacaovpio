@@ -201,7 +201,7 @@ export default function PerformanceTable({
                           <div className='space-y-1'>
                             <div className='flex justify-between text-xs flex-col gap-1'>
                               <span>
-                                Realizado:{' '}
+                                Realizado:
                                 {formatNumber(result.valorRealizado || 0)}
                               </span>
 

@@ -242,7 +242,7 @@ export function ParameterForm({
                         value={String(p.id)}
                         disabled={p.status !== 'PLANEJAMENTO'}
                       >
-                        {p.mesAno} ({p.status}){' '}
+                        {p.mesAno} ({p.status})
                         {p.status !== 'PLANEJAMENTO' ? '(Não editável)' : ''}
                       </SelectItem>
                     ))}
@@ -259,7 +259,7 @@ export function ParameterForm({
           render={({ field }) => (
             <FormItem>
               <FormLabel>
-                Nome do Parâmetro{' '}
+                Nome do Parâmetro
                 <span className='text-xs text-muted-foreground'>
                   (Opcional)
                 </span>
@@ -328,7 +328,7 @@ export function ParameterForm({
           render={({ field }) => (
             <FormItem>
               <FormLabel>
-                Setor{' '}
+                Setor
                 <span className='text-xs text-muted-foreground'>
                   (Opcional)
                 </span>
@@ -383,7 +383,7 @@ export function ParameterForm({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>
-                  Expirar Versão Anterior em{' '}
+                  Expirar Versão Anterior em
                   <span className='text-xs text-muted-foreground'>
                     (Opcional)
                   </span>
