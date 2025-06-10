@@ -1,0 +1,51 @@
+// --- NOVO BLOCO: Log de Versionamento de Parâmetro ---
+if (details.newParameter && details.oldVersion) {
+const { newVersion, oldVersion, newParameter } = details;
+const { metadata, valor, justificativa } = newParameter;
+
+return (
+<div className='space-y-4'>
+  <div>
+    <h4 className='font-semibold mb-2'>Resumo da Operação</h4>
+    <p className='text-sm bg-purple-50 p-3 rounded-md border border-purple-200'>
+      {justificativa || 'Um novo parâmetro foi versionado no sistema.'}
+    </p>
+  </div>
+
+  <div className='flex items-center justify-center gap-4'>
+    <Badge variant='outline'>Versão {oldVersion}</Badge>
+    <span className='text-muted-foreground'>&rarr;</span>
+    <Badge>Versão {newVersion}</Badge>
+  </div>
+  <div>
+    <h4 className='font-semibold mb-2'>Cálculo do Novo Parâmetro</h4>
+    <div className='grid grid-cols-2 gap-x-4 gap-y-2 text-sm'>
+      <div className='col-span-2 sm:col-span-1 p-2 border rounded-md'>
+        <p className='text-xs text-muted-foreground'>
+          Valor Base (cálculo)
+        </p>
+        <p className='font-semibold text-lg'>
+          {Number(metadata.baseValue).toLocaleString('pt-BR', {
+          maximumFractionDigits: 2,
+          })}
+        </p>
+      </div>
+      <div className='col-span-2 sm:col-span-1 p-2 border rounded-md'>
+        <p className='text-xs text-muted-foreground'>Ajuste Aplicado</p>
+        <p className='font-semibold text-lg text-red-600'>
+          {metadata.adjustmentPercentage}%
+        </p>
+      </div>
+      <div className='col-span-2 p-3 border-2 border-purple-500 bg-purple-50 rounded-md text-center'>
+        <p className='text-xs text-purple-800 font-semibold'>
+          NOVO VALOR DO PARÂMETRO
+        </p>
+        <p className='font-bold text-2xl text-purple-700'>
+          {Number(valor).toLocaleString('pt-BR')}
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+);
+}

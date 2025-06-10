@@ -115,3 +115,24 @@ export {
 
 export const SHARED_TYPES_VERSION = '2.0.0'; // Incrementado para incluir anexos
 export const ATTACHMENT_FEATURE_VERSION = '1.0.0';
+
+// packages/shared-types/src/index.ts
+
+// === NOVOS DTOs DE AUTH ===
+export * from './dto/auth.dto';
+
+// === RE-EXPORTS ESPECÍFICOS PARA COMPATIBILIDADE ===
+export {
+  getPermissionLabel,
+  getRoleLabel,
+  getRolePermissions,
+  Permission,
+  Role,
+} from './enums/permission.enum';
+
+export {
+  AuthAuditEvent,
+  AuthErrorCode,
+  formatSessionDevice,
+  validatePassword,
+} from './dto/auth.dto';
