@@ -1,4 +1,4 @@
-// apps/api/src/entity/user.entity.ts - VERSÃO COMPLETA PARA AUTENTICAÇÃO
+// apps/api/src/entity/user.entity.ts - VERSÃO FINAL COMPATÍVEL
 
 import { Role } from '@sistema-premiacao/shared-types';
 import * as bcrypt from 'bcrypt';
@@ -38,36 +38,46 @@ export class UserEntity {
   @Column({ type: 'boolean', default: true })
   ativo: boolean;
 
-  @Column({ type: 'int', nullable: true })
+  @Column({ type: 'int', nullable: true, name: 'sectorId' })
   sectorId?: number;
 
-  // Campos de auditoria
-  @CreateDateColumn()
+  // Campos que já existem no banco (nomes exatos)
+  @CreateDateColumn({ name: 'createdAt' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updatedAt' })
   updatedAt: Date;
 
-  @Column({ type: 'timestamp', nullable: true })
+  // Campos novos adicionados
+  @Column({ type: 'timestamp', nullable: true, name: 'lastLoginAt' })
   lastLoginAt?: Date;
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ type: 'int', default: 0, name: 'loginAttempts' })
   loginAttempts: number;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'timestamp', nullable: true, name: 'lockedUntil' })
   lockedUntil?: Date;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+    name: 'resetPasswordToken',
+  })
   resetPasswordToken?: string;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'timestamp', nullable: true, name: 'resetPasswordExpires' })
   resetPasswordExpires?: Date;
 
   // Métodos para hash da senha
   @BeforeInsert()
   @BeforeUpdate()
   async hashPassword() {
-    if (this.senha && !this.senha.startsWith('$2b$')) {
+    if (
+      this.senha &&
+      !this.senha.startsWith('$2b$') &&
+      !this.senha.startsWith('$2a$')
+    ) {
       // Só fazer hash se não estiver já hasheada
       this.senha = await bcrypt.hash(this.senha, 12);
     }
@@ -75,7 +85,12 @@ export class UserEntity {
 
   // Método para validar senha
   async validatePassword(plainPassword: string): Promise<boolean> {
-    return bcrypt.compare(plainPassword, this.senha);
+    try {
+      return await bcrypt.compare(plainPassword, this.senha);
+    } catch (error) {
+      console.error('Erro ao validar senha:', error);
+      return false;
+    }
   }
 
   // Método para verificar se conta está bloqueada
@@ -84,7 +99,7 @@ export class UserEntity {
   }
 
   // Método para incrementar tentativas de login
-  async incrementLoginAttempts(): Promise<void> {
+  incrementLoginAttempts(): void {
     this.loginAttempts += 1;
 
     // Bloquear após 5 tentativas por 15 minutos
@@ -94,9 +109,9 @@ export class UserEntity {
   }
 
   // Método para resetar tentativas
-  async resetLoginAttempts(): Promise<void> {
+  resetLoginAttempts(): void {
     this.loginAttempts = 0;
-    this.lockedUntil = undefined; // undefined em vez de null
+    this.lockedUntil = undefined;
     this.lastLoginAt = new Date();
   }
 
@@ -137,5 +152,18 @@ export class UserEntity {
       ...safeUser,
       permissions: this.getPermissions(),
     };
+  }
+
+  // Método estático para encontrar usuário com senha (para login)
+  static async findByEmailWithPassword(
+    email: string,
+    userRepository: any
+  ): Promise<UserEntity | null> {
+    return await userRepository
+      .createQueryBuilder('user')
+      .addSelect('user.senha')
+      .where('user.email = :email', { email })
+      .andWhere('user.ativo = :ativo', { ativo: true })
+      .getOne();
   }
 }
