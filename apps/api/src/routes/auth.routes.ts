@@ -1,208 +1,123 @@
-// apps/api/src/routes/auth.routes.ts
-import {
-  AuthErrorCode,
-  ChangePasswordDto,
-  ForgotPasswordDto,
-  LoginDto,
-  ResetPasswordDto,
-} from '@sistema-premiacao/shared-types';
+// apps/api/src/routes/auth.routes.ts - IMPLEMENTAÇÃO REAL
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { AuthService } from '../services/auth.service';
 
+// DTOs para autenticação
+interface LoginDto {
+  email: string;
+  password: string;
+}
+
+interface RegisterDto {
+  name: string;
+  email: string;
+  password: string;
+}
+
+interface ChangePasswordDto {
+  currentPassword: string;
+  newPassword: string;
+}
+
+/**
+ * Registrar rotas de autenticação com implementação real
+ */
 export async function authRoutes(fastify: FastifyInstance) {
   const authService = new AuthService();
 
-  // === LOGIN ===
+  // === ROTA: LOGIN (COM PROTEÇÃO) ===
   fastify.post(
     '/api/auth/login',
     {
       schema: {
+        description: 'Fazer login do usuário',
+        tags: ['auth'],
         body: {
           type: 'object',
           required: ['email', 'password'],
           properties: {
-            email: { type: 'string', format: 'email' },
-            password: { type: 'string', minLength: 1 },
-            rememberMe: { type: 'boolean' },
+            email: {
+              type: 'string',
+              format: 'email',
+              maxLength: 255,
+            },
+            password: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 128,
+            },
           },
+          additionalProperties: false,
         },
-      },
-      preHandler: [
-        // Rate limiting específico para login
-        fastify.rateLimit({
-          max: 5,
-          timeWindow: '1 minute',
-          keyGenerator: (request) =>
-            `login_${request.ip}_${(request.body as any)?.email}`,
-          errorResponseBuilder: (request, context) => ({
-            error: 'Muitas tentativas de login',
-            code: 'RATE_LIMITED',
-            retryAfter: Math.round(context.ttl / 1000),
-          }),
-        }),
-      ],
-    },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      const loginData = request.body as LoginDto;
-      const ipAddress = request.ip;
-      const userAgent = request.headers['user-agent'] || 'unknown';
-
-      try {
-        fastify.log.info(
-          `Tentativa de login: ${loginData.email} de ${ipAddress}`
-        );
-
-        const result = await authService.login(loginData, ipAddress, userAgent);
-
-        // Gerar JWT real
-        const accessToken = fastify.generateToken({
-          sub: result.user.id,
-          email: result.user.email,
-          nome: result.user.nome,
-          roles: result.user.roles,
-          permissions: result.user.permissions,
-          sectorId: result.user.sectorId,
-          sessionId: result.sessionId,
-          iat: Math.floor(Date.now() / 1000),
-        });
-
-        fastify.log.info(`Login bem-sucedido: ${loginData.email}`);
-
-        return reply.send({
-          user: result.user,
-          accessToken,
-          refreshToken: result.refreshToken,
-          expiresIn: 15 * 60, // 15 minutos
-          sessionId: result.sessionId,
-        });
-      } catch (error: any) {
-        fastify.log.error(`Erro no login para ${loginData.email}:`, error);
-
-        // Mapear erros do AuthService para códigos HTTP
-        if (error.code) {
-          switch (error.code) {
-            case AuthErrorCode.INVALID_CREDENTIALS:
-              return reply.status(401).send({
-                error: 'Email ou senha incorretos',
-                code: error.code,
-              });
-
-            case AuthErrorCode.ACCOUNT_LOCKED:
-              return reply.status(423).send({
-                error: 'Conta temporariamente bloqueada',
-                code: error.code,
-                retryAfter: error.details?.retryAfter,
-              });
-
-            case AuthErrorCode.ACCOUNT_INACTIVE:
-              return reply.status(403).send({
-                error: 'Conta inativa',
-                code: error.code,
-              });
-
-            case AuthErrorCode.TOO_MANY_ATTEMPTS:
-              return reply.status(429).send({
-                error: 'Muitas tentativas de login',
-                code: error.code,
-              });
-          }
-        }
-
-        return reply.status(500).send({
-          error: 'Erro interno do servidor',
-          code: 'INTERNAL_ERROR',
-        });
-      }
-    }
-  );
-
-  // === LOGOUT ===
-  fastify.post(
-    '/api/auth/logout',
-    {
-      preHandler: [fastify.authenticate],
-    },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      try {
-        if (request.sessionId) {
-          await authService.logout(request.sessionId, request.user?.id);
-        }
-
-        fastify.log.info(`Logout realizado: ${request.user?.email}`);
-
-        return reply.send({
-          message: 'Logout realizado com sucesso',
-        });
-      } catch (error: any) {
-        fastify.log.error('Erro no logout:', error);
-        // Não falhar o logout por erro - sempre retornar sucesso
-        return reply.send({
-          message: 'Logout realizado',
-        });
-      }
-    }
-  );
-
-  // === REFRESH TOKEN ===
-  fastify.post(
-    '/api/auth/refresh',
-    {
-      schema: {
-        body: {
-          type: 'object',
-          required: ['refreshToken', 'sessionId'],
-          properties: {
-            refreshToken: { type: 'string' },
-            sessionId: { type: 'string' },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              token: { type: 'string' },
+              user: {
+                type: 'object',
+                properties: {
+                  id: { type: 'number' },
+                  name: { type: 'string' },
+                  email: { type: 'string' },
+                  roles: { type: 'array', items: { type: 'string' } },
+                },
+              },
+              expiresIn: { type: 'string' },
+            },
+          },
+          401: {
+            type: 'object',
+            properties: {
+              error: { type: 'string' },
+              code: { type: 'string' },
+            },
           },
         },
       },
     },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      const { refreshToken, sessionId } = request.body as {
-        refreshToken: string;
-        sessionId: string;
-      };
-
+    async (
+      request: FastifyRequest<{ Body: LoginDto }>,
+      reply: FastifyReply
+    ) => {
       try {
-        const result = await authService.refreshAccessToken(
-          refreshToken,
-          sessionId
-        );
+        const { email, password } = request.body;
 
-        // Gerar novo JWT
-        const accessToken = fastify.generateToken({
-          sub: result.user.id,
-          email: result.user.email,
-          nome: result.user.nome,
-          roles: result.user.roles,
-          permissions: result.user.permissions,
-          sectorId: result.user.sectorId,
-          sessionId: result.sessionId,
-          iat: Math.floor(Date.now() / 1000),
-        });
+        // Log de tentativa de login (sem senha)
+        fastify.log.info(`Tentativa de login: ${email} (IP: ${request.ip})`);
 
-        return reply.send({
-          user: result.user,
-          accessToken,
-          refreshToken: result.refreshToken,
-          expiresIn: 15 * 60,
-          sessionId: result.sessionId,
-        });
-      } catch (error: any) {
-        fastify.log.error('Erro no refresh token:', error);
-
-        if (
-          error.code === AuthErrorCode.SESSION_EXPIRED ||
-          error.code === AuthErrorCode.TOKEN_INVALID
-        ) {
-          return reply.status(401).send({
-            error: 'Sessão expirada - faça login novamente',
-            code: error.code,
+        // Validação básica
+        if (!email || !password) {
+          return reply.code(400).send({
+            error: 'Email e senha são obrigatórios',
+            code: 'MISSING_CREDENTIALS',
           });
         }
 
-        return reply.status(500).send({
+        // Tentar fazer login
+        const result = await authService.login({ email, password });
+
+        fastify.log.info(
+          `Login bem-sucedido: ${email} (ID: ${result.user.id})`
+        );
+
+        return reply.send(result);
+      } catch (error: any) {
+        fastify.log.error(
+          `Erro no login para ${request.body.email}:`,
+          error.message
+        );
+
+        // Verificar tipo de erro
+        if (error.message.includes('Email ou senha incorretos')) {
+          return reply.code(401).send({
+            error: 'Email ou senha incorretos',
+            code: 'INVALID_CREDENTIALS',
+          });
+        }
+
+        return reply.code(500).send({
           error: 'Erro interno do servidor',
           code: 'INTERNAL_ERROR',
         });
@@ -210,28 +125,117 @@ export async function authRoutes(fastify: FastifyInstance) {
     }
   );
 
-  // === PERFIL DO USUÁRIO ===
+  // === ROTA: REGISTER ===
+  fastify.post(
+    '/api/auth/register',
+    {
+      schema: {
+        description: 'Registrar novo usuário',
+        tags: ['auth'],
+        body: {
+          type: 'object',
+          required: ['name', 'email', 'password'],
+          properties: {
+            name: {
+              type: 'string',
+              minLength: 2,
+              maxLength: 100,
+            },
+            email: {
+              type: 'string',
+              format: 'email',
+              maxLength: 255,
+            },
+            password: {
+              type: 'string',
+              minLength: 6,
+              maxLength: 128,
+            },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (
+      request: FastifyRequest<{ Body: RegisterDto }>,
+      reply: FastifyReply
+    ) => {
+      try {
+        const { name, email, password } = request.body;
+
+        fastify.log.info(`Tentativa de registro: ${email}`);
+
+        // Tentar registrar usuário
+        const result = await authService.register({ name, email, password });
+
+        fastify.log.info(
+          `Registro bem-sucedido: ${email} (ID: ${result.user.id})`
+        );
+
+        return reply.code(201).send(result);
+      } catch (error: any) {
+        fastify.log.error(
+          `Erro no registro para ${request.body.email}:`,
+          error.message
+        );
+
+        // Verificar tipo de erro
+        if (error.message.includes('Email já está em uso')) {
+          return reply.code(409).send({
+            error: 'Email já está em uso',
+            code: 'EMAIL_ALREADY_EXISTS',
+          });
+        }
+
+        if (error.message.includes('Senha deve ter pelo menos')) {
+          return reply.code(400).send({
+            error: error.message,
+            code: 'WEAK_PASSWORD',
+          });
+        }
+
+        return reply.code(500).send({
+          error: 'Erro interno do servidor',
+          code: 'INTERNAL_ERROR',
+        });
+      }
+    }
+  );
+
+  // === ROTA: DADOS DO USUÁRIO ATUAL ===
   fastify.get(
     '/api/auth/me',
     {
+      schema: {
+        description: 'Obter dados do usuário autenticado',
+        tags: ['auth'],
+      },
       preHandler: [fastify.authenticate],
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        // Buscar dados atualizados do usuário
-        const user = await authService.getUserById(request.user!.id);
+        if (!request.user) {
+          return reply.code(401).send({
+            error: 'Usuário não autenticado',
+            code: 'NOT_AUTHENTICATED',
+          });
+        }
 
-        if (!user) {
-          return reply.status(404).send({
+        // Buscar dados atualizados do usuário
+        const user = await authService.getCurrentUser(request.user.id);
+
+        return reply.send(user);
+      } catch (error: any) {
+        fastify.log.error('Erro ao buscar dados do usuário:', error);
+
+        if (error.message.includes('Usuário não encontrado')) {
+          return reply.code(404).send({
             error: 'Usuário não encontrado',
             code: 'USER_NOT_FOUND',
           });
         }
 
-        return reply.send(user);
-      } catch (error: any) {
-        fastify.log.error('Erro ao buscar perfil:', error);
-        return reply.status(500).send({
+        return reply.code(500).send({
           error: 'Erro interno do servidor',
           code: 'INTERNAL_ERROR',
         });
@@ -239,52 +243,88 @@ export async function authRoutes(fastify: FastifyInstance) {
     }
   );
 
-  // === ALTERAR SENHA ===
+  // === ROTA: ALTERAR SENHA ===
   fastify.put(
     '/api/auth/change-password',
     {
       schema: {
+        description: 'Alterar senha do usuário autenticado',
+        tags: ['auth'],
         body: {
           type: 'object',
           required: ['currentPassword', 'newPassword'],
           properties: {
-            currentPassword: { type: 'string', minLength: 1 },
-            newPassword: { type: 'string', minLength: 8 },
+            currentPassword: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 128,
+            },
+            newPassword: {
+              type: 'string',
+              minLength: 6,
+              maxLength: 128,
+            },
           },
+          additionalProperties: false,
         },
       },
-      preHandler: [
-        fastify.authenticate,
-        // Rate limiting para alteração de senha
-        fastify.rateLimit({
-          max: 3,
-          timeWindow: '5 minutes',
-          keyGenerator: (request) => `change_password_${request.user?.id}`,
-        }),
-      ],
+      preHandler: [fastify.authenticate],
     },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      const changePasswordData = request.body as ChangePasswordDto;
-
+    async (
+      request: FastifyRequest<{ Body: ChangePasswordDto }>,
+      reply: FastifyReply
+    ) => {
       try {
-        await authService.changePassword(request.user!.id, changePasswordData);
+        if (!request.user) {
+          return reply.code(401).send({
+            error: 'Usuário não autenticado',
+            code: 'NOT_AUTHENTICATED',
+          });
+        }
 
-        fastify.log.info(`Senha alterada com sucesso: ${request.user?.email}`);
+        const { currentPassword, newPassword } = request.body;
+
+        fastify.log.info(
+          `Alteração de senha solicitada: usuário ${request.user.email}`
+        );
+
+        // Alterar senha
+        await authService.changePassword(
+          request.user.id,
+          currentPassword,
+          newPassword
+        );
+
+        fastify.log.info(
+          `Senha alterada com sucesso: usuário ${request.user.email}`
+        );
 
         return reply.send({
+          success: true,
           message: 'Senha alterada com sucesso',
         });
       } catch (error: any) {
-        fastify.log.error('Erro ao alterar senha:', error);
+        fastify.log.error(
+          `Erro ao alterar senha (usuário ${request.user?.email}):`,
+          error.message
+        );
 
-        if (error.code === AuthErrorCode.INVALID_CREDENTIALS) {
-          return reply.status(400).send({
+        // Verificar tipo de erro
+        if (error.message.includes('Senha atual incorreta')) {
+          return reply.code(401).send({
             error: 'Senha atual incorreta',
-            code: error.code,
+            code: 'INVALID_CURRENT_PASSWORD',
           });
         }
 
-        return reply.status(500).send({
+        if (error.message.includes('Nova senha deve ter pelo menos')) {
+          return reply.code(400).send({
+            error: error.message,
+            code: 'WEAK_PASSWORD',
+          });
+        }
+
+        return reply.code(500).send({
           error: 'Erro interno do servidor',
           code: 'INTERNAL_ERROR',
         });
@@ -292,144 +332,111 @@ export async function authRoutes(fastify: FastifyInstance) {
     }
   );
 
-  // === ESQUECI MINHA SENHA ===
+  // === ROTA: LOGOUT ===
   fastify.post(
-    '/api/auth/forgot-password',
+    '/api/auth/logout',
     {
       schema: {
-        body: {
-          type: 'object',
-          required: ['email'],
-          properties: {
-            email: { type: 'string', format: 'email' },
-          },
-        },
+        description: 'Fazer logout do usuário',
+        tags: ['auth'],
       },
-      preHandler: [
-        // Rate limiting para forgot password
-        fastify.rateLimit({
-          max: 3,
-          timeWindow: '5 minutes',
-          keyGenerator: (request) =>
-            `forgot_password_${request.ip}_${(request.body as any)?.email}`,
-        }),
-      ],
-    },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      const forgotPasswordData = request.body as ForgotPasswordDto;
-
-      try {
-        await authService.forgotPassword(forgotPasswordData);
-
-        // Sempre retornar sucesso para não revelar se o email existe
-        return reply.send({
-          message:
-            'Se o email existir, você receberá instruções para redefinir sua senha',
-        });
-      } catch (error: any) {
-        fastify.log.error('Erro no forgot password:', error);
-
-        // Sempre retornar sucesso para não revelar informações
-        return reply.send({
-          message:
-            'Se o email existir, você receberá instruções para redefinir sua senha',
-        });
-      }
-    }
-  );
-
-  // === REDEFINIR SENHA ===
-  fastify.post(
-    '/api/auth/reset-password',
-    {
-      schema: {
-        body: {
-          type: 'object',
-          required: ['token', 'newPassword'],
-          properties: {
-            token: { type: 'string' },
-            newPassword: { type: 'string', minLength: 8 },
-          },
-        },
-      },
-    },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      const resetPasswordData = request.body as ResetPasswordDto;
-
-      try {
-        await authService.resetPassword(resetPasswordData);
-
-        fastify.log.info('Senha redefinida com sucesso via token');
-
-        return reply.send({
-          message: 'Senha redefinida com sucesso',
-        });
-      } catch (error: any) {
-        fastify.log.error('Erro no reset password:', error);
-
-        if (error.code === AuthErrorCode.RESET_TOKEN_INVALID) {
-          return reply.status(400).send({
-            error: 'Token inválido ou expirado',
-            code: error.code,
-          });
-        }
-
-        return reply.status(500).send({
-          error: 'Erro interno do servidor',
-          code: 'INTERNAL_ERROR',
-        });
-      }
-    }
-  );
-
-  // === SESSÕES ATIVAS ===
-  fastify.get(
-    '/api/auth/sessions',
-    {
       preHandler: [fastify.authenticate],
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const sessions = await authService.getUserSessions(request.user!.id);
+        if (!request.user) {
+          return reply.code(401).send({
+            error: 'Usuário não autenticado',
+            code: 'NOT_AUTHENTICATED',
+          });
+        }
+
+        // Extrair token do header para invalidação futura
+        const authHeader = request.headers.authorization;
+        const token = authHeader?.replace('Bearer ', '') || '';
+
+        fastify.log.info(`Logout realizado: usuário ${request.user.email}`);
+
+        // Fazer logout (invalidar token/sessão)
+        await authService.logout(token);
 
         return reply.send({
-          sessions: sessions.map((session) => session.getPublicInfo()),
-          total: sessions.length,
+          success: true,
+          message: 'Logout realizado com sucesso',
         });
       } catch (error: any) {
-        fastify.log.error('Erro ao buscar sessões:', error);
-        return reply.status(500).send({
-          error: 'Erro interno do servidor',
-          code: 'INTERNAL_ERROR',
+        fastify.log.error(
+          `Erro no logout (usuário ${request.user?.email}):`,
+          error
+        );
+
+        // Mesmo com erro, considerar logout bem-sucedido do lado cliente
+        return reply.send({
+          success: true,
+          message: 'Logout realizado com sucesso',
         });
       }
     }
   );
 
-  // === INVALIDAR SESSÃO ===
-  fastify.delete(
-    '/api/auth/sessions/:sessionId',
+  // === ROTA: REFRESH TOKEN ===
+  fastify.post(
+    '/api/auth/refresh',
     {
-      preHandler: [fastify.authenticate],
+      schema: {
+        description: 'Renovar token JWT',
+        tags: ['auth'],
+        body: {
+          type: 'object',
+          required: ['token'],
+          properties: {
+            token: { type: 'string', minLength: 1 },
+          },
+        },
+      },
     },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      const { sessionId } = request.params as { sessionId: string };
-
+    async (
+      request: FastifyRequest<{ Body: { token: string } }>,
+      reply: FastifyReply
+    ) => {
       try {
-        await authService.invalidateSession(sessionId);
+        const { token } = request.body;
 
-        return reply.send({
-          message: 'Sessão invalidada com sucesso',
-        });
+        const result = await authService.refreshToken(token);
+
+        return reply.send(result);
       } catch (error: any) {
-        fastify.log.error('Erro ao invalidar sessão:', error);
-        return reply.status(500).send({
-          error: 'Erro interno do servidor',
-          code: 'INTERNAL_ERROR',
+        fastify.log.error('Erro ao renovar token:', error);
+
+        return reply.code(401).send({
+          error: 'Token inválido ou expirado',
+          code: 'INVALID_REFRESH_TOKEN',
         });
       }
     }
   );
 
-  fastify.log.info('✅ Rotas de autenticação registradas');
+  // === ROTA DE TESTE (DESENVOLVIMENTO) ===
+  if (process.env.NODE_ENV === 'development') {
+    fastify.get(
+      '/api/auth/test',
+      {
+        schema: {
+          description: 'Testar autenticação (desenvolvimento)',
+          tags: ['auth', 'development'],
+        },
+        preHandler: [fastify.authenticate],
+      },
+      async (request: FastifyRequest, reply: FastifyReply) => {
+        return reply.send({
+          authenticated: true,
+          user: request.user,
+          timestamp: new Date().toISOString(),
+          environment: 'development',
+        });
+      }
+    );
+  }
+
+  fastify.log.info('🔐 Rotas de autenticação REAIS registradas com sucesso');
 }

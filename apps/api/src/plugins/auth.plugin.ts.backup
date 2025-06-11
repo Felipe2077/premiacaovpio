@@ -1,10 +1,10 @@
-// apps/api/src/plugins/auth.plugin.ts - VERSÃO CORRIGIDA FINAL
-import jwt from '@fastify/jwt';
-import fp from 'fastify-plugin';
+// apps/api/src/plugins/auth.plugin.ts - CORREÇÃO MÍNIMA
+import jwt from '@fastify/jwt'; // IMPORTAÇÃO NECESSÁRIA
+import fp from '@fastify/plugin'; // ADICIONAR ESTA LINHA NO TOPO
 
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
-// === INTERFACES PARA TIPAGEM ===
+// === INTERFACES PARA RESOLVER TIPOS ===
 export interface JwtPayload {
   userId: number;
   email: string;
@@ -13,12 +13,32 @@ export interface JwtPayload {
   exp?: number;
 }
 
-/**
- * Plugin de autenticação para Fastify
- * Implementa JWT seguindo padrões de segurança
- */
+export interface AuthenticatedUser {
+  id: number;
+  email: string;
+  name: string;
+  roleNames: string[];
+}
+
+// CORREÇÃO: Estender FastifyRequest e FastifyInstance
+declare module 'fastify' {
+  interface FastifyRequest {
+    user?: AuthenticatedUser;
+  }
+
+  interface FastifyInstance {
+    authenticate: (
+      request: FastifyRequest,
+      reply: FastifyReply
+    ) => Promise<void>;
+    verifyJWT: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    generateToken: (payload: JwtPayload) => string;
+    verifyToken: (token: string) => JwtPayload;
+  }
+}
+
 async function authPlugin(fastify: FastifyInstance) {
-  // === REGISTRAR PLUGIN JWT ===
+  // Registrar plugin JWT
   await fastify.register(jwt, {
     secret:
       process.env.JWT_SECRET ||
@@ -30,9 +50,21 @@ async function authPlugin(fastify: FastifyInstance) {
     verify: {
       algorithms: ['HS256'],
     },
+    // CORREÇÃO: Tipar os parâmetros corretamente
+    errorResponseBuilder: function (request: FastifyRequest, context: any) {
+      return {
+        code: 'UNAUTHORIZED',
+        error: 'Token inválido ou expirado',
+        message: context.message || 'Falha na autenticação',
+        statusCode: 401,
+      };
+    },
   });
 
-  // === UTILITÁRIOS JWT ===
+  // Registrar plugin de auth
+  await fastify.register(fp);
+
+  // Utilitários JWT - CORREÇÃO: usar fastify.jwt corretamente
   fastify.decorate('generateToken', (payload: JwtPayload): string => {
     return fastify.jwt.sign(payload);
   });
@@ -41,7 +73,7 @@ async function authPlugin(fastify: FastifyInstance) {
     return fastify.jwt.verify(token) as JwtPayload;
   });
 
-  // === MIDDLEWARE DE VERIFICAÇÃO JWT ===
+  // Middleware JWT
   fastify.decorate(
     'verifyJWT',
     async function (request: FastifyRequest, reply: FastifyReply) {
@@ -65,16 +97,9 @@ async function authPlugin(fastify: FastifyInstance) {
 
         const token = tokenMatch[1];
 
-        if (!token) {
-          return reply.code(401).send({
-            error: 'Token não encontrado',
-            code: 'TOKEN_NOT_FOUND',
-          });
-        }
-
         let decoded: JwtPayload;
         try {
-          decoded = fastify.jwt.verify(token) as JwtPayload;
+          decoded = fastify.jwt.verify(token) as JwtPayload; // CORREÇÃO: tipo correto
         } catch (jwtError: any) {
           return reply.code(401).send({
             error: 'Token inválido ou expirado',
@@ -83,14 +108,11 @@ async function authPlugin(fastify: FastifyInstance) {
           });
         }
 
-        // Anexar dados do usuário ao request
+        // Aqui você pode adicionar validação adicional do usuário se necessário
         request.user = {
           id: decoded.userId,
           email: decoded.email,
-          name: '',
-          roles: decoded.roleNames || [],
-          permissions: [],
-          sectorId: undefined,
+          name: '', // Buscar do banco se necessário
           roleNames: decoded.roleNames || [],
         };
       } catch (error) {
@@ -103,7 +125,7 @@ async function authPlugin(fastify: FastifyInstance) {
     }
   );
 
-  // === MIDDLEWARE PRINCIPAL DE AUTENTICAÇÃO ===
+  // Middleware principal
   fastify.decorate(
     'authenticate',
     async function (request: FastifyRequest, reply: FastifyReply) {
@@ -117,7 +139,6 @@ async function authPlugin(fastify: FastifyInstance) {
   fastify.log.info('🔐 Plugin de autenticação carregado com sucesso');
 }
 
-// === EXPORT CORRETO ===
 export default fp(authPlugin, {
   name: 'auth-plugin',
 });

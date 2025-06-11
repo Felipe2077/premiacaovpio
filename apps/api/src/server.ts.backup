@@ -43,32 +43,6 @@ import { authRoutes } from './routes/auth.routes';
 import { AuthService } from './services/auth.service';
 
 dotenv.config();
-declare module '@fastify/jwt' {
-  interface FastifyJWT {
-    user: {
-      id: number;
-      email: string;
-      name?: string;
-      roles?: string[];
-      permissions?: string[];
-      sectorId?: number;
-      roleNames?: string[];
-    };
-  }
-}
-
-// Adicionar métodos de autenticação ao FastifyInstance
-declare module 'fastify' {
-  interface FastifyInstance {
-    authenticate: (
-      request: FastifyRequest,
-      reply: FastifyReply
-    ) => Promise<void>;
-    verifyJWT: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
-    generateToken: (payload: any) => string;
-    verifyToken: (token: string) => any;
-  }
-}
 
 const fastify = Fastify({
   logger: {
@@ -199,10 +173,7 @@ const start = async () => {
         );
       }
     }
-    await fastify.register(require('@fastify/rate-limit'), {
-      max: 100,
-      timeWindow: '1 minute',
-    });
+
     // === 6. ROTAS DE SAÚDE (PÚBLICAS) ===
     fastify.get('/health', async (request, reply) => {
       const health = await authService.healthCheck();
