@@ -1,4 +1,4 @@
-// apps/api/src/routes/auth.routes.ts - SEM ERROS DE TIPO
+// apps/api/src/routes/auth.routes.ts - VERSÃO ATUALIZADA
 
 import {
   FastifyInstance,
@@ -7,19 +7,18 @@ import {
   FastifyRequest,
 } from 'fastify';
 import fp from 'fastify-plugin';
-import { AuthService } from '../services/auth.service';
 
 /**
- * Plugin de rotas de autenticação - SEM ERROS DE TIPO
+ * Plugin de rotas de autenticação - VERSÃO ATUALIZADA
  */
 export const authRoutes: FastifyPluginAsync = async (
   fastify: FastifyInstance
 ) => {
-  // Instanciar AuthService
-  const authService = new AuthService();
+  // 🎯 USANDO AuthService DECORADO (configurado no auth.plugin.ts)
+  const authService = fastify.authService;
 
   /**
-   * POST /api/auth/login - Login do usuário
+   * POST /api/auth/login - Login do usuário (ROTA PÚBLICA)
    */
   fastify.post(
     '/api/auth/login',
@@ -35,6 +34,7 @@ export const authRoutes: FastifyPluginAsync = async (
           },
         },
       },
+      // 🔧 SEM preHandler - ROTA PÚBLICA
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
@@ -79,12 +79,12 @@ export const authRoutes: FastifyPluginAsync = async (
   fastify.post(
     '/api/auth/logout',
     {
-      preHandler: [(fastify as any).authenticate], // ✅ Type assertion
+      preHandler: [fastify.authenticate],
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const sessionId = (request as any).sessionId; // ✅ Type assertion
-        const userId = (request as any).user?.id; // ✅ Type assertion
+        const sessionId = (request as any).sessionId;
+        const userId = (request as any).user?.id;
 
         if (sessionId) {
           await authService.logout(sessionId, userId);
@@ -105,11 +105,11 @@ export const authRoutes: FastifyPluginAsync = async (
   fastify.get(
     '/api/auth/me',
     {
-      preHandler: [(fastify as any).authenticate], // ✅ Type assertion
+      preHandler: [fastify.authenticate],
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const userId = (request as any).user?.id; // ✅ Type assertion
+        const userId = (request as any).user?.id;
 
         if (!userId) {
           return reply.status(401).send({
@@ -125,7 +125,17 @@ export const authRoutes: FastifyPluginAsync = async (
           });
         }
 
-        reply.send({ user });
+        // 🎯 RESPOSTA COMPATÍVEL COM FRONTEND
+        reply.send({
+          id: user.id,
+          email: user.email,
+          nome: user.nome,
+          roles: [user.role],
+          permissions: user.getPermissions(),
+          sectorId: user.sectorId,
+          sectorName: user.sectorId ? `Setor ${user.sectorId}` : undefined, // 🔧 CORRIGIDO
+          ativo: user.ativo,
+        });
       } catch (error: any) {
         fastify.log.error('Erro ao obter dados do usuário:', error);
         reply.status(500).send({
@@ -151,11 +161,11 @@ export const authRoutes: FastifyPluginAsync = async (
           },
         },
       },
-      preHandler: [(fastify as any).authenticate], // ✅ Type assertion
+      preHandler: [fastify.authenticate],
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const userId = (request as any).user?.id; // ✅ Type assertion
+        const userId = (request as any).user?.id;
         const { currentPassword, newPassword } = request.body as {
           currentPassword: string;
           newPassword: string;
@@ -326,6 +336,10 @@ export const authRoutes: FastifyPluginAsync = async (
       }
     }
   );
+
+  fastify.get('/api/auth/test', async (request, reply) => {
+    reply.send({ message: 'Rota pública funcionando!' });
+  });
 
   /**
    * GET /api/auth/health - Health check de autenticação

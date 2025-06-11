@@ -7,7 +7,7 @@ import fp from 'fastify-plugin';
  * Plugin de rotas de auditoria
  */
 const auditRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
-  fastify.addHook('preHandler', fastify.auth([fastify.authenticate]));
+  //fastify.addHook('preHandler', fastify.auth([fastify.authenticate]));
 
   /**
    * GET /api/audit-logs - Listar logs de auditoria

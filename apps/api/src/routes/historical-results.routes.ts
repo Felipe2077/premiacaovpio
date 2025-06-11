@@ -14,7 +14,7 @@ const historicalResultsRoutes: FastifyPluginAsync = async (
   fastify: FastifyInstance
 ) => {
   // Este hook agora só se aplica às rotas DENTRO deste arquivo.
-  fastify.addHook('preHandler', fastify.auth([fastify.authenticate]));
+  // fastify.addHook('preHandler', fastify.auth([fastify.authenticate]));
 
   fastify.get(
     '/api/results/historical',
