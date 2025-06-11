@@ -1,6 +1,5 @@
 // apps/api/src/controllers/expurgo-attachments.controller.ts
 
-import { AppDataSource } from '@/database/data-source';
 import { ExpurgoService } from '@/modules/expurgos/expurgo.service';
 import { AuthService } from '@/services/auth.service';
 import { FastifyReply, FastifyRequest } from 'fastify';
@@ -48,8 +47,6 @@ export class ExpurgoAttachmentsController {
             'Requisição deve ser multipart/form-data para upload de arquivo',
         });
       }
-
-      await AppDataSource.initialize();
 
       // Usar o método file() do plugin @fastify/multipart
       const data = await request.file();
@@ -151,8 +148,6 @@ export class ExpurgoAttachmentsController {
         });
       }
 
-      await AppDataSource.initialize();
-
       const anexos =
         await this.services.expurgo.getExpurgoAttachments(expurgoId);
 
@@ -204,8 +199,6 @@ export class ExpurgoAttachmentsController {
           error: 'ID do anexo deve ser um número positivo',
         });
       }
-
-      await AppDataSource.initialize();
 
       // Buscar informações do anexo
       const attachmentService = new (
@@ -305,8 +298,6 @@ export class ExpurgoAttachmentsController {
       if (!deletingUser) {
         return reply.status(401).send({ error: 'Usuário não encontrado' });
       }
-
-      await AppDataSource.initialize();
 
       await this.services.expurgo.deleteAttachment(
         attachmentId,

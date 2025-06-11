@@ -1,5 +1,4 @@
 // apps/api/src/controllers/parameters.controller.ts
-import { AppDataSource } from '@/database/data-source';
 import { CriterionCalculationSettingsService } from '@/modules/parameters/criterion-calculation-settings.service';
 import { ParameterService } from '@/modules/parameters/parameter.service';
 import { AuthService } from '@/services/auth.service';
@@ -62,8 +61,6 @@ export class ParametersController {
         });
       }
 
-      await AppDataSource.initialize();
-
       const data = await this.services.parameter.findParametersForPeriod(
         queryParams.period,
         sectorIdNum,
@@ -97,8 +94,6 @@ export class ParametersController {
         return reply.status(400).send({ message: 'ID do parâmetro inválido.' });
       }
 
-      await AppDataSource.initialize();
-
       const parameter =
         await this.services.parameter.findParameterById(parameterId);
       if (!parameter) {
@@ -129,8 +124,6 @@ export class ParametersController {
       }
 
       request.log.info('POST /api/parameters com dados:', createData);
-
-      await AppDataSource.initialize();
 
       const newParameter = await this.services.parameter.createParameter(
         createData,
@@ -175,8 +168,6 @@ export class ParametersController {
       if (!actingUser) {
         return reply.status(401).send({ error: 'Usuário não encontrado' });
       }
-
-      await AppDataSource.initialize();
 
       const updatedParameter = await this.services.parameter.updateParameter(
         idNum,
@@ -242,8 +233,6 @@ export class ParametersController {
         });
       }
 
-      await AppDataSource.initialize();
-
       const deletedParameter = await this.services.parameter.deleteParameter(
         parameterId,
         actingUser as any,
@@ -286,8 +275,6 @@ export class ParametersController {
         calculateData
       );
 
-      await AppDataSource.initialize();
-
       const result = await this.services.parameter.calculateParameter(
         calculateData,
         actingUser as any
@@ -323,8 +310,6 @@ export class ParametersController {
       if (isNaN(criterionIdNum)) {
         return reply.status(400).send({ error: 'ID do critério inválido.' });
       }
-
-      await AppDataSource.initialize();
 
       const criterionCalculationSettingsService =
         new CriterionCalculationSettingsService();

@@ -73,8 +73,6 @@ export class ExpurgosController {
 
       request.log.info('[API] Filtros processados:', filters);
 
-      await AppDataSource.initialize();
-
       const expurgos = await this.services.expurgo.findExpurgos(filters);
 
       request.log.info(`[API] Retornando ${expurgos.length} expurgos`);
@@ -102,8 +100,6 @@ export class ExpurgosController {
           error: 'ID do expurgo deve ser um número positivo',
         });
       }
-
-      await AppDataSource.initialize();
 
       const expurgo = await this.services.expurgo.findExpurgoById(expurgoId);
 
@@ -167,8 +163,6 @@ export class ExpurgosController {
       if (!requestingUser) {
         return reply.status(401).send({ error: 'Usuário não encontrado' });
       }
-
-      await AppDataSource.initialize();
 
       const newExpurgo = await this.services.expurgo.requestExpurgo(
         createExpurgoDto,
@@ -248,8 +242,6 @@ export class ExpurgosController {
       if (!approvingUser) {
         return reply.status(401).send({ error: 'Usuário não encontrado' });
       }
-
-      await AppDataSource.initialize();
 
       const approvedExpurgo =
         await this.services.expurgo.approveExpurgoWithValue(
@@ -338,8 +330,6 @@ export class ExpurgosController {
       if (!rejectingUser) {
         return reply.status(401).send({ error: 'Usuário não encontrado' });
       }
-
-      await AppDataSource.initialize();
 
       const rejectedExpurgo = await this.services.expurgo.rejectExpurgo(
         expurgoId,
