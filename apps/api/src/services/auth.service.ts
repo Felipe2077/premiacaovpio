@@ -1,4 +1,5 @@
-// apps/api/src/services/auth.service.ts
+// apps/api/src/services/auth.service.ts - VERSÃO HÍBRIDA CORRIGIDA
+
 import {
   AuthAuditEvent,
   AuthErrorCode,
@@ -19,6 +20,18 @@ import { AuditLogEntity } from '../entity/audit-log.entity';
 import { SessionEntity } from '../entity/session.entity';
 import { UserEntity } from '../entity/user.entity';
 
+// Classe de erro customizada para autenticação
+export class AuthError extends Error {
+  constructor(
+    message: string,
+    public code?: string,
+    public details?: Record<string, any>
+  ) {
+    super(message);
+    this.name = 'AuthError';
+  }
+}
+
 export class AuthService {
   private userRepo: Repository<UserEntity>;
   private sessionRepo: Repository<SessionEntity>;
@@ -32,9 +45,21 @@ export class AuthService {
   private readonly RESET_TOKEN_EXPIRES = 60 * 60 * 1000; // 1 hora
 
   constructor() {
-    this.userRepo = AppDataSource.getRepository(UserEntity);
-    this.sessionRepo = AppDataSource.getRepository(SessionEntity);
-    this.auditRepo = AppDataSource.getRepository(AuditLogEntity);
+    this.initializeRepositories();
+  }
+
+  private async initializeRepositories(): Promise<void> {
+    try {
+      if (!AppDataSource.isInitialized) {
+        await AppDataSource.initialize();
+      }
+
+      this.userRepo = AppDataSource.getRepository(UserEntity);
+      this.sessionRepo = AppDataSource.getRepository(SessionEntity);
+      this.auditRepo = AppDataSource.getRepository(AuditLogEntity);
+    } catch (error: any) {
+      console.error('Erro ao inicializar repositórios do AuthService:', error);
+    }
   }
 
   /**
@@ -48,6 +73,8 @@ export class AuthService {
     const { email, password, rememberMe = false } = loginDto;
 
     try {
+      await this.initializeRepositories();
+
       // 1. Buscar usuário
       const user = await this.userRepo.findOne({
         where: { email },
@@ -106,10 +133,10 @@ export class AuthService {
         );
       }
 
-      // 5. Resetar tentativas falhadas
+      // 5. Resetar tentativas falhadas - CORRIGIDO
       if (user.failedLoginAttempts > 0) {
         user.failedLoginAttempts = 0;
-        user.lockedUntil = null;
+        user.lockedUntil = undefined; // ✅ undefined em vez de null
         await this.userRepo.save(user);
       }
 
@@ -163,6 +190,8 @@ export class AuthService {
    */
   async logout(sessionId: string, userId?: number): Promise<void> {
     try {
+      await this.initializeRepositories();
+
       const session = await this.sessionRepo.findOne({
         where: { id: sessionId },
         relations: ['user'],
@@ -179,17 +208,19 @@ export class AuthService {
           manual: true,
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('[AuthService] Erro no logout:', error);
       // Não lançar erro no logout para não impactar UX
     }
   }
 
   /**
-   * Valida e decodifica token JWT
+   * Valida e decodifica token JWT - ESSENCIAL PARA AUTENTICAÇÃO
    */
   async validateToken(token: string): Promise<AuthUser | null> {
     try {
+      await this.initializeRepositories();
+
       // Este método será usado pelo middleware de autenticação
       // Por enquanto, vamos decodificar o token simulado
       const decoded = JSON.parse(Buffer.from(token, 'base64').toString());
@@ -202,23 +233,33 @@ export class AuthService {
       // Buscar usuário atualizado no banco
       const user = await this.getUserById(decoded.sub);
       return user;
-    } catch (error) {
+    } catch (error: any) {
       return null;
     }
   }
-  // Método utilitário para criar refresh token hash
-  private async createRefreshTokenHash(refreshToken: string): Promise<string> {
-    return await argon2.hash(refreshToken);
-  }
 
-  // Método para validar refresh token
-  private async validateRefreshToken(
-    token: string,
-    hash: string
+  /**
+   * Verifica se usuário tem permissão específica - ESSENCIAL PARA RBAC
+   */
+  async userHasPermission(
+    userId: number,
+    permission: string
   ): Promise<boolean> {
     try {
-      return await argon2.verify(hash, token);
-    } catch (error) {
+      await this.initializeRepositories();
+
+      const user = await this.userRepo.findOne({
+        where: { id: userId, ativo: true },
+        relations: ['roles'],
+      });
+
+      if (!user) return false;
+
+      return user.roles.some((role) =>
+        role.permissions.includes(permission as any)
+      );
+    } catch (error: any) {
+      console.error('[AuthService] Erro ao verificar permissão:', error);
       return false;
     }
   }
@@ -231,6 +272,8 @@ export class AuthService {
     sessionId: string
   ): Promise<LoginResponse> {
     try {
+      await this.initializeRepositories();
+
       // 1. Validar sessão
       const session = await this.sessionRepo.findOne({
         where: { id: sessionId, isActive: true },
@@ -309,6 +352,8 @@ export class AuthService {
     const { currentPassword, newPassword } = changePasswordDto;
 
     try {
+      await this.initializeRepositories();
+
       // 1. Buscar usuário
       const user = await this.userRepo.findOne({
         where: { id: userId },
@@ -368,6 +413,8 @@ export class AuthService {
     const { email } = forgotPasswordDto;
 
     try {
+      await this.initializeRepositories();
+
       const user = await this.userRepo.findOne({ where: { email } });
 
       // Por segurança, sempre retornamos sucesso (não revelar se email existe)
@@ -417,6 +464,8 @@ export class AuthService {
     const { token, newPassword } = resetPasswordDto;
 
     try {
+      await this.initializeRepositories();
+
       // 1. Hash do token
       const hashedToken = crypto
         .createHash('sha256')
@@ -427,7 +476,6 @@ export class AuthService {
       const user = await this.userRepo.findOne({
         where: {
           resetPasswordToken: hashedToken,
-          // TypeORM automaticamente filtra por data não expirada
         },
       });
 
@@ -445,12 +493,12 @@ export class AuthService {
       // 3. Hash da nova senha
       const newPasswordHash = await argon2.hash(newPassword);
 
-      // 4. Atualizar usuário
+      // 4. Atualizar usuário - CORRIGIDO
       user.passwordHash = newPasswordHash;
-      user.resetPasswordToken = null;
-      user.resetPasswordExpires = null;
+      user.resetPasswordToken = undefined; // ✅ undefined em vez de null
+      user.resetPasswordExpires = undefined; // ✅ undefined em vez de null
       user.failedLoginAttempts = 0; // Reset tentativas
-      user.lockedUntil = null; // Desbloquear se estava bloqueado
+      user.lockedUntil = undefined; // ✅ undefined em vez de null
       await this.userRepo.save(user);
 
       // 5. Invalidar todas as sessões
@@ -472,6 +520,137 @@ export class AuthService {
         AuthErrorCode.RESET_TOKEN_INVALID,
         'Erro ao resetar senha'
       );
+    }
+  }
+
+  /**
+   * Obtém informações do usuário por ID
+   */
+  async getUserById(userId: number): Promise<AuthUser | null> {
+    try {
+      await this.initializeRepositories();
+
+      const user = await this.userRepo.findOne({
+        where: { id: userId, ativo: true },
+        relations: ['roles'],
+      });
+
+      if (!user) return null;
+
+      return this.buildAuthUser(user);
+    } catch (error: any) {
+      console.error('[AuthService] Erro ao buscar usuário:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Lista sessões ativas do usuário
+   */
+  async getUserSessions(userId: number): Promise<SessionEntity[]> {
+    try {
+      await this.initializeRepositories();
+
+      return await this.sessionRepo.find({
+        where: { userId, isActive: true },
+        order: { lastUsedAt: 'DESC' },
+      });
+    } catch (error: any) {
+      console.error('[AuthService] Erro ao buscar sessões:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Invalida sessão específica
+   */
+  async invalidateSession(sessionId: string): Promise<void> {
+    try {
+      await this.initializeRepositories();
+
+      const session = await this.sessionRepo.findOne({
+        where: { id: sessionId },
+      });
+
+      if (session) {
+        session.invalidate('manual');
+        await this.sessionRepo.save(session);
+
+        await this.logAuditEvent(
+          session.userId,
+          AuthAuditEvent.SESSION_INVALIDATED,
+          { sessionId, reason: 'Manual invalidation' }
+        );
+      }
+    } catch (error: any) {
+      console.error('[AuthService] Erro ao invalidar sessão:', error);
+    }
+  }
+
+  /**
+   * Desbloqueia conta de usuário (admin)
+   */
+  async unlockUserAccount(userId: number, adminUserId: number): Promise<void> {
+    try {
+      await this.initializeRepositories();
+
+      const user = await this.userRepo.findOne({
+        where: { id: userId },
+      });
+
+      if (user && user.isLocked()) {
+        user.lockedUntil = undefined; // ✅ undefined em vez de null
+        user.failedLoginAttempts = 0;
+        await this.userRepo.save(user);
+
+        await this.logAuditEvent(userId, AuthAuditEvent.ACCOUNT_UNLOCKED, {
+          unlockedBy: adminUserId,
+          reason: 'Admin action',
+        });
+      }
+    } catch (error: any) {
+      console.error('[AuthService] Erro ao desbloquear conta:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Health check do serviço de autenticação
+   */
+  async healthCheck(): Promise<{
+    healthy: boolean;
+    details: Record<string, any>;
+  }> {
+    try {
+      await this.initializeRepositories();
+
+      // Testar conexão com banco
+      await this.userRepo.query('SELECT 1');
+
+      // Estatísticas básicas
+      const [totalUsers, activeSessions, lockedAccounts] = await Promise.all([
+        this.userRepo.count({ where: { ativo: true } }),
+        this.sessionRepo.count({ where: { isActive: true } }),
+        this.userRepo.count({ where: { lockedUntil: new Date() } }),
+      ]);
+
+      return {
+        healthy: true,
+        details: {
+          totalUsers,
+          activeSessions,
+          lockedAccounts,
+          timestamp: new Date(),
+        },
+      };
+    } catch (error: any) {
+      return {
+        healthy: false,
+        details: {
+          error: error instanceof Error ? error.message : 'Erro desconhecido',
+          timestamp: new Date(),
+        },
+      };
     }
   }
 
@@ -653,8 +832,8 @@ export class AuthService {
   ): Promise<void> {
     try {
       const auditLog = this.auditRepo.create({
-        userId,
-        userName: details.email || null,
+        userId: userId || undefined, // ✅ Corrigido: converte null para undefined
+        userName: details.email || undefined,
         actionType: event,
         entityType: 'AUTH',
         details,
@@ -662,13 +841,9 @@ export class AuthService {
       });
 
       await this.auditRepo.save(auditLog);
-    } catch (error) {
+    } catch (error: any) {
       console.error('[AuthService] Erro ao criar log de auditoria:', error);
       // Não lançar erro para não impactar o fluxo principal
-      throw this.createAuthError(
-        AuthErrorCode.RESET_TOKEN_INVALID,
-        'Erro ao resetar senha'
-      );
     }
   }
 
@@ -676,157 +851,7 @@ export class AuthService {
     code: AuthErrorCode,
     message: string,
     details?: Record<string, any>
-  ): Error {
-    const error = new Error(message) as any;
-    error.code = code;
-    error.details = details;
-    return error;
-  }
-
-  // === MÉTODOS PÚBLICOS ADICIONAIS ===
-
-  /**
-   * Obtém informações do usuário por ID
-   */
-  async getUserById(userId: number): Promise<AuthUser | null> {
-    try {
-      const user = await this.userRepo.findOne({
-        where: { id: userId, ativo: true },
-        relations: ['roles'],
-      });
-
-      if (!user) return null;
-
-      return this.buildAuthUser(user);
-    } catch (error) {
-      console.error('[AuthService] Erro ao buscar usuário:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Verifica se usuário tem permissão específica
-   */
-  async userHasPermission(
-    userId: number,
-    permission: string
-  ): Promise<boolean> {
-    try {
-      const user = await this.userRepo.findOne({
-        where: { id: userId, ativo: true },
-        relations: ['roles'],
-      });
-
-      if (!user) return false;
-
-      return user.roles.some((role) =>
-        role.permissions.includes(permission as any)
-      );
-    } catch (error) {
-      console.error('[AuthService] Erro ao verificar permissão:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Lista sessões ativas do usuário
-   */
-  async getUserSessions(userId: number): Promise<SessionEntity[]> {
-    try {
-      return await this.sessionRepo.find({
-        where: { userId, isActive: true },
-        order: { lastUsedAt: 'DESC' },
-      });
-    } catch (error) {
-      console.error('[AuthService] Erro ao buscar sessões:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Invalida sessão específica
-   */
-  async invalidateSession(sessionId: string): Promise<void> {
-    try {
-      const session = await this.sessionRepo.findOne({
-        where: { id: sessionId },
-      });
-
-      if (session) {
-        session.invalidate('manual');
-        await this.sessionRepo.save(session);
-
-        await this.logAuditEvent(
-          session.userId,
-          AuthAuditEvent.SESSION_INVALIDATED,
-          { sessionId, reason: 'Manual invalidation' }
-        );
-      }
-    } catch (error) {
-      console.error('[AuthService] Erro ao invalidar sessão:', error);
-    }
-  }
-
-  /**
-   * Desbloqueia conta de usuário (admin)
-   */
-  async unlockUserAccount(userId: number, adminUserId: number): Promise<void> {
-    try {
-      const user = await this.userRepo.findOne({
-        where: { id: userId },
-      });
-
-      if (user && user.isLocked()) {
-        user.lockedUntil = null;
-        user.failedLoginAttempts = 0;
-        await this.userRepo.save(user);
-
-        await this.logAuditEvent(userId, AuthAuditEvent.ACCOUNT_UNLOCKED, {
-          unlockedBy: adminUserId,
-          reason: 'Admin action',
-        });
-      }
-    } catch (error) {
-      console.error('[AuthService] Erro ao desbloquear conta:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Health check do serviço de autenticação
-   */
-  async healthCheck(): Promise<{
-    healthy: boolean;
-    details: Record<string, any>;
-  }> {
-    try {
-      // Testar conexão com banco
-      await this.userRepo.query('SELECT 1');
-
-      // Estatísticas básicas
-      const [totalUsers, activeSessions, lockedAccounts] = await Promise.all([
-        this.userRepo.count({ where: { ativo: true } }),
-        this.sessionRepo.count({ where: { isActive: true } }),
-        this.userRepo.count({ where: { lockedUntil: new Date() } }),
-      ]);
-
-      return {
-        healthy: true,
-        details: {
-          totalUsers,
-          activeSessions,
-          lockedAccounts,
-          timestamp: new Date(),
-        },
-      };
-    } catch (error) {
-      return {
-        healthy: false,
-        details: {
-          error: error.message,
-          timestamp: new Date(),
-        },
-      };
-    }
+  ): AuthError {
+    return new AuthError(message, code, details);
   }
 }

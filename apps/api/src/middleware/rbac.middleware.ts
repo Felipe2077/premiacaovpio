@@ -7,21 +7,21 @@ import { FastifyReply, FastifyRequest } from 'fastify';
  */
 export function requirePermissions(...permissions: Permission[]) {
   return async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!request.user) {
+    if (!(request as any).user) {
       return reply.status(401).send({
         error: 'Acesso negado - usuário não autenticado',
         code: 'NOT_AUTHENTICATED',
       });
     }
 
-    const userPermissions = request.user.permissions || [];
+    const userPermissions = (request as any).user.permissions || [];
     const hasPermission = permissions.some((permission) =>
       userPermissions.includes(permission)
     );
 
     if (!hasPermission) {
       console.warn(
-        `[RBAC] Acesso negado para usuário ${request.user.email} (ID: ${request.user.id})`
+        `[RBAC] Acesso negado para usuário ${(request as any).user.email} (ID: ${(request as any).user.id})`
       );
       console.warn(`[RBAC] Rota: ${request.method} ${request.url}`);
       console.warn(`[RBAC] Permissões necessárias: ${permissions.join(', ')}`);
@@ -38,7 +38,7 @@ export function requirePermissions(...permissions: Permission[]) {
     }
 
     request.log.info(
-      `[RBAC] Acesso autorizado para ${request.user.email} - ${request.method} ${request.url}`
+      `[RBAC] Acesso autorizado para ${(request as any).user.email} - ${request.method} ${request.url}`
     );
   };
 }
@@ -48,19 +48,19 @@ export function requirePermissions(...permissions: Permission[]) {
  */
 export function requireRoles(...roles: Role[]) {
   return async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!request.user) {
+    if (!(request as any).user) {
       return reply.status(401).send({
         error: 'Acesso negado - usuário não autenticado',
         code: 'NOT_AUTHENTICATED',
       });
     }
 
-    const userRoles = request.user.roles || [];
+    const userRoles = (request as any).user.roles || [];
     const hasRole = roles.some((role) => userRoles.includes(role));
 
     if (!hasRole) {
       console.warn(
-        `[RBAC] Acesso negado por role para usuário ${request.user.email}`
+        `[RBAC] Acesso negado por role para usuário ${(request as any).user.email}`
       );
       console.warn(`[RBAC] Roles necessários: ${roles.join(', ')}`);
       console.warn(`[RBAC] Roles do usuário: ${userRoles.join(', ')}`);
@@ -80,7 +80,7 @@ export function requireRoles(...roles: Role[]) {
  */
 export function requireOwnershipOrAdmin(userIdParam: string = 'userId') {
   return async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!request.user) {
+    if (!(request as any).user) {
       return reply.status(401).send({
         error: 'Acesso negado - usuário não autenticado',
         code: 'NOT_AUTHENTICATED',
@@ -110,17 +110,17 @@ export function requireOwnershipOrAdmin(userIdParam: string = 'userId') {
     }
 
     // Verificar se é o próprio usuário
-    const isOwner = request.user.id === targetUserId;
+    const isOwner = (request as any).user.id === targetUserId;
 
     // Verificar se é admin/diretor
     const isAdmin =
-      request.user.roles?.includes(Role.DIRETOR) ||
-      request.user.permissions?.includes(Permission.MANAGE_USERS);
+      (request as any).user.roles?.includes(Role.DIRETOR) ||
+      (request as any).user.permissions?.includes(Permission.MANAGE_USERS);
 
     if (!isOwner && !isAdmin) {
       console.warn(`[RBAC] Tentativa de acesso a recurso de outro usuário`);
       console.warn(
-        `[RBAC] Usuário: ${request.user.email} (ID: ${request.user.id})`
+        `[RBAC] Usuário: ${(request as any).user.email} (ID: ${(request as any).user.id})`
       );
       console.warn(`[RBAC] Tentando acessar: ${targetUserId}`);
 
@@ -137,7 +137,7 @@ export function requireOwnershipOrAdmin(userIdParam: string = 'userId') {
  */
 export function requireSectorAccess() {
   return async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!request.user) {
+    if (!(request as any).user) {
       return reply.status(401).send({
         error: 'Acesso negado - usuário não autenticado',
         code: 'NOT_AUTHENTICATED',
@@ -145,7 +145,7 @@ export function requireSectorAccess() {
     }
 
     // Diretores têm acesso a todos os setores
-    if (request.user.roles?.includes(Role.DIRETOR)) {
+    if ((request as any).user.roles?.includes(Role.DIRETOR)) {
       return; // Permitir acesso
     }
 
@@ -171,17 +171,20 @@ export function requireSectorAccess() {
     }
 
     // Verificar se está tentando acessar o próprio setor
-    if (request.user.sectorId && request.user.sectorId !== targetSectorId) {
+    if (
+      (request as any).user.sectorId &&
+      (request as any).user.sectorId !== targetSectorId
+    ) {
       console.warn(`[RBAC] Tentativa de acesso a setor não autorizado`);
       console.warn(
-        `[RBAC] Usuário: ${request.user.email} (Setor: ${request.user.sectorId})`
+        `[RBAC] Usuário: ${(request as any).user.email} (Setor: ${(request as any).user.sectorId})`
       );
       console.warn(`[RBAC] Tentando acessar setor: ${targetSectorId}`);
 
       return reply.status(403).send({
         error: 'Acesso negado - você só pode acessar dados do seu setor',
         code: 'SECTOR_ACCESS_DENIED',
-        userSector: request.user.sectorId,
+        userSector: (request as any).user.sectorId,
         requestedSector: targetSectorId,
       });
     }
@@ -213,9 +216,9 @@ export function auditAdminAction(actionType: string) {
       {
         action: actionType,
         user: {
-          id: request.user?.id,
-          email: request.user?.email,
-          roles: request.user?.roles,
+          id: (request as any).user?.id,
+          email: (request as any).user?.email,
+          roles: (request as any).user?.roles,
         },
         route: `${request.method} ${request.url}`,
         ip: request.ip,
@@ -259,7 +262,7 @@ export const authenticated = async (
   request: FastifyRequest,
   reply: FastifyReply
 ) => {
-  if (!request.user) {
+  if (!(request as any).user) {
     return reply.status(401).send({
       error: 'Acesso negado - login necessário',
       code: 'LOGIN_REQUIRED',

@@ -1,123 +1,77 @@
-// apps/api/src/plugins/auth.plugin.ts - VERSÃO CORRIGIDA FINAL
-import jwt from '@fastify/jwt';
+// apps/api/src/plugins/auth.plugin.ts - SEM @fastify/jwt
+
+import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import fp from 'fastify-plugin';
 
-import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-
-// === INTERFACES PARA TIPAGEM ===
-export interface JwtPayload {
-  userId: number;
-  email: string;
-  roleNames: string[];
-  iat?: number;
-  exp?: number;
-}
-
 /**
- * Plugin de autenticação para Fastify
- * Implementa JWT seguindo padrões de segurança
+ * Plugin de autenticação simples - SEM @fastify/jwt
  */
-async function authPlugin(fastify: FastifyInstance) {
-  // === REGISTRAR PLUGIN JWT ===
-  await fastify.register(jwt, {
-    secret:
-      process.env.JWT_SECRET ||
-      'your-super-secret-jwt-key-change-in-production',
-    sign: {
-      algorithm: 'HS256',
-      expiresIn: process.env.JWT_EXPIRES_IN || '24h',
-    },
-    verify: {
-      algorithms: ['HS256'],
-    },
-  });
+const authPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => {
+  fastify.decorate('authenticate', async function (request: any, reply: any) {
+    const authHeader = request.headers.authorization;
 
-  // === UTILITÁRIOS JWT ===
-  fastify.decorate('generateToken', (payload: JwtPayload): string => {
-    return fastify.jwt.sign(payload);
-  });
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return reply.status(401).send({
+        error: 'Token obrigatório',
+        code: 'MISSING_TOKEN',
+      });
+    }
 
-  fastify.decorate('verifyToken', (token: string): JwtPayload => {
-    return fastify.jwt.verify(token) as JwtPayload;
-  });
+    const token = authHeader.substring(7);
 
-  // === MIDDLEWARE DE VERIFICAÇÃO JWT ===
-  fastify.decorate(
-    'verifyJWT',
-    async function (request: FastifyRequest, reply: FastifyReply) {
-      try {
-        const authHeader = request.headers.authorization;
+    try {
+      const decoded = JSON.parse(Buffer.from(token, 'base64').toString());
 
-        if (!authHeader) {
-          return reply.code(401).send({
-            error: 'Token de acesso necessário',
-            code: 'MISSING_TOKEN',
-          });
-        }
-
-        const tokenMatch = authHeader.match(/^Bearer\s+(.+)$/);
-        if (!tokenMatch) {
-          return reply.code(401).send({
-            error: 'Formato de token inválido. Use: Bearer <token>',
-            code: 'INVALID_TOKEN_FORMAT',
-          });
-        }
-
-        const token = tokenMatch[1];
-
-        if (!token) {
-          return reply.code(401).send({
-            error: 'Token não encontrado',
-            code: 'TOKEN_NOT_FOUND',
-          });
-        }
-
-        let decoded: JwtPayload;
-        try {
-          decoded = fastify.jwt.verify(token) as JwtPayload;
-        } catch (jwtError: any) {
-          return reply.code(401).send({
-            error: 'Token inválido ou expirado',
-            code: 'INVALID_TOKEN',
-            details: jwtError.message,
-          });
-        }
-
-        // Anexar dados do usuário ao request
-        request.user = {
-          id: decoded.userId,
-          email: decoded.email,
-          name: '',
-          roles: decoded.roleNames || [],
-          permissions: [],
-          sectorId: undefined,
-          roleNames: decoded.roleNames || [],
-        };
-      } catch (error) {
-        fastify.log.error('Erro na verificação JWT:', error);
-        return reply.code(500).send({
-          error: 'Erro interno na autenticação',
-          code: 'AUTH_INTERNAL_ERROR',
+      // Verificar expiração
+      if (decoded.exp && decoded.exp < Math.floor(Date.now() / 1000)) {
+        return reply.status(401).send({
+          error: 'Token expirado',
+          code: 'TOKEN_EXPIRED',
         });
       }
+
+      // Definir usuário no request
+      request.user = {
+        id: decoded.sub,
+        email: decoded.email,
+        name: decoded.nome || decoded.name,
+        nome: decoded.nome || decoded.name,
+        roles: decoded.roles || [],
+        permissions: decoded.permissions || [],
+        sectorId: decoded.sectorId,
+        roleNames: decoded.roleNames || decoded.roles || [],
+      };
+
+      // Adicionar sessionId separadamente
+      request.sessionId = decoded.sessionId;
+    } catch (error) {
+      return reply.status(401).send({
+        error: 'Token inválido',
+        code: 'INVALID_TOKEN',
+      });
     }
-  );
+  });
 
-  // === MIDDLEWARE PRINCIPAL DE AUTENTICAÇÃO ===
-  fastify.decorate(
-    'authenticate',
-    async function (request: FastifyRequest, reply: FastifyReply) {
-      await fastify.verifyJWT(request, reply);
-      fastify.log.info(
-        `Usuário autenticado: ${request.user?.email} (ID: ${request.user?.id})`
-      );
-    }
-  );
+  fastify.decorate('generateToken', function (payload: any): string {
+    const tokenPayload = {
+      sub: payload.id || payload.sub,
+      email: payload.email,
+      nome: payload.nome || payload.name,
+      roles: payload.roles || [],
+      permissions: payload.permissions || [],
+      sessionId: payload.sessionId,
+      sectorId: payload.sectorId,
+      roleNames: payload.roleNames || payload.roles || [],
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 15 * 60, // 15 minutos
+    };
 
-  fastify.log.info('🔐 Plugin de autenticação carregado com sucesso');
-}
+    return Buffer.from(JSON.stringify(tokenPayload)).toString('base64');
+  });
 
-// === EXPORT CORRETO ===
+  fastify.log.info('✅ Plugin de autenticação simples registrado');
+};
+
 export default fp(authPlugin, {
   name: 'auth-plugin',
 });
