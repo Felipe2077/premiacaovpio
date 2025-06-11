@@ -1,138 +1,141 @@
-// apps/api/src/entity/user.entity.ts
+// apps/api/src/entity/user.entity.ts - VERSÃO COMPLETA PARA AUTENTICAÇÃO
+
+import { Role } from '@sistema-premiacao/shared-types';
+import * as bcrypt from 'bcrypt';
 import {
+  BeforeInsert,
+  BeforeUpdate,
   Column,
   CreateDateColumn,
   Entity,
   Index,
-  JoinTable,
-  ManyToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { RoleEntity } from './role.entity';
 
-@Entity({ name: 'users' })
-@Index(['email'])
-@Index(['lastLoginAt'])
-@Index(['failedLoginAttempts'])
+@Entity('users')
+@Index(['email'], { unique: true })
 export class UserEntity {
   @PrimaryGeneratedColumn()
-  id!: number;
+  id: number;
 
-  @Column({ type: 'varchar', length: 255 })
-  nome!: string;
+  @Column({ length: 100 })
+  nome: string;
 
-  @Column({ type: 'varchar', length: 255, unique: true })
-  email!: string;
+  @Column({ length: 150, unique: true })
+  email: string;
 
-  // === CAMPOS DE AUTENTICAÇÃO ===
-  @Column({ type: 'varchar', length: 255, select: false })
-  passwordHash!: string;
+  @Column({ length: 255, select: false }) // select: false para segurança
+  senha: string;
 
-  @Column({ type: 'timestamp with time zone', nullable: true })
-  lastLoginAt?: Date;
+  @Column({
+    type: 'enum',
+    enum: Role,
+    default: Role.GERENTE,
+  })
+  role: Role;
 
-  @Column({ type: 'int', default: 0 })
-  failedLoginAttempts!: number;
-
-  @Column({ type: 'timestamp with time zone', nullable: true })
-  lockedUntil?: Date;
-
-  // === RECUPERAÇÃO DE SENHA ===
-  @Column({ type: 'varchar', length: 255, nullable: true, select: false })
-  resetPasswordToken?: string;
-
-  @Column({ type: 'timestamp with time zone', nullable: true })
-  resetPasswordExpires?: Date;
-
-  // === METADATA DE SESSÃO ===
-  @Column({ type: 'jsonb', nullable: true })
-  sessionMetadata?: {
-    ipAddress?: string;
-    userAgent?: string;
-    lastActiveAt?: Date;
-    location?: string;
-  }[];
-
-  // === CAMPOS EXISTENTES ===
   @Column({ type: 'boolean', default: true })
-  ativo!: boolean;
+  ativo: boolean;
 
-  // === SETOR (para Gerentes) ===
   @Column({ type: 'int', nullable: true })
   sectorId?: number;
 
-  // === RELAÇÕES ===
-  @ManyToMany(() => RoleEntity)
-  @JoinTable({
-    name: 'user_roles',
-    joinColumn: { name: 'user_id', referencedColumnName: 'id' },
-    inverseJoinColumn: { name: 'role_id', referencedColumnName: 'id' },
-  })
-  roles!: RoleEntity[];
+  // Campos de auditoria
+  @CreateDateColumn()
+  createdAt: Date;
 
-  // === AUDITORIA ===
-  @CreateDateColumn({ type: 'timestamp with time zone' })
-  createdAt!: Date;
+  @UpdateDateColumn()
+  updatedAt: Date;
 
-  @UpdateDateColumn({ type: 'timestamp with time zone' })
-  updatedAt!: Date;
+  @Column({ type: 'timestamp', nullable: true })
+  lastLoginAt?: Date;
 
-  // === MÉTODOS HELPER ===
+  @Column({ type: 'int', default: 0 })
+  loginAttempts: number;
 
-  /**
-   * Verifica se a conta está bloqueada
-   */
-  isLocked(): boolean {
-    if (!this.lockedUntil) return false;
-    return new Date() < this.lockedUntil;
-  }
+  @Column({ type: 'timestamp', nullable: true })
+  lockedUntil?: Date;
 
-  /**
-   * Verifica se precisa resetar tentativas de login
-   */
-  shouldResetLoginAttempts(): boolean {
-    if (!this.lastLoginAt) return false;
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    return this.lastLoginAt < oneHourAgo;
-  }
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  resetPasswordToken?: string;
 
-  /**
-   * Adiciona metadata de sessão (mantém apenas últimas 5)
-   */
-  addSessionMetadata(
-    ipAddress: string,
-    userAgent: string,
-    location?: string
-  ): void {
-    if (!this.sessionMetadata) {
-      this.sessionMetadata = [];
+  @Column({ type: 'timestamp', nullable: true })
+  resetPasswordExpires?: Date;
+
+  // Métodos para hash da senha
+  @BeforeInsert()
+  @BeforeUpdate()
+  async hashPassword() {
+    if (this.senha && !this.senha.startsWith('$2b$')) {
+      // Só fazer hash se não estiver já hasheada
+      this.senha = await bcrypt.hash(this.senha, 12);
     }
-
-    this.sessionMetadata.unshift({
-      ipAddress,
-      userAgent,
-      location,
-      lastActiveAt: new Date(),
-    });
-
-    // Manter apenas últimas 5 sessões
-    this.sessionMetadata = this.sessionMetadata.slice(0, 5);
   }
 
-  /**
-   * Retorna informações básicas do usuário (sem dados sensíveis)
-   */
-  getPublicInfo() {
+  // Método para validar senha
+  async validatePassword(plainPassword: string): Promise<boolean> {
+    return bcrypt.compare(plainPassword, this.senha);
+  }
+
+  // Método para verificar se conta está bloqueada
+  isLocked(): boolean {
+    return !!(this.lockedUntil && this.lockedUntil > new Date());
+  }
+
+  // Método para incrementar tentativas de login
+  async incrementLoginAttempts(): Promise<void> {
+    this.loginAttempts += 1;
+
+    // Bloquear após 5 tentativas por 15 minutos
+    if (this.loginAttempts >= 5) {
+      this.lockedUntil = new Date(Date.now() + 15 * 60 * 1000); // 15 minutos
+    }
+  }
+
+  // Método para resetar tentativas
+  async resetLoginAttempts(): Promise<void> {
+    this.loginAttempts = 0;
+    this.lockedUntil = undefined; // undefined em vez de null
+    this.lastLoginAt = new Date();
+  }
+
+  // Método para obter permissões baseadas no role
+  getPermissions(): string[] {
+    const permissions: Record<Role, string[]> = {
+      [Role.DIRETOR]: [
+        'MANAGE_USERS',
+        'MANAGE_PARAMETERS',
+        'APPROVE_EXPURGOS',
+        'REJECT_EXPURGOS',
+        'VIEW_REPORTS',
+        'VIEW_RANKINGS',
+        'CLOSE_PERIODS',
+        'START_PERIODS',
+        'VIEW_ALL_AUDIT_LOGS',
+      ],
+      [Role.GERENTE]: [
+        'REQUEST_EXPURGOS',
+        'VIEW_REPORTS',
+        'VIEW_RANKINGS',
+        'VIEW_PARAMETERS',
+      ],
+      [Role.VISUALIZADOR]: [
+        'VIEW_REPORTS',
+        'VIEW_RANKINGS',
+        'VIEW_PUBLIC_REPORTS',
+      ],
+    };
+
+    return permissions[this.role] || [];
+  }
+
+  // Método para serialização segura (sem senha)
+  toSafeObject() {
+    const { senha, resetPasswordToken, ...safeUser } = this;
     return {
-      id: this.id,
-      nome: this.nome,
-      email: this.email,
-      ativo: this.ativo,
-      lastLoginAt: this.lastLoginAt,
-      sectorId: this.sectorId,
-      roles: this.roles?.map((role) => role.nome) || [],
-      createdAt: this.createdAt,
+      ...safeUser,
+      permissions: this.getPermissions(),
     };
   }
 }
