@@ -12,6 +12,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { Permission } from './role.entity';
 
 @Entity('users')
 @Index(['email'], { unique: true })
@@ -117,31 +118,49 @@ export class UserEntity {
 
   // Método para obter permissões baseadas no role
   getPermissions(): string[] {
-    const permissions: Record<Role, string[]> = {
+    const permissions: Record<Role, Permission[]> = {
       [Role.DIRETOR]: [
-        'MANAGE_USERS',
-        'MANAGE_PARAMETERS',
-        'APPROVE_EXPURGOS',
-        'REJECT_EXPURGOS',
-        'VIEW_REPORTS',
-        'VIEW_RANKINGS',
-        'CLOSE_PERIODS',
-        'START_PERIODS',
-        'VIEW_ALL_AUDIT_LOGS',
+        // Todas as permissões para diretor
+        Permission.MANAGE_USERS,
+        Permission.MANAGE_ROLES,
+        Permission.MANAGE_PARAMETERS,
+        Permission.CLOSE_PERIODS,
+        Permission.START_PERIODS,
+        Permission.APPROVE_EXPURGOS,
+        Permission.REJECT_EXPURGOS,
+        Permission.DELETE_EXPURGOS,
+        Permission.MANAGE_SYSTEM_SETTINGS,
+        Permission.VIEW_ALL_AUDIT_LOGS,
+        Permission.RESOLVE_TIES,
+        Permission.REQUEST_EXPURGOS,
+        Permission.EDIT_OWN_EXPURGOS,
+        Permission.VIEW_REPORTS,
+        Permission.VIEW_DETAILED_PERFORMANCE,
+        Permission.VIEW_SECTOR_LOGS,
+        Permission.VIEW_PARAMETERS,
+        Permission.VIEW_RANKINGS,
+        Permission.VIEW_PUBLIC_REPORTS,
+        Permission.VIEW_OWN_PROFILE,
       ],
       [Role.GERENTE]: [
-        'REQUEST_EXPURGOS',
-        'VIEW_REPORTS',
-        'VIEW_RANKINGS',
-        'VIEW_PARAMETERS',
+        Permission.REQUEST_EXPURGOS,
+        Permission.EDIT_OWN_EXPURGOS,
+        Permission.VIEW_REPORTS,
+        Permission.VIEW_DETAILED_PERFORMANCE,
+        Permission.VIEW_SECTOR_LOGS,
+        Permission.VIEW_PARAMETERS,
+        Permission.VIEW_RANKINGS,
+        Permission.VIEW_PUBLIC_REPORTS,
+        Permission.VIEW_OWN_PROFILE,
       ],
       [Role.VISUALIZADOR]: [
-        'VIEW_REPORTS',
-        'VIEW_RANKINGS',
-        'VIEW_PUBLIC_REPORTS',
+        Permission.VIEW_RANKINGS,
+        Permission.VIEW_PUBLIC_REPORTS,
+        Permission.VIEW_OWN_PROFILE,
       ],
     };
 
+    // Retorna os valores do enum (snake_case)
     return permissions[this.role] || [];
   }
 

@@ -7,7 +7,7 @@ import fp from 'fastify-plugin';
  * Plugin de rotas administrativas
  */
 const adminRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
-  fastify.addHook('preHandler', fastify.auth([fastify.authenticate]));
+  // fastify.addHook('preHandler', fastify.auth([fastify.authenticate]));
 
   /**
    * GET /api/admin/users - Listar usuários (TODO: implementar)

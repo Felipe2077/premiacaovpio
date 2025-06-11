@@ -1,8 +1,9 @@
-// apps/api/src/services/auth.service.ts - VERSÃO CORRIGIDA
+// apps/api/src/services/auth.service.ts - VERSÃO SIMPLES SEM CONFLITOS DE TIPO
 
 import { AppDataSource } from '@/database/data-source';
 import { UserEntity } from '@/entity/user.entity';
 import { Role } from '@sistema-premiacao/shared-types';
+import * as jwt from 'jsonwebtoken';
 import { Repository } from 'typeorm';
 
 interface LoginDto {
@@ -42,8 +43,12 @@ interface LoginResult {
 export class AuthService {
   private readonly MAX_FAILED_ATTEMPTS = 5;
   private readonly LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutos
-  private readonly ACCESS_TOKEN_EXPIRY = 15 * 60; // 15 minutos
-  private readonly REFRESH_TOKEN_EXPIRY = 7 * 24 * 60 * 60; // 7 dias
+  private readonly ACCESS_TOKEN_EXPIRY = '15m'; // 15 minutos
+  private readonly REFRESH_TOKEN_EXPIRY = '7d'; // 7 dias
+
+  // JWT Secret
+  private readonly JWT_SECRET =
+    process.env.JWT_SECRET || 'uma-chave-super-secreta-para-dev';
 
   private getUserRepository(): Repository<UserEntity> {
     if (!AppDataSource.isInitialized) {
@@ -131,7 +136,7 @@ export class AuthService {
         role: user.role,
         permissions: user.getPermissions(),
       },
-      expiresIn: this.ACCESS_TOKEN_EXPIRY,
+      expiresIn: 900, // 15 minutos em segundos
     };
   }
 
@@ -148,9 +153,13 @@ export class AuthService {
    */
   async getUserById(userId: number): Promise<UserEntity | null> {
     const userRepository = this.getUserRepository();
-    return await userRepository.findOne({
-      where: { id: userId, ativo: true },
-    });
+
+    // CORREÇÃO: Usar query builder para evitar problemas de relação
+    return await userRepository
+      .createQueryBuilder('user')
+      .where('user.id = :id', { id: userId })
+      .andWhere('user.ativo = :ativo', { ativo: true })
+      .getOne();
   }
 
   /**
@@ -259,14 +268,8 @@ export class AuthService {
     sessionId: string
   ): Promise<{ accessToken: string; expiresIn: number }> {
     try {
-      // Decodificar refresh token (implementação básica)
-      const decoded = JSON.parse(
-        Buffer.from(refreshToken, 'base64').toString()
-      );
-
-      if (decoded.exp < Math.floor(Date.now() / 1000)) {
-        throw new Error('Refresh token expirado');
-      }
+      // Verificar refresh token
+      const decoded = jwt.verify(refreshToken, this.JWT_SECRET) as any;
 
       if (decoded.sessionId !== sessionId) {
         throw new Error('Session ID inválido');
@@ -283,7 +286,7 @@ export class AuthService {
 
       return {
         accessToken: newAccessToken,
-        expiresIn: this.ACCESS_TOKEN_EXPIRY,
+        expiresIn: 900, // 15 minutos
       };
     } catch (error) {
       throw new Error('Erro ao renovar token');
@@ -324,6 +327,7 @@ export class AuthService {
     return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
+  // ✅ USANDO JSONWEBTOKEN DIRETAMENTE (sem conflitos de tipo)
   private generateAccessToken(user: UserEntity, sessionId: string): string {
     const payload = {
       sub: user.id,
@@ -334,23 +338,24 @@ export class AuthService {
       sessionId,
       sectorId: user.sectorId,
       roleNames: [user.role],
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + this.ACCESS_TOKEN_EXPIRY,
     };
 
-    return Buffer.from(JSON.stringify(payload)).toString('base64');
+    return jwt.sign(payload, this.JWT_SECRET, {
+      expiresIn: this.ACCESS_TOKEN_EXPIRY,
+    });
   }
 
+  // ✅ USANDO JSONWEBTOKEN DIRETAMENTE (sem conflitos de tipo)
   private generateRefreshToken(user: UserEntity, sessionId: string): string {
     const payload = {
       sub: user.id,
       sessionId,
       type: 'refresh',
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + this.REFRESH_TOKEN_EXPIRY,
     };
 
-    return Buffer.from(JSON.stringify(payload)).toString('base64');
+    return jwt.sign(payload, this.JWT_SECRET, {
+      expiresIn: this.REFRESH_TOKEN_EXPIRY,
+    });
   }
 
   private generateResetToken(): string {
