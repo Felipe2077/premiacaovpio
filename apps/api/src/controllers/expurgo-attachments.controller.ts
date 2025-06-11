@@ -1,13 +1,31 @@
 // apps/api/src/controllers/expurgo-attachments.controller.ts
+
 import { AppDataSource } from '@/database/data-source';
 import { ExpurgoService } from '@/modules/expurgos/expurgo.service';
 import { AuthService } from '@/services/auth.service';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import * as fs from 'fs';
 
+// Interfaces para estender os tipos do Fastify
+interface AuthenticatedRequest extends FastifyRequest {
+  user: {
+    id: number;
+    email: string;
+    nome: string;
+  };
+}
+
 interface Services {
   expurgo: ExpurgoService;
   auth: AuthService;
+}
+
+// Interface para dados do arquivo (compatível com @fastify/multipart)
+interface FileData {
+  originalname: string;
+  buffer: Buffer;
+  mimetype: string;
+  size: number;
 }
 
 /**
@@ -32,6 +50,7 @@ export class ExpurgoAttachmentsController {
         });
       }
 
+      // Verificar se é multipart usando o método correto
       if (!request.isMultipart()) {
         return reply.status(400).send({
           error:
@@ -41,6 +60,7 @@ export class ExpurgoAttachmentsController {
 
       await AppDataSource.initialize();
 
+      // Usar o método file() do plugin @fastify/multipart
       const data = await request.file();
 
       if (!data) {
@@ -49,25 +69,34 @@ export class ExpurgoAttachmentsController {
         });
       }
 
+      // Converter o arquivo para buffer
       const buffer = await data.toBuffer();
 
-      const fileData = {
+      // Preparar dados do arquivo no formato esperado pelo service
+      const fileData: FileData = {
         originalname: data.filename,
         buffer: buffer,
         mimetype: data.mimetype,
         size: buffer.length,
       };
 
+      // Extrair descrição dos fields se presente
       const fields = data.fields;
-      const description =
-        fields && (fields as any).description
-          ? (fields as any).description.value
-          : undefined;
+      let description: string | undefined;
+
+      if (fields && typeof fields === 'object') {
+        const descField = (fields as any).description;
+        if (descField && typeof descField === 'object' && descField.value) {
+          description = descField.value;
+        }
+      }
 
       // Usar usuário autenticado real
+      const authRequest = request as AuthenticatedRequest;
       const uploadingUser = await this.services.auth.getUserById(
-        request.user!.id
+        authRequest.user.id
       );
+
       if (!uploadingUser) {
         return reply.status(401).send({ error: 'Usuário não encontrado' });
       }
@@ -278,9 +307,11 @@ export class ExpurgoAttachmentsController {
       }
 
       // Usar usuário autenticado real
+      const authRequest = request as AuthenticatedRequest;
       const deletingUser = await this.services.auth.getUserById(
-        request.user!.id
+        authRequest.user.id
       );
+
       if (!deletingUser) {
         return reply.status(401).send({ error: 'Usuário não encontrado' });
       }

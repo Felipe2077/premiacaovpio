@@ -8,7 +8,10 @@
     "strictPropertyInitialization": false,
     "baseUrl": ".",
 
-    // 🎯 CORREÇÃO MÍNIMA: Apenas mudar o path do shared-types
+    // Adicionar types para @fastify/multipart
+    "types": ["node", "@fastify/multipart"],
+    "typeRoots": ["node_modules/@types", "src/types"],
+
     "paths": {
       "@/*": ["src/*"],
       "@sistema-premiacao/shared-types": ["../../packages/shared-types/dist"],

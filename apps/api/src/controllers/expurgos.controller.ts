@@ -5,6 +5,9 @@ import { ExpurgoService } from '@/modules/expurgos/expurgo.service';
 import { AuthService } from '@/services/auth.service';
 import {
   ApproveExpurgoDto,
+  CreateExpurgoDto,
+  ExpurgoStatus,
+  FindExpurgosDto,
   RejectExpurgoDto,
 } from '@sistema-premiacao/shared-types';
 import { FastifyReply, FastifyRequest } from 'fastify';
@@ -12,21 +15,6 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 interface Services {
   expurgo: ExpurgoService;
   auth: AuthService;
-}
-
-interface ExpurgoFilters {
-  competitionPeriodId?: number;
-  sectorId?: number;
-  criterionId?: number;
-  status?: string;
-  dataEventoInicio?: string;
-  dataEventoFim?: string;
-  periodMesAno?: string;
-  registradoPorUserId?: number;
-  aprovadoPorUserId?: number;
-  comAnexos?: boolean;
-  valorMinimoSolicitado?: number;
-  valorMaximoSolicitado?: number;
 }
 
 /**
@@ -47,7 +35,8 @@ export class ExpurgosController {
       const queryParams = request.query as any;
       request.log.info('[API] Query params recebidos:', queryParams);
 
-      const filters: ExpurgoFilters = {};
+      // Usar o tipo correto do shared-types
+      const filters: FindExpurgosDto = {};
 
       // Converter IDs numéricos
       if (queryParams.competitionPeriodId) {
@@ -77,9 +66,10 @@ export class ExpurgosController {
       }
 
       // Processar outros filtros
-      this.processNumericFilters(queryParams, filters, reply);
-      this.processStatusFilter(queryParams, filters, reply);
-      this.processDateFilters(queryParams, filters, reply);
+      const validationResult = this.processFilters(queryParams, filters);
+      if (validationResult.error) {
+        return reply.status(400).send({ error: validationResult.error });
+      }
 
       request.log.info('[API] Filtros processados:', filters);
 
@@ -159,15 +149,15 @@ export class ExpurgosController {
         return reply.status(400).send({ error: validationError });
       }
 
-      // Criar DTO limpo
-      const createExpurgoDto = {
+      // Criar DTO limpo usando o tipo correto
+      const createExpurgoDto: CreateExpurgoDto = {
         competitionPeriodId: data.competitionPeriodId,
         sectorId: data.sectorId,
         criterionId: data.criterionId,
         dataEvento: data.dataEvento,
         descricaoEvento: data.descricaoEvento.trim(),
         justificativaSolicitacao: data.justificativaSolicitacao.trim(),
-        valorSolicitado: data.valorSolicitado,
+        valorSolicitado: data.valorSolicitado, // Usar o nome correto do DTO
       };
 
       // Usar usuário autenticado real
@@ -386,13 +376,13 @@ export class ExpurgosController {
   }
 
   /**
-   * Métodos auxiliares para validação
+   * Método auxiliar unificado para processar filtros
    */
-  private processNumericFilters(
+  private processFilters(
     queryParams: any,
-    filters: ExpurgoFilters,
-    reply: FastifyReply
-  ): void {
+    filters: FindExpurgosDto
+  ): { error?: string } {
+    // Processar filtros numéricos
     const numericFields = [
       'sectorId',
       'criterionId',
@@ -406,62 +396,49 @@ export class ExpurgosController {
       if (queryParams[field]) {
         const value = parseFloat(queryParams[field]);
         if (isNaN(value)) {
-          reply.status(400).send({
-            error: `${field} deve ser um número válido`,
-          });
-          return;
+          return { error: `${field} deve ser um número válido` };
         }
         (filters as any)[field] = value;
       }
     }
 
+    // Processar filtro booleano
     if (queryParams.comAnexos !== undefined) {
       filters.comAnexos = queryParams.comAnexos === 'true';
     }
-  }
 
-  private processStatusFilter(
-    queryParams: any,
-    filters: ExpurgoFilters,
-    reply: FastifyReply
-  ): void {
+    // Processar status usando o enum correto
     if (queryParams.status) {
-      const validStatuses = [
-        'PENDENTE',
-        'APROVADO',
-        'APROVADO_PARCIAL',
-        'REJEITADO',
-      ];
-      if (!validStatuses.includes(queryParams.status.toUpperCase())) {
-        reply.status(400).send({
+      const statusUpper = queryParams.status.toUpperCase();
+      const validStatuses = Object.values(ExpurgoStatus);
+
+      if (!validStatuses.includes(statusUpper as ExpurgoStatus)) {
+        return {
           error: `Status deve ser um de: ${validStatuses.join(', ')}`,
-        });
-        return;
+        };
       }
-      filters.status = queryParams.status.toUpperCase();
+      filters.status = statusUpper as ExpurgoStatus;
     }
-  }
 
-  private processDateFilters(
-    queryParams: any,
-    filters: ExpurgoFilters,
-    reply: FastifyReply
-  ): void {
+    // Processar filtros de data
     const dateFields = ['dataEventoInicio', 'dataEventoFim'];
-
     for (const field of dateFields) {
       if (queryParams[field]) {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(queryParams[field])) {
-          reply.status(400).send({
+          return {
             error: `${field} deve estar no formato YYYY-MM-DD`,
-          });
-          return;
+          };
         }
         (filters as any)[field] = queryParams[field];
       }
     }
+
+    return {}; // Sucesso, sem erro
   }
 
+  /**
+   * Validação de requisição de expurgo
+   */
   private validateExpurgoRequest(data: any): string | null {
     const requiredFields = [
       'competitionPeriodId',
@@ -529,6 +506,9 @@ export class ExpurgosController {
     return null;
   }
 
+  /**
+   * Validação de DTO de aprovação
+   */
   private validateApprovalDto(dto: any): string | null {
     if (!dto.valorAprovado || typeof dto.valorAprovado !== 'number') {
       return 'valorAprovado é obrigatório e deve ser um número';
