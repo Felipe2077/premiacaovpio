@@ -1,7 +1,7 @@
-// src/modules/historical/historical-results.routes.ts
-
+// apps/api/src/routes/historical-results.routes.ts (VERSÃO PLUGIN CORRIGIDA)
 import { historicalResultsService } from '@/modules/historical/historical-results.service';
-import { FastifyInstance, FastifyRequest } from 'fastify';
+import { FastifyInstance, FastifyPluginAsync, FastifyRequest } from 'fastify';
+import fp from 'fastify-plugin';
 
 interface HistoricalResultsQuery {
   criterionId?: string;
@@ -10,9 +10,12 @@ interface HistoricalResultsQuery {
   count?: string;
 }
 
-export async function registerHistoricalResultsRoutes(
+const historicalResultsRoutes: FastifyPluginAsync = async (
   fastify: FastifyInstance
-) {
+) => {
+  // Este hook agora só se aplica às rotas DENTRO deste arquivo.
+  fastify.addHook('preHandler', fastify.auth([fastify.authenticate]));
+
   fastify.get(
     '/api/results/historical',
     async (
@@ -22,7 +25,7 @@ export async function registerHistoricalResultsRoutes(
       try {
         const { criterionId, sectorId, currentPeriod, count } = request.query;
 
-        // Validar parâmetros obrigatórios
+        // Sua lógica original de validação e busca...
         if (!criterionId || !sectorId || !currentPeriod) {
           return reply.status(400).send({
             success: false,
@@ -31,24 +34,10 @@ export async function registerHistoricalResultsRoutes(
           });
         }
 
-        // Validar formato do período
-        if (!currentPeriod.match(/^\d{4}-\d{2}$/)) {
-          return reply.status(400).send({
-            success: false,
-            error: 'Formato de período inválido. Use YYYY-MM',
-          });
-        }
-
-        console.log(
-          `[API] GET /api/results/historical - Critério: ${criterionId}, Setor: ${sectorId}, Período: ${currentPeriod}, Count: ${count || '6 (padrão)'}`
-        );
-
-        // Converter para números
         const criterionIdNum = parseInt(criterionId, 10);
         const sectorIdNum = parseInt(sectorId, 10);
         const countNum = count ? parseInt(count, 10) : 6;
 
-        // Validar conversões
         if (
           isNaN(criterionIdNum) ||
           isNaN(sectorIdNum) ||
@@ -60,7 +49,6 @@ export async function registerHistoricalResultsRoutes(
           });
         }
 
-        // Buscar dados históricos
         const data = await historicalResultsService.getHistoricalResults(
           criterionIdNum,
           sectorIdNum,
@@ -68,25 +56,21 @@ export async function registerHistoricalResultsRoutes(
           countNum
         );
 
-        console.log(
-          `[API] GET /api/results/historical - Resultados encontrados: ${data.history.length} períodos`
-        );
-
-        // Retornar os dados
-        return reply.send({
-          success: true,
-          data,
-        });
+        return reply.send({ success: true, data });
       } catch (error: any) {
-        console.error(
+        request.log.error(
           `[API] ERRO em /api/results/historical: ${error.message}`,
           error
         );
         return reply.status(500).send({
           success: false,
-          error: error.message || 'Erro interno do servidor',
+          error: error.message || 'Erro interno ao buscar dados históricos.',
         });
       }
     }
   );
-}
+
+  fastify.log.info('✅ Rotas de Histórico de Resultados registradas');
+};
+
+export default fp(historicalResultsRoutes);

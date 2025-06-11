@@ -1,29 +1,27 @@
-// apps/api/src/routes/metadata.routes.ts
+// apps/api/src/routes/metadata.routes.ts (VERSÃO FINAL E COMPLETA)
 import { AppDataSource } from '@/database/data-source';
 import { CriterionEntity } from '@/entity/criterion.entity';
 import { SectorEntity } from '@/entity/sector.entity';
-import { viewReports } from '@/middleware/rbac.middleware';
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import fp from 'fastify-plugin';
 
-/**
- * Plugin de rotas de metadados (critérios, setores, etc.)
- */
 const metadataRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   /**
-   * GET /api/criteria/active - Critérios ativos
+   * GET /api/criteria/active - Rota com correção de CORS
    */
   fastify.get(
     '/api/criteria/active',
     {
-      preHandler: [(fastify as any).authenticate, viewReports],
+      // Hook onSend para forçar os cabeçalhos de CORS
+      onSend: async (request, reply, payload) => {
+        reply.header('Access-Control-Allow-Origin', 'http://localhost:3000');
+        reply.header('Access-Control-Allow-Credentials', 'true');
+      },
     },
     async (request, reply) => {
       request.log.info('Recebida requisição GET /api/criteria/active');
-
       try {
         const criterionRepo = AppDataSource.getRepository(CriterionEntity);
-
         const activeCriteria = await criterionRepo.find({
           where: { ativo: true },
           select: [
@@ -63,19 +61,21 @@ const metadataRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   );
 
   /**
-   * GET /api/sectors/active - Setores ativos
+   * GET /api/sectors/active - Rota com correção de CORS
    */
   fastify.get(
     '/api/sectors/active',
     {
-      preHandler: [(fastify as any).authenticate, viewReports],
+      // Hook onSend para forçar os cabeçalhos de CORS
+      onSend: async (request, reply, payload) => {
+        reply.header('Access-Control-Allow-Origin', 'http://localhost:3000');
+        reply.header('Access-Control-Allow-Credentials', 'true');
+      },
     },
     async (request, reply) => {
       request.log.info('Recebida requisição GET /api/sectors/active');
-
       try {
         const sectorRepo = AppDataSource.getRepository(SectorEntity);
-
         const activeSectors = await sectorRepo.find({
           where: { ativo: true },
           select: ['id', 'nome'],

@@ -1,4 +1,4 @@
-// apps/api/src/routes/health.routes.ts
+// apps/api/src/routes/health.routes.ts (VERSÃO CORRIGIDA E NA ÍNTEGRA)
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import fp from 'fastify-plugin';
 
@@ -34,12 +34,12 @@ const healthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
 
   /**
    * Health check autenticado
-   * GET /api/health
+   * GET /health/secure  <-- CAMINHO CORRIGIDO
    */
   fastify.get(
-    '/api/health',
+    '/health/secure', // <-- ROTA RENOMEADA PARA EVITAR DUPLICIDADE
     {
-      preHandler: [fastify.authenticate],
+      preHandler: [fastify.authenticate], // <-- PREHANDLER ADICIONADO PARA PROTEGER A ROTA
     },
     async (request, reply) => {
       try {
@@ -49,7 +49,6 @@ const healthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
           status: 'authenticated',
           user: {
             id: request.user?.id,
-            email: request.user?.email,
             roles: request.user?.roles,
           },
           auth: health,

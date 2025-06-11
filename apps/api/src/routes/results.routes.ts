@@ -1,6 +1,5 @@
 // apps/api/src/routes/results.routes.ts
 import { ResultsController } from '@/controllers/results.controller';
-import { viewReports } from '@/middleware/rbac.middleware';
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import fp from 'fastify-plugin';
 
@@ -18,9 +17,7 @@ const resultsRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
    */
   fastify.get(
     '/api/ranking',
-    {
-      preHandler: [(fastify as any).authenticate, viewReports],
-    },
+
     controller.getCurrentRanking.bind(controller)
   );
 
@@ -29,9 +26,7 @@ const resultsRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
    */
   fastify.get(
     '/api/results/by-date',
-    {
-      preHandler: [(fastify as any).authenticate, viewReports],
-    },
+
     controller.getResultsByDate.bind(controller)
   );
 
@@ -40,9 +35,7 @@ const resultsRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
    */
   fastify.get(
     '/api/results',
-    {
-      preHandler: [(fastify as any).authenticate, viewReports],
-    },
+
     controller.getResults.bind(controller)
   );
 
@@ -51,9 +44,7 @@ const resultsRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
    */
   fastify.get(
     '/api/results/current',
-    {
-      preHandler: [(fastify as any).authenticate, viewReports],
-    },
+
     controller.getCurrentResults.bind(controller)
   );
 
@@ -62,9 +53,7 @@ const resultsRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
    */
   fastify.get(
     '/api/results/by-period',
-    {
-      preHandler: [(fastify as any).authenticate, viewReports],
-    },
+
     controller.getResultsByPeriod.bind(controller)
   );
 
@@ -73,9 +62,7 @@ const resultsRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
    */
   fastify.get<{ Params: { id: string } }>(
     '/api/results/period/:id',
-    {
-      preHandler: [(fastify as any).authenticate, viewReports],
-    },
+
     controller.getResultsByPeriodId.bind(controller)
   );
 

@@ -6,15 +6,6 @@ import { AuthService } from '@/services/auth.service';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import * as fs from 'fs';
 
-// Interfaces para estender os tipos do Fastify
-interface AuthenticatedRequest extends FastifyRequest {
-  user: {
-    id: number;
-    email: string;
-    nome: string;
-  };
-}
-
 interface Services {
   expurgo: ExpurgoService;
   auth: AuthService;
@@ -92,9 +83,9 @@ export class ExpurgoAttachmentsController {
       }
 
       // Usar usuário autenticado real
-      const authRequest = request as AuthenticatedRequest;
+
       const uploadingUser = await this.services.auth.getUserById(
-        authRequest.user.id
+        request.user.id // Use 'request' diretamente
       );
 
       if (!uploadingUser) {
@@ -307,9 +298,8 @@ export class ExpurgoAttachmentsController {
       }
 
       // Usar usuário autenticado real
-      const authRequest = request as AuthenticatedRequest;
       const deletingUser = await this.services.auth.getUserById(
-        authRequest.user.id
+        request.user.id // Use 'request' diretamente
       );
 
       if (!deletingUser) {

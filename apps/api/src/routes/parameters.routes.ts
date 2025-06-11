@@ -14,6 +14,8 @@ import fp from 'fastify-plugin';
 const parametersRoutes: FastifyPluginAsync = async (
   fastify: FastifyInstance
 ) => {
+  fastify.addHook('preHandler', fastify.auth([fastify.authenticate]));
+
   // Instanciar controller com serviços injetados
   const controller = new ParametersController({
     parameter: fastify.services.parameter,

@@ -1,77 +1,40 @@
-// apps/api/src/plugins/auth.plugin.ts - SEM @fastify/jwt
-
-import { FastifyInstance, FastifyPluginAsync } from 'fastify';
+// apps/api/src/plugins/auth.plugin.ts (VERSÃO FINAL COM TYPE CHECK)
+import fastifyAuth from '@fastify/auth';
+import fastifyJwt from '@fastify/jwt';
+import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
 
-/**
- * Plugin de autenticação simples - SEM @fastify/jwt
- */
-const authPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => {
-  fastify.decorate('authenticate', async function (request: any, reply: any) {
-    const authHeader = request.headers.authorization;
+const authenticateUser = async (req: FastifyRequest, reply: FastifyReply) => {
+  req.log.info(
+    `[AUTH_CHECK] Verificando autenticação para a rota: ${req.raw.url}`
+  );
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return reply.status(401).send({
-        error: 'Token obrigatório',
-        code: 'MISSING_TOKEN',
-      });
+  try {
+    await req.jwtVerify();
+  } catch (err) {
+    // Verificamos se 'err' é uma instância de Error antes de acessar .message
+    if (err instanceof Error) {
+      req.log.warn(`Falha na verificação de JWT: ${err.message}`);
+    } else {
+      req.log.warn(`Falha na verificação de JWT: ${String(err)}`);
     }
-
-    const token = authHeader.substring(7);
-
-    try {
-      const decoded = JSON.parse(Buffer.from(token, 'base64').toString());
-
-      // Verificar expiração
-      if (decoded.exp && decoded.exp < Math.floor(Date.now() / 1000)) {
-        return reply.status(401).send({
-          error: 'Token expirado',
-          code: 'TOKEN_EXPIRED',
-        });
-      }
-
-      // Definir usuário no request
-      request.user = {
-        id: decoded.sub,
-        email: decoded.email,
-        name: decoded.nome || decoded.name,
-        nome: decoded.nome || decoded.name,
-        roles: decoded.roles || [],
-        permissions: decoded.permissions || [],
-        sectorId: decoded.sectorId,
-        roleNames: decoded.roleNames || decoded.roles || [],
-      };
-
-      // Adicionar sessionId separadamente
-      request.sessionId = decoded.sessionId;
-    } catch (error) {
-      return reply.status(401).send({
-        error: 'Token inválido',
-        code: 'INVALID_TOKEN',
-      });
-    }
-  });
-
-  fastify.decorate('generateToken', function (payload: any): string {
-    const tokenPayload = {
-      sub: payload.id || payload.sub,
-      email: payload.email,
-      nome: payload.nome || payload.name,
-      roles: payload.roles || [],
-      permissions: payload.permissions || [],
-      sessionId: payload.sessionId,
-      sectorId: payload.sectorId,
-      roleNames: payload.roleNames || payload.roles || [],
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + 15 * 60, // 15 minutos
-    };
-
-    return Buffer.from(JSON.stringify(tokenPayload)).toString('base64');
-  });
-
-  fastify.log.info('✅ Plugin de autenticação simples registrado');
+    // O plugin @fastify/jwt já lida com o envio da resposta 401,
+    // então não precisamos de um reply.send() aqui.
+  }
 };
 
-export default fp(authPlugin, {
-  name: 'auth-plugin',
-});
+async function authPlugin(fastify: FastifyInstance) {
+  await fastify.register(fastifyJwt, {
+    secret: process.env.JWT_SECRET || 'uma-chave-super-secreta-para-dev',
+  });
+
+  await fastify.register(fastifyAuth);
+
+  fastify.decorate('authenticate', authenticateUser);
+
+  fastify.log.info(
+    '✅ Plugins @fastify/jwt e @fastify/auth registrados com sucesso.'
+  );
+}
+
+export default fp(authPlugin);
