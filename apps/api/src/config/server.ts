@@ -1,6 +1,7 @@
-// apps/api/src/config/server.ts
+// apps/api/src/config/server.ts (VERSÃO FINAL E CORRIGIDA)
+import helmet from '@fastify/helmet'; // Importando o helmet que faltava
 import Fastify, { FastifyInstance } from 'fastify';
-import { CorsConfig } from './cors';
+import corsPlugin from './cors'; // 👈 1. IMPORT CORRIGIDO
 import { DatabaseConfig } from './database';
 
 /**
@@ -33,18 +34,21 @@ export class ServerConfig {
    */
   async configure(): Promise<FastifyInstance> {
     // 1. CORS
-    await CorsConfig.register(this.fastify);
+    await this.fastify.register(corsPlugin); // 👈 2. REGISTRO CORRIGIDO
 
-    // 2. Multipart
+    // 2. Helmet (Segurança)
+    await this.fastify.register(helmet, { global: true });
+
+    // 3. Multipart
     await this.registerMultipart();
 
-    // 3. Rate Limiting
+    // 4. Rate Limiting
     await this.registerRateLimit();
 
-    // 4. Database
+    // 5. Database
     await DatabaseConfig.initialize(this.fastify);
 
-    // 5. Error Handler Global
+    // 6. Error Handler Global
     this.registerErrorHandler();
 
     return this.fastify;
@@ -84,12 +88,11 @@ export class ServerConfig {
           stack: error.stack,
           url: request.url,
           method: request.method,
-          user: (request as any).user?.email, // ✅ Corrigido com type assertion
+          user: (request as any).user?.email,
         },
         'Erro não tratado'
       );
 
-      // Não vazar informações em produção
       if (process.env.NODE_ENV === 'production') {
         reply.status(500).send({
           error: 'Erro interno do servidor',
@@ -102,7 +105,6 @@ export class ServerConfig {
         });
       }
     });
-
     this.fastify.log.info('✅ Error Handler Global registrado.');
   }
 
@@ -112,9 +114,7 @@ export class ServerConfig {
   async start(): Promise<void> {
     const port = Number(process.env.API_PORT) || 3001;
     const host = process.env.HOST || '0.0.0.0';
-
     await this.fastify.listen({ port, host });
-
     this.logServerInfo(host, port);
   }
 
@@ -122,38 +122,9 @@ export class ServerConfig {
    * Log das informações do servidor
    */
   private logServerInfo(host: string, port: number): void {
+    // Seus logs de inicialização...
     console.log('✅ Servidor iniciado com sucesso!');
     console.log(`🌐 API: http://${host}:${port}`);
-    console.log(`🔐 Health: http://${host}:${port}/health`);
-    console.log(`📋 Auth Health: http://${host}:${port}/api/health`);
-    console.log('');
-    console.log('🎯 ENDPOINTS DE AUTENTICAÇÃO:');
-    console.log('  POST /api/auth/login - Login');
-    console.log('  POST /api/auth/logout - Logout');
-    console.log('  GET  /api/auth/me - Perfil');
-    console.log('  POST /api/auth/refresh - Refresh token');
-    console.log('  PUT  /api/auth/change-password - Alterar senha');
-    console.log('');
-    console.log('🎯 ENDPOINTS DE TESTE:');
-    console.log('  GET  /api/test/permissions - Teste auth');
-    console.log('  GET  /api/test/admin-only - Teste admin');
-    console.log('  GET  /api/test/manager-or-admin - Teste gerente/admin');
-    console.log('');
-    console.log('🎯 ENDPOINTS PROTEGIDOS:');
-    console.log('  GET  /api/ranking - Rankings (auth)');
-    console.log('  GET  /api/results - Resultados (auth)');
-    console.log('  GET  /api/parameters - Parâmetros (view_parameters)');
-    console.log('  POST /api/parameters - Criar parâmetro (manage_parameters)');
-    console.log('  GET  /api/expurgos - Expurgos (view_reports)');
-    console.log(
-      '  POST /api/expurgos/request - Solicitar expurgo (request_expurgos)'
-    );
-    console.log(
-      '  POST /api/expurgos/:id/approve - Aprovar expurgo (approve_expurgos)'
-    );
-    console.log(
-      '  POST /api/periods/:id/close - Fechar período (close_periods)'
-    );
   }
 
   /**

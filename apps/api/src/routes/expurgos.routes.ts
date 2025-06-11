@@ -15,6 +15,8 @@ import fp from 'fastify-plugin';
  * Plugin de rotas de expurgos
  */
 const expurgosRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
+  fastify.addHook('preHandler', fastify.auth([fastify.authenticate]));
+
   // Instanciar controllers com serviços injetados
   const expurgosController = new ExpurgosController({
     expurgo: fastify.services.expurgo,
