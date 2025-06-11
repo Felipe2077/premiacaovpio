@@ -4,7 +4,8 @@ import { ExpurgosController } from '@/controllers/expurgos.controller';
 import {
   approveExpurgos,
   auditAdminAction,
-  requirePermissions,
+  rejectExpurgos,
+  requestExpurgos,
   requireSectorAccess,
   viewReports,
 } from '@/middleware/rbac.middleware';
@@ -38,7 +39,8 @@ const expurgosRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     {
       preHandler: [
         (fastify as any).authenticate,
-        requirePermissions('view_reports' as any, 'request_expurgos' as any),
+        viewReports,
+        requestExpurgos,
         requireSectorAccess(),
       ],
     },
@@ -51,10 +53,7 @@ const expurgosRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   fastify.get(
     '/api/expurgos/:id',
     {
-      preHandler: [
-        (fastify as any).authenticate,
-        requirePermissions('view_reports' as any, 'request_expurgos' as any),
-      ],
+      preHandler: [(fastify as any).authenticate, viewReports, requestExpurgos],
     },
     expurgosController.getExpurgoById.bind(expurgosController)
   );
@@ -67,7 +66,7 @@ const expurgosRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     {
       preHandler: [
         (fastify as any).authenticate,
-        requirePermissions('request_expurgos' as any),
+        requestExpurgos,
         auditAdminAction('REQUEST_EXPURGO'),
       ],
     },
@@ -97,7 +96,7 @@ const expurgosRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     {
       preHandler: [
         (fastify as any).authenticate,
-        requirePermissions('reject_expurgos' as any),
+        rejectExpurgos,
         auditAdminAction('REJECT_EXPURGO'),
       ],
     },
@@ -112,10 +111,7 @@ const expurgosRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   fastify.post(
     '/api/expurgos/:id/anexos/upload',
     {
-      preHandler: [
-        (fastify as any).authenticate,
-        requirePermissions('request_expurgos' as any),
-      ],
+      preHandler: [(fastify as any).authenticate, requestExpurgos],
     },
     attachmentsController.uploadAttachment.bind(attachmentsController)
   );
@@ -126,10 +122,7 @@ const expurgosRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   fastify.get(
     '/api/expurgos/:id/anexos',
     {
-      preHandler: [
-        (fastify as any).authenticate,
-        requirePermissions('view_reports' as any, 'request_expurgos' as any),
-      ],
+      preHandler: [(fastify as any).authenticate, viewReports, requestExpurgos],
     },
     attachmentsController.getAttachments.bind(attachmentsController)
   );
@@ -140,10 +133,7 @@ const expurgosRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   fastify.get(
     '/api/expurgos/anexos/:attachmentId/download',
     {
-      preHandler: [
-        (fastify as any).authenticate,
-        requirePermissions('view_reports' as any, 'request_expurgos' as any),
-      ],
+      preHandler: [(fastify as any).authenticate, viewReports, requestExpurgos],
     },
     attachmentsController.downloadAttachment.bind(attachmentsController)
   );
@@ -154,10 +144,7 @@ const expurgosRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   fastify.delete(
     '/api/expurgos/anexos/:attachmentId',
     {
-      preHandler: [
-        (fastify as any).authenticate,
-        requirePermissions('request_expurgos' as any),
-      ],
+      preHandler: [(fastify as any).authenticate, requestExpurgos],
     },
     attachmentsController.deleteAttachment.bind(attachmentsController)
   );

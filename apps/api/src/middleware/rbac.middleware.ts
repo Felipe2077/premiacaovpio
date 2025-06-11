@@ -1,5 +1,6 @@
-// apps/api/src/middleware/rbac.middleware.ts - CORREÇÃO
-import { Permission, Role } from '@sistema-premiacao/shared-types';
+// apps/api/src/middleware/rbac.middleware.ts - VERSÃO COMPLETA CORRIGIDA
+import { Permission } from '@/entity/role.entity';
+import { Role } from '@sistema-premiacao/shared-types';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 /**
@@ -76,7 +77,7 @@ export function requireRoles(...roles: Role[]) {
 }
 
 /**
- * Middleware que permite acesso apenas ao próprio usuário ou admins - CORRIGIDO
+ * Middleware que permite acesso apenas ao próprio usuário ou admins
  */
 export function requireOwnershipOrAdmin(userIdParam: string = 'userId') {
   return async (request: FastifyRequest, reply: FastifyReply) => {
@@ -87,7 +88,7 @@ export function requireOwnershipOrAdmin(userIdParam: string = 'userId') {
       });
     }
 
-    // Extrair ID do usuário alvo dos parâmetros da rota - CORRIGIDO
+    // Extrair ID do usuário alvo dos parâmetros da rota
     const params = request.params as Record<string, string>;
     const userIdString = params[userIdParam];
 
@@ -133,7 +134,7 @@ export function requireOwnershipOrAdmin(userIdParam: string = 'userId') {
 }
 
 /**
- * Middleware que limita acesso ao setor do usuário (para gerentes) - CORRIGIDO
+ * Middleware que limita acesso ao setor do usuário (para gerentes)
  */
 export function requireSectorAccess() {
   return async (request: FastifyRequest, reply: FastifyReply) => {
@@ -149,7 +150,7 @@ export function requireSectorAccess() {
       return; // Permitir acesso
     }
 
-    // Extrair sectorId da query ou params - CORRIGIDO
+    // Extrair sectorId da query ou params
     const query = request.query as Record<string, any>;
     const params = request.params as Record<string, any>;
 
@@ -270,6 +271,8 @@ export const authenticated = async (
   }
 };
 
+// === MIDDLEWARES DE PERMISSÕES ESPECÍFICAS ===
+
 export const manageUsers = requirePermissions(Permission.MANAGE_USERS);
 
 export const manageParameters = requirePermissions(
@@ -277,6 +280,16 @@ export const manageParameters = requirePermissions(
 );
 
 export const approveExpurgos = requirePermissions(Permission.APPROVE_EXPURGOS);
+
+export const rejectExpurgos = requirePermissions(Permission.REJECT_EXPURGOS);
+
+export const requestExpurgos = requirePermissions(Permission.REQUEST_EXPURGOS);
+
+export const viewAllAuditLogs = requirePermissions(
+  Permission.VIEW_ALL_AUDIT_LOGS
+);
+
+export const viewParameters = requirePermissions(Permission.VIEW_PARAMETERS);
 
 export const viewReports = requirePermissions(
   Permission.VIEW_REPORTS,
@@ -287,3 +300,29 @@ export const viewReports = requirePermissions(
 export const closePeriods = requirePermissions(Permission.CLOSE_PERIODS);
 
 export const startPeriods = requirePermissions(Permission.START_PERIODS);
+
+export const deleteExpurgos = requirePermissions(Permission.DELETE_EXPURGOS);
+
+export const editOwnExpurgos = requirePermissions(Permission.EDIT_OWN_EXPURGOS);
+
+export const viewDetailedPerformance = requirePermissions(
+  Permission.VIEW_DETAILED_PERFORMANCE
+);
+
+export const viewSectorLogs = requirePermissions(Permission.VIEW_SECTOR_LOGS);
+
+export const manageRoles = requirePermissions(Permission.MANAGE_ROLES);
+
+export const manageSystemSettings = requirePermissions(
+  Permission.MANAGE_SYSTEM_SETTINGS
+);
+
+export const resolveTies = requirePermissions(Permission.RESOLVE_TIES);
+
+export const viewRankings = requirePermissions(Permission.VIEW_RANKINGS);
+
+export const viewPublicReports = requirePermissions(
+  Permission.VIEW_PUBLIC_REPORTS
+);
+
+export const viewOwnProfile = requirePermissions(Permission.VIEW_OWN_PROFILE);

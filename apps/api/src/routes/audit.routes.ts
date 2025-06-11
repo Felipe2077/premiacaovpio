@@ -1,5 +1,5 @@
 // apps/api/src/routes/audit.routes.ts
-import { requirePermissions, viewReports } from '@/middleware/rbac.middleware';
+import { viewAllAuditLogs, viewReports } from '@/middleware/rbac.middleware';
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import fp from 'fastify-plugin';
 
@@ -15,10 +15,7 @@ const auditRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   fastify.get(
     '/api/audit-logs',
     {
-      preHandler: [
-        (fastify as any).authenticate,
-        requirePermissions('view_all_audit_logs' as any),
-      ],
+      preHandler: [(fastify as any).authenticate, viewAllAuditLogs],
     },
     async (request, reply) => {
       try {

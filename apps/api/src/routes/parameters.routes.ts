@@ -3,7 +3,7 @@ import { ParametersController } from '@/controllers/parameters.controller';
 import {
   auditAdminAction,
   manageParameters,
-  requirePermissions,
+  viewParameters,
 } from '@/middleware/rbac.middleware';
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import fp from 'fastify-plugin';
@@ -29,10 +29,7 @@ const parametersRoutes: FastifyPluginAsync = async (
   fastify.get(
     '/api/parameters',
     {
-      preHandler: [
-        (fastify as any).authenticate,
-        requirePermissions('view_parameters' as any),
-      ],
+      preHandler: [(fastify as any).authenticate, viewParameters],
     },
     controller.getParameters.bind(controller)
   );
@@ -43,10 +40,7 @@ const parametersRoutes: FastifyPluginAsync = async (
   fastify.get(
     '/api/parameters/:id',
     {
-      preHandler: [
-        (fastify as any).authenticate,
-        requirePermissions('view_parameters' as any),
-      ],
+      preHandler: [(fastify as any).authenticate, viewParameters],
     },
     controller.getParameterById.bind(controller)
   );
@@ -113,10 +107,7 @@ const parametersRoutes: FastifyPluginAsync = async (
   fastify.get(
     '/api/criteria/:criterionId/calculation-settings',
     {
-      preHandler: [
-        (fastify as any).authenticate,
-        requirePermissions('view_parameters' as any),
-      ],
+      preHandler: [(fastify as any).authenticate, viewParameters],
     },
     controller.getCalculationSettings.bind(controller)
   );

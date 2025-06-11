@@ -153,10 +153,13 @@ export class AuthService {
    */
   async getUserById(userId: number): Promise<UserEntity | null> {
     const userRepository = this.getUserRepository();
-    return await userRepository.findOne({
-      where: { id: userId, ativo: true },
-      relations: ['sector'], // Para carregar dados do setor
-    });
+
+    // CORREÇÃO: Usar query builder para evitar problemas de relação
+    return await userRepository
+      .createQueryBuilder('user')
+      .where('user.id = :id', { id: userId })
+      .andWhere('user.ativo = :ativo', { ativo: true })
+      .getOne();
   }
 
   /**
