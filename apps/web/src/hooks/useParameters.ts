@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-// apps/web/src/hooks/useParameters.ts (ADICIONANDO getParameterHistory)
+// apps/web/src/hooks/useParameters.ts (CORRIGIDO COMPLETO)
 import {
   CalculateParameterDto,
   CreateParameterDto,
@@ -43,7 +43,7 @@ export interface ParameterValueAPI {
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
-// fetchParameters, createParameter, updateParameterAPI, deleteParameterAPI (COMO NA ÚLTIMA VERSÃO QUE TE MANDEI)
+// 🎯 FUNÇÃO CORRIGIDA 1: fetchParameters
 const fetchParameters = async ({
   queryKey,
 }: {
@@ -63,9 +63,18 @@ const fetchParameters = async ({
   if (criterionId !== undefined)
     params.append('criterionId', String(criterionId));
   if (onlyActive === false) params.append('onlyActive', 'false');
+
   const response = await fetch(
-    `${API_BASE_URL}/parameters?${params.toString()}`
+    `${API_BASE_URL}/parameters?${params.toString()}`,
+    {
+      // ✅ CORREÇÃO: Adicionar credentials para autenticação
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    }
   );
+
   if (!response.ok) {
     const errorData = await response
       .json()
@@ -76,12 +85,16 @@ const fetchParameters = async ({
   }
   return response.json();
 };
+
+// 🎯 FUNÇÃO CORRIGIDA 2: createParameter
 const createParameter = async (
   newParameterData: CreateParameterDto
 ): Promise<ParameterValueAPI> => {
   const response = await fetch(`${API_BASE_URL}/parameters`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    // ✅ CORREÇÃO: Adicionar credentials para autenticação
+    credentials: 'include',
     body: JSON.stringify(newParameterData),
   });
   if (!response.ok) {
@@ -94,10 +107,13 @@ const createParameter = async (
   }
   return response.json();
 };
+
 interface UpdateParameterPayload {
   id: number;
   data: UpdateParameterDto;
 }
+
+// 🎯 FUNÇÃO CORRIGIDA 3: updateParameterAPI
 const updateParameterAPI = async ({
   id,
   data,
@@ -105,6 +121,8 @@ const updateParameterAPI = async ({
   const response = await fetch(`${API_BASE_URL}/parameters/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
+    // ✅ CORREÇÃO: Adicionar credentials para autenticação
+    credentials: 'include',
     body: JSON.stringify(data),
   });
 
@@ -121,13 +139,15 @@ const updateParameterAPI = async ({
   }
 
   const responseData = await response.json();
-
   return responseData;
 };
+
 interface DeleteParameterPayload {
   id: number;
   justificativa: string;
 }
+
+// 🎯 FUNÇÃO CORRIGIDA 4: deleteParameterAPI
 const deleteParameterAPI = async ({
   id,
   justificativa,
@@ -135,6 +155,8 @@ const deleteParameterAPI = async ({
   const response = await fetch(`${API_BASE_URL}/parameters/${id}`, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
+    // ✅ CORREÇÃO: Adicionar credentials para autenticação
+    credentials: 'include',
     body: JSON.stringify({ justificativa }),
   });
   if (!response.ok) {
@@ -148,7 +170,7 @@ const deleteParameterAPI = async ({
   return response.json();
 };
 
-// --- ADICIONAR ESTA FUNÇÃO ---
+// 🎯 FUNÇÃO CORRIGIDA 5: fetchParameterHistory
 const fetchParameterHistory = async (
   periodId: number,
   criterionId: number,
@@ -162,9 +184,18 @@ const fetchParameterHistory = async (
   } else if (sectorId === null) {
     params.append('sectorId', 'null');
   }
+
   const response = await fetch(
-    `${API_BASE_URL}/parameters/history?${params.toString()}`
+    `${API_BASE_URL}/parameters/history?${params.toString()}`,
+    {
+      // ✅ CORREÇÃO: Adicionar credentials para autenticação
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    }
   );
+
   if (!response.ok) {
     const errorData = await response
       .json()
@@ -175,15 +206,16 @@ const fetchParameterHistory = async (
   }
   return response.json();
 };
-// -----------------------------
 
-// Adicionar função para cálculo automático
+// 🎯 FUNÇÃO CORRIGIDA 6: calculateParameterValue
 const calculateParameterValue = async (
   calculateData: CalculateParameterDto
 ): Promise<{ value: number; metadata: any }> => {
   const response = await fetch(`${API_BASE_URL}/parameters/calculate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    // ✅ CORREÇÃO: Adicionar credentials para autenticação
+    credentials: 'include',
     body: JSON.stringify(calculateData),
   });
 
@@ -201,12 +233,19 @@ const calculateParameterValue = async (
   return response.json();
 };
 
-// Adicionar função para buscar configurações de cálculo
+// 🎯 FUNÇÃO CORRIGIDA 7: fetchCriterionCalculationSettings
 const fetchCriterionCalculationSettings = async (
   criterionId: number
 ): Promise<CriterionCalculationSettingsDto> => {
   const response = await fetch(
-    `${API_BASE_URL}/criteria/${criterionId}/calculation-settings`
+    `${API_BASE_URL}/criteria/${criterionId}/calculation-settings`,
+    {
+      // ✅ CORREÇÃO: Adicionar credentials para autenticação
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    }
   );
 
   if (!response.ok) {
@@ -231,11 +270,12 @@ const fetchCriterionCalculationSettings = async (
   return response.json();
 };
 
+// Hook principal para usar parâmetros
 export const useParameters = (
   periodMesAno: string,
   initialSectorId?: number,
   initialCriterionId?: number,
-  initialOnlyActive: boolean = true // Alterado para false na page.tsx para ver todas
+  initialOnlyActive: boolean = true
 ) => {
   const queryClient = useQueryClient();
   const queryKey: QueryKey = [
@@ -256,6 +296,7 @@ export const useParameters = (
     queryFn: fetchParameters,
     enabled: !!periodMesAno,
   });
+
   const createParameterMutation = useMutation<
     ParameterValueAPI,
     Error,
@@ -270,6 +311,7 @@ export const useParameters = (
       console.error('Erro ao criar parâmetro:', error.message);
     },
   });
+
   const updateParameterMutation = useMutation<
     ParameterValueAPI,
     Error,
@@ -279,12 +321,10 @@ export const useParameters = (
     mutationFn: updateParameterAPI,
     onSuccess: (data) => {},
     onError: (error: Error) => {
-      console.error(
-        'Erro ao atualizar parâmetro:',
-        error.message
-      ); /* toast... */
+      console.error('Erro ao atualizar parâmetro:', error.message);
     },
   });
+
   const deleteParameterMutation = useMutation<
     ParameterValueAPI,
     Error,
@@ -294,26 +334,23 @@ export const useParameters = (
     mutationFn: deleteParameterAPI,
     onSuccess: (data) => {},
     onError: (error: Error) => {
-      console.error('Erro ao deletar parâmetro:', error.message); /* toast... */
+      console.error('Erro ao deletar parâmetro:', error.message);
     },
   });
 
-  // --- ADICIONAR ESTA FUNÇÃO AO RETORNO ---
+  // Função para buscar histórico de parâmetros
   const getParameterHistory = async (
     periodId: number,
     criterionId: number,
     sectorId?: number | null
   ) => {
-    // Não usa useQuery aqui para ser uma chamada sob demanda
     try {
       return await fetchParameterHistory(periodId, criterionId, sectorId);
     } catch (error) {
       console.error('Erro ao buscar histórico no hook useParameters:', error);
-      // toast.error(error.message || "Falha ao buscar histórico."); // O toast já está na page.tsx
-      throw error; // Relança para o componente tratar
+      throw error;
     }
   };
-  // ------------------------------------
 
   return {
     parameters: parameters || [],
@@ -329,7 +366,7 @@ export const useParameters = (
     deleteParameter: deleteParameterMutation.mutateAsync,
     isDeletingParameter: deleteParameterMutation.isPending,
     deleteParameterError: deleteParameterMutation.error?.message,
-    getParameterHistory, // <<< EXPORTAR AQUI
+    getParameterHistory,
     fetchCriterionCalculationSettings,
   };
 };

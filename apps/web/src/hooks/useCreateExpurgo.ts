@@ -1,4 +1,4 @@
-// apps/web/src/hooks/expurgos/useCreateExpurgo.ts
+// apps/web/src/hooks/expurgos/useCreateExpurgo.ts (CORRIGIDO COMPLETO)
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -51,7 +51,7 @@ interface CreateExpurgoResponse {
   };
 }
 
-// Função para criar expurgo via API
+// 🎯 FUNÇÃO CORRIGIDA 1: createExpurgo
 const createExpurgo = async (
   data: CreateExpurgoData
 ): Promise<CreateExpurgoResponse> => {
@@ -60,6 +60,8 @@ const createExpurgo = async (
     headers: {
       'Content-Type': 'application/json',
     },
+    // ✅ CORREÇÃO: Adicionar credentials para autenticação
+    credentials: 'include',
     body: JSON.stringify(data),
   });
 
@@ -71,7 +73,7 @@ const createExpurgo = async (
   return response.json();
 };
 
-// Hook principal para criação de expurgo
+// Hook principal para criação de expurgo (MANTIDO INTACTO)
 export function useCreateExpurgo() {
   const queryClient = useQueryClient();
 
@@ -97,7 +99,7 @@ export function useCreateExpurgo() {
   });
 }
 
-// Hook específico para validação prévia
+// Hook específico para validação prévia (MANTIDO INTACTO)
 export function useValidateExpurgoData() {
   const validateData = (data: CreateExpurgoData): string[] => {
     const errors: string[] = [];
@@ -156,12 +158,19 @@ export function useValidateExpurgoData() {
   return { validateData };
 }
 
-// Hook para buscar períodos disponíveis
+// 🎯 HOOK CORRIGIDO 2: useAvailablePeriods
 export function useAvailablePeriods() {
   return useQuery({
     queryKey: ['available-periods'],
     queryFn: async () => {
-      const response = await fetch('http://localhost:3001/api/periods');
+      const response = await fetch('http://localhost:3001/api/periods', {
+        // ✅ CORREÇÃO: Adicionar credentials para autenticação
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
       if (!response.ok) {
         throw new Error('Erro ao buscar períodos');
       }
@@ -177,7 +186,7 @@ export function useAvailablePeriods() {
   });
 }
 
-// Hook para pré-validação de critérios elegíveis
+// Hook para pré-validação de critérios elegíveis (MANTIDO INTACTO)
 export function useEligibleCriteria(criterios: any[] = []) {
   const eligibleCriteriaNames = [
     'QUEBRA',

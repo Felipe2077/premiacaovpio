@@ -1,4 +1,4 @@
-// apps/web/src/hooks/expurgos/useExpurgosData.ts (ATUALIZADO)
+// apps/web/src/hooks/useExpurgosData.ts (CORRIGIDO COMPLETO)
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
@@ -100,7 +100,7 @@ interface ExpurgoFilters {
   valorMaximoSolicitado?: number;
 }
 
-// Função para buscar expurgos com filtros
+// 🎯 FUNÇÃO CORRIGIDA 1: fetchExpurgos
 const fetchExpurgos = async (
   filters: ExpurgoFilters = {}
 ): Promise<ExpurgoResponseDto[]> => {
@@ -115,7 +115,14 @@ const fetchExpurgos = async (
 
   const url = `http://localhost:3001/api/expurgos?${searchParams.toString()}`;
 
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    // ✅ CORREÇÃO: Adicionar credentials para autenticação
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(
@@ -127,10 +134,17 @@ const fetchExpurgos = async (
   return Array.isArray(data) ? data : [];
 };
 
-// Função para buscar critérios ativos
+// 🎯 FUNÇÃO CORRIGIDA 2: fetchActiveCriteriaSimple
 const fetchActiveCriteriaSimple = async (): Promise<Criterio[]> => {
   const url = 'http://localhost:3001/api/criteria/active';
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    // ✅ CORREÇÃO: Adicionar credentials para autenticação
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
   if (!response.ok) {
     throw new Error(`Erro ${response.status} ao buscar critérios ativos`);
   }
@@ -138,10 +152,17 @@ const fetchActiveCriteriaSimple = async (): Promise<Criterio[]> => {
   return Array.isArray(data) ? data : [];
 };
 
-// Função para buscar setores ativos
+// 🎯 FUNÇÃO CORRIGIDA 3: fetchActiveSectorsSimple
 const fetchActiveSectorsSimple = async (): Promise<Setor[]> => {
   const url = 'http://localhost:3001/api/sectors/active';
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    // ✅ CORREÇÃO: Adicionar credentials para autenticação
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
   if (!response.ok) {
     throw new Error(`Erro ${response.status} ao buscar setores ativos`);
   }
@@ -149,10 +170,17 @@ const fetchActiveSectorsSimple = async (): Promise<Setor[]> => {
   return Array.isArray(data) ? data : [];
 };
 
-// Função para buscar um expurgo específico por ID
+// 🎯 FUNÇÃO CORRIGIDA 4: fetchExpurgoById
 const fetchExpurgoById = async (id: number): Promise<ExpurgoResponseDto> => {
   const url = `http://localhost:3001/api/expurgos/${id}`;
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    // ✅ CORREÇÃO: Adicionar credentials para autenticação
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(
@@ -162,7 +190,7 @@ const fetchExpurgoById = async (id: number): Promise<ExpurgoResponseDto> => {
   return response.json();
 };
 
-// Hook principal para dados de expurgos
+// Hook principal para dados de expurgos (MANTIDO INTACTO)
 export function useExpurgosData(filters: ExpurgoFilters = {}) {
   const expurgos = useQuery({
     queryKey: ['expurgos', filters],
@@ -211,7 +239,7 @@ export function useExpurgosData(filters: ExpurgoFilters = {}) {
   };
 }
 
-// Hook para buscar um expurgo específico
+// Hook para buscar um expurgo específico (MANTIDO INTACTO)
 export function useExpurgoById(id: number) {
   return useQuery({
     queryKey: ['expurgo', id],
@@ -221,7 +249,7 @@ export function useExpurgoById(id: number) {
   });
 }
 
-// Hook para filtros comuns
+// Hook para filtros comuns (MANTIDO INTACTO)
 export function useExpurgoFilters() {
   // Status disponíveis
   const statusOptions = [
@@ -236,7 +264,7 @@ export function useExpurgoFilters() {
   };
 }
 
-// Hook para estatísticas de expurgos
+// 🎯 HOOK CORRIGIDO 5: useExpurgoStatistics
 export function useExpurgoStatistics(periodMesAno?: string) {
   return useQuery({
     queryKey: ['expurgo-statistics', periodMesAno],
@@ -245,7 +273,14 @@ export function useExpurgoStatistics(periodMesAno?: string) {
         ? `http://localhost:3001/api/expurgos/statistics/advanced?period=${periodMesAno}`
         : 'http://localhost:3001/api/expurgos/statistics/advanced';
 
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        // ✅ CORREÇÃO: Adicionar credentials para autenticação
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
       if (!response.ok) {
         throw new Error('Erro ao buscar estatísticas');
       }
@@ -255,7 +290,7 @@ export function useExpurgoStatistics(periodMesAno?: string) {
   });
 }
 
-// Hook para expurgos com resumo
+// 🎯 HOOK CORRIGIDO 6: useExpurgosWithSummary
 export function useExpurgosWithSummary(filters: ExpurgoFilters = {}) {
   return useQuery({
     queryKey: ['expurgos-with-summary', filters],
@@ -268,7 +303,14 @@ export function useExpurgosWithSummary(filters: ExpurgoFilters = {}) {
       });
 
       const url = `http://localhost:3001/api/expurgos/with-summary?${searchParams.toString()}`;
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        // ✅ CORREÇÃO: Adicionar credentials para autenticação
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
       if (!response.ok) {
         throw new Error('Erro ao buscar expurgos com resumo');
       }

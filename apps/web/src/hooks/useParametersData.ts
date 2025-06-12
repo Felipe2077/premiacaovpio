@@ -1,4 +1,4 @@
-// hooks/useParametersData.ts
+// hooks/useParametersData.ts (CORRIGIDO COMPLETO)
 import {
   Criterio as Criterion,
   RegrasAplicadasPadrao,
@@ -33,9 +33,9 @@ export interface ResultData {
   metaPropostaPadrao: number | null;
   metaAnteriorValor: number | null;
   metaAnteriorPeriodo: number | null;
-  regrasAplicadasPadrao: RegrasAplicadasPadrao | null; // ✅ CORRIGIR TIPO
-  metaDefinidaValor: number | null; // ✅ ADICIONAR
-  isMetaDefinida: boolean; // ✅ ADICIONAR
+  regrasAplicadasPadrao: RegrasAplicadasPadrao | null;
+  metaDefinidaValor: number | null;
+  isMetaDefinida: boolean;
 }
 
 const API_BASE_URL = 'http://localhost:3001';
@@ -51,11 +51,18 @@ export function useParametersData(selectedPeriod?: string) {
   const [isLoadingResults, setIsLoadingResults] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Adicionar função para buscar configurações de cálculo
+  // 🎯 FUNÇÃO CORRIGIDA: fetchCriterionCalculationSettings
   const fetchCriterionCalculationSettings = async (criterionId: number) => {
     try {
       const response = await fetch(
-        `/api/criteria/${criterionId}/calculation-settings`
+        `/api/criteria/${criterionId}/calculation-settings`,
+        {
+          // ✅ CORREÇÃO: Adicionar credentials para autenticação
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
       );
       console.log('[DEBUG] 📊 Response status:', response.status);
       console.log('[DEBUG] 📊 Response OK:', response.ok);
@@ -109,13 +116,21 @@ export function useParametersData(selectedPeriod?: string) {
       };
     }
   };
-  // Função para buscar períodos
+
+  // 🎯 FUNÇÃO CORRIGIDA: fetchPeriods
   const fetchPeriods = useCallback(async () => {
     setIsLoadingPeriods(true);
     try {
       const timestamp = new Date().getTime();
       const response = await fetch(
-        `${API_BASE_URL}/api/periods?_t=${timestamp}`
+        `${API_BASE_URL}/api/periods?_t=${timestamp}`,
+        {
+          // ✅ CORREÇÃO: Adicionar credentials para autenticação
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
       );
       if (!response.ok) {
         throw new Error('Falha ao buscar períodos');
@@ -132,17 +147,22 @@ export function useParametersData(selectedPeriod?: string) {
     }
   }, []);
 
-  // Função para buscar resultados
+  // 🎯 FUNÇÃO CORRIGIDA: fetchResults
   const fetchResults = useCallback(
     async (period: string): Promise<ResultData[]> => {
-      // Ou Promise<EntradaResultadoDetalhado[]>
-
       setIsLoadingResults(true);
       setError(null);
       try {
         const timestamp = new Date().getTime();
         const response = await fetch(
-          `${API_BASE_URL}/api/results/by-period?period=${period}&_t=${timestamp}`
+          `${API_BASE_URL}/api/results/by-period?period=${period}&_t=${timestamp}`,
+          {
+            // ✅ CORREÇÃO: Adicionar credentials para autenticação
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          }
         );
 
         if (!response.ok) {
@@ -161,7 +181,7 @@ export function useParametersData(selectedPeriod?: string) {
         console.log(
           `[useParametersData] Resultados recebidos para ${period}:`,
           data.length > 0 ? data[0] : 'Array vazio ou dados ausentes'
-        ); // Log do primeiro item
+        );
 
         setResults(data);
         return data;
@@ -177,23 +197,29 @@ export function useParametersData(selectedPeriod?: string) {
         toast.error(
           `Erro ao carregar resultados para ${period}: ${error.message}`
         );
-        setResults([]); // Limpa os resultados em caso de erro
-        return []; // Retorna array vazio para manter a consistência do tipo de retorno
+        setResults([]);
+        return [];
       } finally {
         setIsLoadingResults(false);
       }
     },
     [setResults, setIsLoadingResults, setError]
-  ); // Dependências do useCallback
+  );
 
-  // Função para buscar critérios
+  // 🎯 FUNÇÃO CORRIGIDA: fetchCriteria
   const fetchCriteria = useCallback(async () => {
     setIsLoadingCriteria(true);
     try {
       const timestamp = new Date().getTime();
-      // Usar o endpoint correto para critérios ativos
       const response = await fetch(
-        `${API_BASE_URL}/api/criteria/active?_t=${timestamp}`
+        `${API_BASE_URL}/api/criteria/active?_t=${timestamp}`,
+        {
+          // ✅ CORREÇÃO: Adicionar credentials para autenticação
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
       );
       if (!response.ok) {
         throw new Error('Falha ao buscar critérios');
@@ -211,14 +237,20 @@ export function useParametersData(selectedPeriod?: string) {
     }
   }, []);
 
-  // Função para buscar setores
+  // 🎯 FUNÇÃO CORRIGIDA: fetchSectors
   const fetchSectors = useCallback(async () => {
     setIsLoadingSectors(true);
     try {
       const timestamp = new Date().getTime();
-      // Usar o endpoint correto para setores ativos
       const response = await fetch(
-        `${API_BASE_URL}/api/sectors/active?_t=${timestamp}`
+        `${API_BASE_URL}/api/sectors/active?_t=${timestamp}`,
+        {
+          // ✅ CORREÇÃO: Adicionar credentials para autenticação
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
       );
       if (!response.ok) {
         throw new Error('Falha ao buscar setores');
@@ -235,7 +267,7 @@ export function useParametersData(selectedPeriod?: string) {
     }
   }, []);
 
-  // Função para buscar todos os dados
+  // Função para buscar todos os dados (MANTIDA INTACTA)
   const fetchAllData = useCallback(
     async (period?: string) => {
       setError(null);
@@ -293,7 +325,53 @@ export function useParametersData(selectedPeriod?: string) {
     [fetchPeriods, fetchResults, fetchCriteria, fetchSectors]
   );
 
-  // Função para forçar a atualização dos resultados
+  // 🎯 FUNÇÃO CORRIGIDA: fetchParameterByCriteriaSector
+  const fetchParameterByCriteriaSector = useCallback(
+    async (
+      criterionId: number,
+      sectorId: number,
+      periodId: number
+    ): Promise<any | null> => {
+      try {
+        const timestamp = new Date().getTime();
+        const response = await fetch(
+          `${API_BASE_URL}/api/parameters?period=${getPeriodById(periodId)?.mesAno}&criterionId=${criterionId}&sectorId=${sectorId}&_t=${timestamp}`,
+          {
+            // ✅ CORREÇÃO: Adicionar credentials para autenticação
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+
+        if (!response.ok) {
+          console.warn(
+            `Erro ${response.status} ao buscar parâmetro específico`
+          );
+          return null;
+        }
+
+        const data = await response.json();
+
+        // A API retorna um array, pegar o primeiro (deveria ser único)
+        if (Array.isArray(data) && data.length > 0) {
+          return data[0];
+        }
+
+        console.warn(
+          'Nenhum parâmetro encontrado para os critérios especificados'
+        );
+        return null;
+      } catch (error) {
+        console.error('Erro ao buscar parâmetro específico:', error);
+        return null;
+      }
+    },
+    [periods]
+  );
+
+  // Função para forçar a atualização dos resultados (MANTIDA INTACTA)
   const refetchResults = useCallback(
     async (period?: string) => {
       const periodToFetch = period || selectedPeriod;
@@ -328,7 +406,7 @@ export function useParametersData(selectedPeriod?: string) {
     [fetchResults, selectedPeriod]
   );
 
-  // Função para buscar um período específico por ID
+  // Funções auxiliares (MANTIDAS INTACTAS)
   const getPeriodById = useCallback(
     (id: number) => {
       return periods.find((p) => p.id === id);
@@ -336,7 +414,6 @@ export function useParametersData(selectedPeriod?: string) {
     [periods]
   );
 
-  // Função para buscar um período específico por mesAno
   const getPeriodByMesAno = useCallback(
     (mesAno: string) => {
       return periods.find((p) => p.mesAno === mesAno);
@@ -344,7 +421,6 @@ export function useParametersData(selectedPeriod?: string) {
     [periods]
   );
 
-  // Função para buscar um critério específico por ID
   const getCriterionById = useCallback(
     (id: number) => {
       return criteria.find((c) => c.id === id);
@@ -352,7 +428,6 @@ export function useParametersData(selectedPeriod?: string) {
     [criteria]
   );
 
-  // Função para buscar um setor específico por ID
   const getSectorById = useCallback(
     (id: number) => {
       return sectors.find((s) => s.id === id);
@@ -360,7 +435,6 @@ export function useParametersData(selectedPeriod?: string) {
     [sectors]
   );
 
-  // Função para buscar resultados filtrados por critério e/ou setor
   const getFilteredResults = useCallback(
     (criterionId?: number, sectorId?: number) => {
       let filtered = [...results];
@@ -378,7 +452,7 @@ export function useParametersData(selectedPeriod?: string) {
     [results]
   );
 
-  // NOVO: Processar resultados por setor
+  // Processar resultados por setor (MANTIDO INTACTO)
   const resultsBySector = useMemo(() => {
     if (!results || results.length === 0) {
       return {};
@@ -398,7 +472,6 @@ export function useParametersData(selectedPeriod?: string) {
         };
       }
 
-      // 🎯 CORREÇÃO PRINCIPAL: Incluir setorId em cada critério
       bySector[sectorId].criterios[criterioId] = {
         criterioId: result.criterioId,
         criterioNome: result.criterioNome,
@@ -420,7 +493,7 @@ export function useParametersData(selectedPeriod?: string) {
     return bySector;
   }, [results]);
 
-  // NOVO: Processar resultados por critério
+  // Processar resultados por critério (MANTIDO INTACTO)
   const resultsByCriterio = useMemo(() => {
     if (!results || results.length === 0) {
       return {};
@@ -451,7 +524,7 @@ export function useParametersData(selectedPeriod?: string) {
     return byCriterio;
   }, [results]);
 
-  // NOVO: Extrair critérios únicos dos resultados
+  // Extrair critérios únicos dos resultados (MANTIDO INTACTO)
   const uniqueCriteria = useMemo(() => {
     if (!criteria || criteria.length === 0) {
       return [];
@@ -468,8 +541,7 @@ export function useParametersData(selectedPeriod?: string) {
         index: criterion.index,
         descricao: criterion.descricao,
         ativo: criterion.ativo,
-        // unidade_medida: criterion.unidade_medida, // Se fizesse parte da interface local
-        casasDecimaisPadrao: criterion.casasDecimaisPadrao, // <<< ADICIONE ESTA LINHA
+        casasDecimaisPadrao: criterion.casasDecimaisPadrao,
       });
     });
 
@@ -495,56 +567,15 @@ export function useParametersData(selectedPeriod?: string) {
         return a.id - b.id;
       }
     );
-    if (uniqueCriteriaArray.length > 0) {
-    }
 
     return uniqueCriteriaArray;
   }, [results, criteria]);
 
-  const fetchParameterByCriteriaSector = useCallback(
-    async (
-      criterionId: number,
-      sectorId: number,
-      periodId: number
-    ): Promise<any | null> => {
-      try {
-        const timestamp = new Date().getTime();
-        const response = await fetch(
-          `${API_BASE_URL}/api/parameters?period=${getPeriodById(periodId)?.mesAno}&criterionId=${criterionId}&sectorId=${sectorId}&_t=${timestamp}`
-        );
-
-        if (!response.ok) {
-          console.warn(
-            `Erro ${response.status} ao buscar parâmetro específico`
-          );
-          return null;
-        }
-
-        const data = await response.json();
-
-        // A API retorna um array, pegar o primeiro (deveria ser único)
-        if (Array.isArray(data) && data.length > 0) {
-          return data[0];
-        }
-
-        console.warn(
-          'Nenhum parâmetro encontrado para os critérios especificados'
-        );
-        return null;
-      } catch (error) {
-        console.error('Erro ao buscar parâmetro específico:', error);
-        return null;
-      }
-    },
-    [periods] // Dependência para acessar getPeriodById
-  );
-
-  // Efeito para carregar dados iniciais
+  // Efeitos (MANTIDOS INTACTOS)
   useEffect(() => {
     fetchAllData(selectedPeriod);
   }, [fetchAllData, selectedPeriod]);
 
-  // Efeito para recarregar resultados quando o período selecionado mudar
   useEffect(() => {
     if (selectedPeriod) {
       fetchResults(selectedPeriod);
@@ -556,9 +587,9 @@ export function useParametersData(selectedPeriod?: string) {
     criteria,
     sectors,
     results,
-    resultsBySector, // NOVO
-    resultsByCriterio, // NOVO
-    uniqueCriteria, // NOVO
+    resultsBySector,
+    resultsByCriterio,
+    uniqueCriteria,
     isLoadingPeriods,
     isLoadingCriteria,
     isLoadingSectors,
@@ -567,7 +598,7 @@ export function useParametersData(selectedPeriod?: string) {
       isLoadingPeriods ||
       isLoadingCriteria ||
       isLoadingSectors ||
-      isLoadingResults, // NOVO
+      isLoadingResults,
     error,
     fetchPeriods,
     fetchCriteria,

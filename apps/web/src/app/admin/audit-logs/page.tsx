@@ -22,7 +22,14 @@ import { useState } from 'react';
 const fetchAuditLogs = async (): Promise<AuditLogEntity[]> => {
   const url = 'http://localhost:3001/api/audit-logs';
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, {
+      // 🎯 ADICIONAR ESTAS LINHAS CRÍTICAS:
+      credentials: 'include', // Para enviar cookies automaticamente
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
     if (!res.ok) {
       // Se a resposta não for OK, lança um erro que o react-query vai capturar
       throw new Error(`Erro ${res.status} ao buscar os logs de auditoria`);

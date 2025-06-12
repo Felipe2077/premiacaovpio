@@ -1,9 +1,9 @@
-// hooks/useParametersMutations.ts
+// hooks/useParametersMutations.ts (CORRIGIDO COMPLETO)
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
-// Schemas para validação
+// Schemas para validação (MANTIDOS INTACTOS)
 export const createParameterSchema = z.object({
   nomeParametro: z.string().min(1, 'Nome da meta é obrigatório'),
   valor: z.coerce.number().min(0, 'Valor deve ser maior ou igual a zero'),
@@ -11,18 +11,16 @@ export const createParameterSchema = z.object({
   criterionId: z.coerce.number().min(1, 'Critério é obrigatório'),
   sectorId: z.coerce.number().min(1, 'Setor é obrigatório'),
   competitionPeriodId: z.coerce.number().min(1, 'Período é obrigatório'),
-  justificativa: z.string().min(1, 'Justificativa é obrigatória'), // Adicionando justificativa
+  justificativa: z.string().min(1, 'Justificativa é obrigatória'),
 });
 
 export const updateParameterSchema = z.object({
-  id: z.number(), // ID da meta a ser atualizada (usado na URL)
+  id: z.number(),
   valor: z.coerce.number().min(0, 'Valor deve ser maior ou igual a zero'),
   dataInicioEfetivo: z.string().min(1, 'Data de início é obrigatória'),
   justificativa: z.string().min(1, 'Justificativa é obrigatória'),
   nomeParametro: z.string().min(1, 'Nome da meta é obrigatório'),
-  // Campos opcionais
   dataFimEfetivoAnterior: z.string().optional(),
-  // Esses campos não são enviados na requisição, mas são usados internamente
   criterionId: z.coerce.number().min(1, 'Critério é obrigatório').optional(),
   sectorId: z.coerce.number().min(1, 'Setor é obrigatório').optional(),
   competitionPeriodId: z.coerce
@@ -36,12 +34,12 @@ export const deleteParameterSchema = z.object({
   justificativa: z.string().min(1, 'Justificativa é obrigatória'),
 });
 
-// Tipos para os formulários
+// Tipos para os formulários (MANTIDOS INTACTOS)
 export type CreateParameterFormValues = z.infer<typeof createParameterSchema>;
 export type UpdateParameterFormValues = z.infer<typeof updateParameterSchema>;
 export type DeleteParameterFormValues = z.infer<typeof deleteParameterSchema>;
 
-// Interface para o parâmetro
+// Interface para o parâmetro (MANTIDA INTACTA)
 export interface Parameter {
   id: number;
   nomeParametro: string;
@@ -54,7 +52,7 @@ export interface Parameter {
   justificativa?: string;
 }
 
-// Funções de mutação
+// 🎯 FUNÇÃO CORRIGIDA 1: createParameter
 const createParameter = async (
   data: CreateParameterFormValues
 ): Promise<Parameter> => {
@@ -65,6 +63,8 @@ const createParameter = async (
     headers: {
       'Content-Type': 'application/json',
     },
+    // ✅ CORREÇÃO: Adicionar credentials para autenticação
+    credentials: 'include',
     body: JSON.stringify(data),
   });
 
@@ -77,6 +77,7 @@ const createParameter = async (
   return responseData;
 };
 
+// 🎯 FUNÇÃO CORRIGIDA 2: updateParameter
 const updateParameter = async (
   data: UpdateParameterFormValues
 ): Promise<Parameter> => {
@@ -122,6 +123,8 @@ const updateParameter = async (
     headers: {
       'Content-Type': 'application/json',
     },
+    // ✅ CORREÇÃO: Adicionar credentials para autenticação
+    credentials: 'include',
     body: JSON.stringify(requestBody),
   });
 
@@ -141,6 +144,7 @@ const updateParameter = async (
   return responseData;
 };
 
+// 🎯 FUNÇÃO CORRIGIDA 3: deleteParameter
 const deleteParameter = async (
   data: DeleteParameterFormValues
 ): Promise<Parameter> => {
@@ -151,6 +155,8 @@ const deleteParameter = async (
     headers: {
       'Content-Type': 'application/json',
     },
+    // ✅ CORREÇÃO: Adicionar credentials para autenticação
+    credentials: 'include',
     body: JSON.stringify({ justificativa: data.justificativa }),
   });
 
@@ -163,7 +169,7 @@ const deleteParameter = async (
   return responseData;
 };
 
-// Hook principal
+// Hook principal (MANTIDO INTACTO)
 export function useParametersMutations(selectedPeriod: string) {
   const queryClient = useQueryClient();
 

@@ -114,7 +114,7 @@ function AdminSidebar() {
     },
     {
       title: 'Auditoria',
-      href: '/admin/audit',
+      href: '/admin/audit-logs',
       icon: Shield,
       show: isDirector(),
     },

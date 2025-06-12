@@ -1,4 +1,4 @@
-// apps/web/src/hooks/expurgos/useExpurgoActions.ts
+// apps/web/src/hooks/expurgos/useExpurgoActions.ts (CORRIGIDO COMPLETO)
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -28,7 +28,7 @@ interface ExpurgoActionResponse {
   aprovadoEm?: string;
 }
 
-// API functions
+// 🎯 FUNÇÃO CORRIGIDA 1: approveExpurgo
 const approveExpurgo = async (
   expurgoId: number,
   data: ApproveExpurgoData
@@ -40,6 +40,8 @@ const approveExpurgo = async (
       headers: {
         'Content-Type': 'application/json',
       },
+      // ✅ CORREÇÃO: Adicionar credentials para autenticação
+      credentials: 'include',
       body: JSON.stringify(data),
     }
   );
@@ -52,6 +54,7 @@ const approveExpurgo = async (
   return response.json();
 };
 
+// 🎯 FUNÇÃO CORRIGIDA 2: rejectExpurgo
 const rejectExpurgo = async (
   expurgoId: number,
   data: RejectExpurgoData
@@ -63,6 +66,8 @@ const rejectExpurgo = async (
       headers: {
         'Content-Type': 'application/json',
       },
+      // ✅ CORREÇÃO: Adicionar credentials para autenticação
+      credentials: 'include',
       body: JSON.stringify(data),
     }
   );
@@ -75,7 +80,7 @@ const rejectExpurgo = async (
   return response.json();
 };
 
-// Hook principal para ações de expurgo
+// Hook principal para ações de expurgo (MANTIDO INTACTO)
 export function useExpurgoActions() {
   const queryClient = useQueryClient();
 
@@ -163,7 +168,7 @@ export function useExpurgoActions() {
   };
 }
 
-// Hook específico para aprovar expurgo (mais granular)
+// Hook específico para aprovar expurgo (mais granular) - MANTIDO INTACTO
 export function useApproveExpurgo() {
   const queryClient = useQueryClient();
 
@@ -197,7 +202,7 @@ export function useApproveExpurgo() {
   });
 }
 
-// Hook específico para rejeitar expurgo (mais granular)
+// Hook específico para rejeitar expurgo (mais granular) - MANTIDO INTACTO
 export function useRejectExpurgo() {
   const queryClient = useQueryClient();
 

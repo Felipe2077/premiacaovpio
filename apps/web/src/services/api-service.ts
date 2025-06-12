@@ -1,69 +1,83 @@
-// apps/web/src/services/api-service.ts
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+// apps/web/src/services/parameters.api.ts
+import { HistoricalDataItem } from '@/types/parameters.types';
 
-export interface CompetitionPeriodForSelect {
-  id: number;
-  mesAno: string;
-  status: string;
-  dataInicio?: string;
-  dataFim?: string;
-}
+export class ParametersAPI {
+  static async calculate(payload: any): Promise<any> {
+    const API_BASE_URL =
+      process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-export interface CriterionForSelect {
-  id: number;
-  nome: string;
-}
+    console.log(
+      '🔍 [ParametersAPI] Fazendo requisição para:',
+      `${API_BASE_URL}/api/parameters/calculate`
+    );
 
-export interface SectorForSelect {
-  id: number;
-  nome: string;
-}
+    const response = await fetch(`${API_BASE_URL}/api/parameters/calculate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    });
 
-export const apiService = {
-  async fetchActiveCriteriaSimple(): Promise<CriterionForSelect[]> {
-    const url = `${API_BASE_URL}/api/criteria/active`;
-    const res = await fetch(url);
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ message: res.statusText }));
-      throw new Error(err.message || `Erro ${res.status} ao buscar critérios`);
+    console.log('📡 [ParametersAPI] Response status:', response.status);
+
+    if (!response.ok) {
+      const errorData = await response
+        .json()
+        .catch(() => ({ message: `Erro ${response.status}` }));
+      throw new Error(
+        errorData.message ||
+          errorData.error ||
+          `Erro ${response.status}: ${response.statusText}`
+      );
     }
-    const data = await res.json();
-    return Array.isArray(data)
-      ? data.map((c) => ({ id: c.id, nome: c.nome }))
-      : [];
-  },
 
-  async fetchActiveSectorsSimple(): Promise<SectorForSelect[]> {
-    const url = `${API_BASE_URL}/api/sectors/active`;
-    const res = await fetch(url);
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ message: res.statusText }));
-      throw new Error(err.message || `Erro ${res.status} ao buscar setores`);
-    }
-    const data = await res.json();
-    return Array.isArray(data)
-      ? data.map((s) => ({ id: s.id, nome: s.nome }))
-      : [];
-  },
+    return await response.json();
+  }
 
-  async fetchCompetitionPeriodsForSelect(): Promise<
-    CompetitionPeriodForSelect[]
-  > {
-    const url = `${API_BASE_URL}/api/periods`;
-    const res = await fetch(url);
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ message: res.statusText }));
-      throw new Error(err.message || `Erro ${res.status} ao buscar períodos`);
+  static async fetchHistoricalData(
+    criterionId: number,
+    sectorId: number | null,
+    currentPeriodYYYYMM: string,
+    count: number = 6
+  ): Promise<HistoricalDataItem[]> {
+    const API_BASE_URL =
+      process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+    let apiUrl = `${API_BASE_URL}/api/results/historical?criterionId=${criterionId}&currentPeriod=${currentPeriodYYYYMM}&count=${count}`;
+
+    if (sectorId !== null && sectorId !== undefined) {
+      apiUrl += `&sectorId=${sectorId}`;
     }
-    const data = await res.json();
-    return Array.isArray(data)
-      ? data.map((p) => ({
-          id: p.id,
-          mesAno: p.mesAno,
-          status: p.status,
-          dataInicio: p.dataInicio,
-          dataFim: p.dataFim,
-        }))
-      : [];
-  },
-};
+
+    const response = await fetch(apiUrl, {
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(
+        `Erro ${response.status}: ${response.statusText} - ${errorBody}`
+      );
+    }
+
+    const result = await response.json();
+
+    if (result.success && result.data && result.data.history) {
+      return result.data.history.map((item: any) => ({
+        periodo: item.period,
+        valorRealizado:
+          item.realizedValue !== null ? parseFloat(item.realizedValue) : null,
+        valorMeta:
+          item.targetValue !== null ? parseFloat(item.targetValue) : null,
+        status: item.realizedValue !== null ? 'FECHADO' : 'ABERTO_OU_SEM_DADOS',
+      }));
+    }
+
+    return [];
+  }
+}
