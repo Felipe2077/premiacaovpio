@@ -16,7 +16,6 @@ const envPath = path.resolve(__dirname, 'apps/api/.env');
 dotenv.config({ path: envPath });
 console.log(`[ETL Script] .env carregado de: ${envPath}`);
 
-// --- Datas para o período de Abril/2025 ---
 const START_DATE_APRIL = '2025-06-01';
 const END_DATE_APRIL = '2025-06-30';
 

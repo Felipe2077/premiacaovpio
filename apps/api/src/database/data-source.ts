@@ -72,7 +72,7 @@ const oracleConfig = {
   port: parseInt(process.env.ORACLE_PORT || '1521', 10),
   username: process.env.ORACLE_USER || 'system',
   password: process.env.ORACLE_PASSWORD || 'oracle',
-  sid: process.env.ORACLE_SID || 'xe',
+  serviceName: process.env.ORACLE_SERVICE_NAME,
 };
 
 console.log('[data-source.ts] Configuração do Oracle:', {
@@ -162,7 +162,7 @@ export const OracleDataSource = new DataSource({
   port: oracleConfig.port,
   username: oracleConfig.username,
   password: oracleConfig.password,
-  sid: oracleConfig.sid,
+  serviceName: oracleConfig.serviceName,
   synchronize: false, // NUNCA sincronizar bancos legados
   logging: process.env.NODE_ENV === 'development' ? ['error'] : false,
   entities: [], // Não usamos entidades para Oracle (apenas queries raw)

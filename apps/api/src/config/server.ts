@@ -1,4 +1,4 @@
-// apps/api/src/config/server.ts (CORRIGIDO - COM COOKIES)
+// apps/api/src/config/server.ts (CORRIGIDO - Rate Limit Ajustado)
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import Fastify, { FastifyInstance } from 'fastify';
@@ -40,7 +40,7 @@ export class ServerConfig {
     // 2. Helmet (Segurança)
     await this.fastify.register(helmet, { global: true });
 
-    // 🎯 3. COOKIES - ADICIONAR ESTE PLUGIN
+    // 3. COOKIES
     await this.fastify.register(cookie, {
       secret:
         process.env.COOKIE_SECRET ||
@@ -53,7 +53,7 @@ export class ServerConfig {
     // 4. Multipart
     await this.registerMultipart();
 
-    // 5. Rate Limiting
+    // 5. Rate Limiting (AJUSTADO)
     await this.registerRateLimit();
 
     // 6. Database
@@ -78,14 +78,28 @@ export class ServerConfig {
   }
 
   /**
-   * Registrar rate limiting
+   * Registrar rate limiting - AJUSTADO PARA DESENVOLVIMENTO
    */
   private async registerRateLimit(): Promise<void> {
-    await this.fastify.register(require('@fastify/rate-limit'), {
-      max: 100,
-      timeWindow: '1 minute',
-    });
-    this.fastify.log.info('✅ Plugin Rate Limit registrado.');
+    const isDevelopment = process.env.NODE_ENV === 'development';
+
+    if (isDevelopment) {
+      // Em desenvolvimento: limite muito alto para não atrapalhar
+      await this.fastify.register(require('@fastify/rate-limit'), {
+        max: 10000, // 10.000 requests por minuto em dev
+        timeWindow: '1 minute',
+      });
+      this.fastify.log.info(
+        '✅ Rate Limit DESENVOLVIMENTO registrado (10.000/min).'
+      );
+    } else {
+      // Em produção: limite normal
+      await this.fastify.register(require('@fastify/rate-limit'), {
+        max: parseInt(process.env.RATE_LIMIT_API_MAX || '500'), // 500 por padrão
+        timeWindow: process.env.RATE_LIMIT_API_WINDOW || '1 minute',
+      });
+      this.fastify.log.info('✅ Rate Limit PRODUÇÃO registrado.');
+    }
   }
 
   /**

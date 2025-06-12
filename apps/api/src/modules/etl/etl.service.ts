@@ -1,10 +1,10 @@
 // apps/api/src/modules/etl/etl.service.ts (EXPANDIDO)
 import { AppDataSource } from '@/database/data-source';
+import { ExpurgoStatus } from '@sistema-premiacao/shared-types';
 import 'reflect-metadata';
 import { Between, Repository } from 'typeorm'; // Adicionado MoreThanOrEqual
 import { MySqlEtlService } from './mysql-etl.service';
 import { OracleEtlService } from './oracle-etl.service';
-import { ExpurgoStatus } from '@sistema-premiacao/shared-types';
 
 // Entidades RAW
 import { RawMySqlOcorrenciaHorariaEntity } from '@/entity/raw-data/raw-mysql-ocorrencia-horaria.entity';
@@ -328,9 +328,9 @@ export class EtlService {
                   },
                 });
 
-                // Assume que valorAjusteNumerico no expurgo de KM Ociosa é o KM a ser subtraído
+                // Assume que valorAprovado no expurgo de KM Ociosa é o KM a ser subtraído
                 const kmTotalExpurgado = expurgosKmOciosa.reduce(
-                  (sum, exp) => sum + (Number(exp.valorAjusteNumerico) || 0),
+                  (sum, exp) => sum + (Number(exp.valorAprovado) || 0),
                   0
                 );
                 console.log(
@@ -425,7 +425,7 @@ export class EtlService {
               },
             });
             totalExpurgado = expurgos.reduce(
-              (sum, item) => sum + (Number(item.valorAjusteNumerico) || 1),
+              (sum, item) => sum + (Number(item.valorAprovado) || 1),
               0
             ); // Default 1 se valorAjuste não definido
           } else {
