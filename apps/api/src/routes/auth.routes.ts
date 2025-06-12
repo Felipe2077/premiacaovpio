@@ -1,4 +1,4 @@
-// apps/api/src/routes/auth.routes.ts (COM LOGS DE DEBUG)
+// apps/api/src/routes/auth.routes.ts (CORRIGIDO - BASEADO NO SEU ORIGINAL)
 
 import {
   FastifyInstance,
@@ -9,7 +9,7 @@ import {
 import fp from 'fastify-plugin';
 
 /**
- * Plugin de rotas de autenticação (COM DEBUG)
+ * Plugin de rotas de autenticação (COM COOKIES PARA MIDDLEWARE)
  */
 export const authRoutes: FastifyPluginAsync = async (
   fastify: FastifyInstance
@@ -52,6 +52,22 @@ export const authRoutes: FastifyPluginAsync = async (
           userAgent
         );
 
+        // 🎯 CORREÇÃO: Adicionar cookies para o middleware
+        const cookieOptions = {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax' as const,
+          path: '/',
+          maxAge: rememberMe ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000,
+        };
+
+        reply.setCookie('session_token', result.accessToken, cookieOptions);
+        reply.setCookie(
+          'session_id',
+          `session_${result.user.id}`,
+          cookieOptions
+        );
+
         fastify.log.info(`Login bem-sucedido para ${email}`);
         reply.send(result);
       } catch (error: any) {
@@ -89,11 +105,26 @@ export const authRoutes: FastifyPluginAsync = async (
           await authService.logout(sessionId, userId);
         }
 
+        // 🎯 CORREÇÃO: Limpar cookies
+        reply.clearCookie('session_token', { path: '/' });
+        reply.clearCookie('session_id', { path: '/' });
+
         fastify.log.info(`Logout realizado para usuário ${userId}`);
-        reply.send({ success: true, message: 'Logout realizado com sucesso' });
+        reply.send({
+          success: true,
+          message: 'Logout realizado com sucesso',
+        });
       } catch (error: any) {
         fastify.log.error('Erro no logout:', error);
-        reply.send({ success: true, message: 'Logout realizado' });
+
+        // Mesmo com erro, limpar cookies
+        reply.clearCookie('session_token', { path: '/' });
+        reply.clearCookie('session_id', { path: '/' });
+
+        reply.send({
+          success: true,
+          message: 'Logout realizado',
+        });
       }
     }
   );
@@ -130,47 +161,147 @@ export const authRoutes: FastifyPluginAsync = async (
         );
 
         const user = await authService.getUserById(userId);
-        console.log('Resultado do getUserById:', user);
+        console.log('Usuário encontrado?', !!user);
 
         if (!user) {
-          console.log('❌ user não encontrado no banco');
-          return reply.status(404).send({
+          console.log('❌ Usuário não encontrado no banco');
+          return reply.status(401).send({
             error: 'Usuário não encontrado',
           });
         }
 
-        console.log('✅ user encontrado, enviando resposta');
-        reply.send({ user });
-      } catch (error: any) {
-        console.log('❌ ERRO no catch:', error);
-        console.log('Error message:', error.message);
-        console.log('Error stack:', error.stack);
+        console.log('✅ Usuário encontrado:', user.email);
 
+        // Montar resposta estruturada
+        const response = {
+          id: user.id,
+          email: user.email,
+          nome: user.nome,
+          roles: [user.role], // Compatibilidade: role único -> array
+          permissions: user.getPermissions ? user.getPermissions() : [],
+          sectorId: user.sectorId,
+          // 🎯 CORREÇÃO: Remover sectorName que não existe na entidade
+          ativo: user.ativo,
+        };
+
+        console.log('📦 Resposta final:', response);
+        reply.send(response);
+      } catch (error: any) {
+        console.error('❌ Erro em /api/auth/me:', error);
         fastify.log.error('Erro ao obter dados do usuário:', error);
-        reply.status(500).send({
-          error: 'Erro interno ao obter dados do usuário',
+        reply.status(401).send({
+          error: 'Erro ao verificar autenticação',
         });
       }
     }
   );
 
   /**
-   * PUT /api/auth/change-password - Alterar senha
+   * POST /api/auth/forgot-password - Solicitar reset de senha
+   */
+  fastify.post(
+    '/api/auth/forgot-password',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['email'],
+          properties: {
+            email: { type: 'string', format: 'email' },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const { email } = request.body as {
+          email: string;
+        };
+
+        await authService.forgotPassword({ email });
+
+        fastify.log.info(`Reset de senha solicitado para ${email}`);
+        reply.send({
+          success: true,
+          message:
+            'Se o email existir em nosso sistema, você receberá instruções para redefinir sua senha.',
+        });
+      } catch (error: any) {
+        fastify.log.error('Erro no forgot password:', error);
+        reply.status(400).send({
+          error: error.message || 'Erro ao solicitar reset de senha',
+          code: error.code || 'FORGOT_PASSWORD_ERROR',
+        });
+      }
+    }
+  );
+
+  /**
+   * POST /api/auth/reset-password - Resetar senha com token
+   */
+  fastify.post(
+    '/api/auth/reset-password',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['token', 'newPassword'],
+          properties: {
+            token: { type: 'string' },
+            newPassword: { type: 'string', minLength: 6 },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const { token, newPassword } = request.body as {
+          token: string;
+          newPassword: string;
+        };
+
+        await authService.resetPassword({ token, newPassword });
+
+        fastify.log.info(`Senha resetada com sucesso para token ${token}`);
+        reply.send({
+          success: true,
+          message: 'Senha alterada com sucesso. Faça login com sua nova senha.',
+        });
+      } catch (error: any) {
+        fastify.log.error('Erro no reset password:', error);
+
+        let statusCode = 400;
+        if (error.code === 'TOKEN_EXPIRED') {
+          statusCode = 400;
+        } else if (error.code === 'TOKEN_INVALID') {
+          statusCode = 400;
+        }
+
+        reply.status(statusCode).send({
+          error: error.message || 'Erro ao resetar senha',
+          code: error.code || 'RESET_PASSWORD_ERROR',
+        });
+      }
+    }
+  );
+
+  /**
+   * PUT /api/auth/change-password - Alterar senha do usuário logado
    */
   fastify.put(
     '/api/auth/change-password',
     {
+      preHandler: [(fastify as any).authenticate],
       schema: {
         body: {
           type: 'object',
           required: ['currentPassword', 'newPassword'],
           properties: {
-            currentPassword: { type: 'string', minLength: 6 },
+            currentPassword: { type: 'string' },
             newPassword: { type: 'string', minLength: 6 },
           },
         },
       },
-      preHandler: [(fastify as any).authenticate],
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
@@ -179,12 +310,6 @@ export const authRoutes: FastifyPluginAsync = async (
           currentPassword: string;
           newPassword: string;
         };
-
-        if (!userId) {
-          return reply.status(401).send({
-            error: 'Usuário não identificado',
-          });
-        }
 
         await authService.changePassword(userId, {
           currentPassword,

@@ -1,4 +1,4 @@
-// apps/web/src/app/login/page.tsx (CORRIGIDO - REDIRECIONAMENTO)
+// apps/web/src/app/login/page.tsx (CORRIGIDO - BASEADO NO SEU ORIGINAL)
 'use client';
 
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -22,7 +22,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Eye, EyeOff, Loader2, Lock, Mail } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -46,17 +46,22 @@ type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Redirecionar se já estiver autenticado
+  // 🎯 CORREÇÃO: Redirecionamento único - sem setTimeout
   useEffect(() => {
     if (isAuthenticated && !authLoading) {
-      // Força redirecionamento para evitar problemas de hidratação
-      window.location.href = '/admin';
+      const redirectTo = searchParams.get('redirect') || '/admin';
+      console.log(
+        '✅ Usuário já autenticado, redirecionando para:',
+        redirectTo
+      );
+      router.replace(redirectTo);
     }
-  }, [isAuthenticated, authLoading]);
+  }, [isAuthenticated, authLoading, router, searchParams]);
 
   // Configurar formulário
   const form = useForm<LoginFormData>({
@@ -68,37 +73,36 @@ export default function LoginPage() {
     },
   });
 
-  // Manipular submit do formulário
+  // 🎯 CORREÇÃO: Submit sem setTimeout - deixar o useEffect cuidar do redirecionamento
   const onSubmit = async (data: LoginFormData) => {
     setIsSubmitting(true);
 
     try {
+      console.log('🔐 Tentando fazer login...');
+
       await login(data);
 
       toast.success('Login realizado com sucesso!', {
         description: 'Redirecionando para o painel administrativo...',
       });
 
-      // 🎯 REDIRECIONAMENTO FORÇADO - SOLUÇÃO PRINCIPAL
-      setTimeout(() => {
-        window.location.href = '/admin';
-      }, 1000);
+      // 🎯 CORREÇÃO: REMOVER O setTimeout - o useEffect vai cuidar do redirecionamento
+      // setTimeout(() => {
+      //   window.location.href = '/admin';
+      // }, 1000);
     } catch (error: any) {
-      console.error('Erro no login:', error);
+      console.error('❌ Erro no login:', error);
 
       toast.error('Erro ao fazer login', {
         description:
           error.message || 'Verifique suas credenciais e tente novamente.',
       });
-
-      // Limpar apenas o campo de senha em caso de erro
-      form.setValue('password', '');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Loading inicial (verificando auth) - SIMPLIFICADO
+  // Mostrar loading enquanto verifica autenticação inicial
   if (authLoading) {
     return (
       <div className='min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100'>
@@ -110,7 +114,7 @@ export default function LoginPage() {
     );
   }
 
-  // Se já estiver autenticado, mostrar loading simples
+  // Se já estiver autenticado, mostrar loading de redirecionamento
   if (isAuthenticated) {
     return (
       <div className='min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100'>
@@ -124,18 +128,16 @@ export default function LoginPage() {
 
   return (
     <div className='min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4'>
-      <Card className='w-full max-w-md shadow-xl border-0'>
-        <CardHeader className='space-y-1 text-center'>
-          <div className='flex justify-center mb-4'>
-            <div className='bg-blue-600 p-3 rounded-full'>
-              <Lock className='h-6 w-6 text-white' />
-            </div>
+      <Card className='w-full max-w-md shadow-lg'>
+        <CardHeader className='space-y-2 text-center'>
+          <div className='mx-auto w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center'>
+            <Lock className='h-6 w-6 text-white' />
           </div>
           <CardTitle className='text-2xl font-bold text-gray-900'>
-            Sistema de Premiação
+            Entrar no Sistema
           </CardTitle>
           <CardDescription className='text-gray-600'>
-            Entre com suas credenciais para acessar o sistema
+            Digite suas credenciais para acessar o painel administrativo
           </CardDescription>
         </CardHeader>
 
@@ -153,14 +155,13 @@ export default function LoginPage() {
                     </FormLabel>
                     <FormControl>
                       <div className='relative'>
-                        <Mail className='absolute left-3 top-3 h-4 w-4 text-gray-400' />
+                        <Mail className='absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400' />
                         <Input
                           {...field}
                           type='email'
-                          placeholder='seu.email@empresa.com'
-                          className='pl-10'
+                          placeholder='seu@email.com'
+                          className='pl-10 h-11'
                           disabled={isSubmitting}
-                          autoComplete='email'
                         />
                       </div>
                     </FormControl>
@@ -180,19 +181,18 @@ export default function LoginPage() {
                     </FormLabel>
                     <FormControl>
                       <div className='relative'>
-                        <Lock className='absolute left-3 top-3 h-4 w-4 text-gray-400' />
+                        <Lock className='absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400' />
                         <Input
                           {...field}
                           type={showPassword ? 'text' : 'password'}
-                          placeholder='••••••••'
-                          className='pl-10 pr-10'
+                          placeholder='Digite sua senha'
+                          className='pl-10 pr-10 h-11'
                           disabled={isSubmitting}
-                          autoComplete='current-password'
                         />
                         <button
                           type='button'
                           onClick={() => setShowPassword(!showPassword)}
-                          className='absolute right-3 top-3 text-gray-400 hover:text-gray-600'
+                          className='absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors'
                           disabled={isSubmitting}
                         >
                           {showPassword ? (
@@ -213,7 +213,7 @@ export default function LoginPage() {
                 control={form.control}
                 name='rememberMe'
                 render={({ field }) => (
-                  <FormItem className='flex items-center space-x-2 space-y-0'>
+                  <FormItem className='flex flex-row items-center space-x-2 space-y-0'>
                     <FormControl>
                       <Checkbox
                         checked={field.value}
@@ -221,17 +221,17 @@ export default function LoginPage() {
                         disabled={isSubmitting}
                       />
                     </FormControl>
-                    <FormLabel className='text-sm text-gray-600 cursor-pointer'>
-                      Lembrar de mim
+                    <FormLabel className='text-sm text-gray-600 font-normal cursor-pointer'>
+                      Manter-me conectado
                     </FormLabel>
                   </FormItem>
                 )}
               />
 
-              {/* Botão de Submit */}
+              {/* Botão Submit */}
               <Button
                 type='submit'
-                className='w-full bg-blue-600 hover:bg-blue-700 text-white'
+                className='w-full h-11 bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors'
                 disabled={isSubmitting}
               >
                 {isSubmitting ? (
@@ -240,21 +240,20 @@ export default function LoginPage() {
                     Entrando...
                   </>
                 ) : (
-                  'Entrar no Sistema'
+                  'Entrar'
                 )}
               </Button>
             </form>
           </Form>
 
-          {/* Informações adicionais */}
-          <div className='mt-6 text-center space-y-2'>
-            <p className='text-xs text-gray-500'>
-              Esqueceu sua senha? Entre em contato com o administrador do
-              sistema.
-            </p>
-            <div className='text-xs text-gray-400'>
-              Sistema de Premiação V1.7 • Via Premiações
-            </div>
+          {/* Links adicionais */}
+          <div className='mt-6 text-center'>
+            <a
+              href='#'
+              className='text-sm text-blue-600 hover:text-blue-700 hover:underline transition-colors'
+            >
+              Esqueceu sua senha?
+            </a>
           </div>
         </CardContent>
       </Card>

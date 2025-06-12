@@ -1,4 +1,4 @@
-// apps/web/src/store/auth-store.ts (VERSÃO CORRIGIDA COMPLETA)
+// apps/web/src/store/auth-store.ts (CORRIGIDO - BASEADO NO SEU ORIGINAL)
 import { Permission, Role } from '@sistema-premiacao/shared-types';
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
@@ -10,7 +10,7 @@ export interface User {
   roles: Role[];
   permissions: Permission[];
   sectorId?: number;
-  sectorName?: string;
+  // 🎯 CORREÇÃO: Remover sectorName - não existe na entidade
   ativo: boolean;
 }
 
@@ -56,8 +56,9 @@ export const useAuthStore = create<AuthState>()(
           isAuthenticated: false,
           isLoading: true,
 
-          // Ação de login
+          // 🎯 CORREÇÃO: Ação de login com verificação de success
           login: async (credentials: LoginCredentials) => {
+            console.log('🔐 Iniciando login...', credentials.email);
             set({ isLoading: true });
 
             try {
@@ -70,23 +71,34 @@ export const useAuthStore = create<AuthState>()(
                 body: JSON.stringify(credentials),
               });
 
+              console.log('📡 Resposta do servidor:', response.status);
+
               if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.message || 'Erro ao fazer login');
+                console.error('❌ Erro na resposta:', errorData);
+                throw new Error(
+                  errorData.error || errorData.message || 'Erro ao fazer login'
+                );
               }
 
               const data = await response.json();
+              console.log('📦 Dados recebidos:', data);
 
-              // Extrair informações do usuário
+              // 🎯 CORREÇÃO: Verificar se o login foi bem-sucedido
+              if (!data.success) {
+                throw new Error('Login não foi bem-sucedido');
+              }
+
+              // Extrair informações do usuário - COMPATIBILIDADE com seu backend
               const user: User = {
                 id: data.user.id,
                 email: data.user.email,
                 nome: data.user.nome,
-                roles: data.user.roles || [],
+                roles: data.user.roles || [data.user.role], // 🎯 COMPATIBILIDADE: role único -> array
                 permissions: data.user.permissions || [],
                 sectorId: data.user.sectorId,
-                sectorName: data.user.sectorName,
-                ativo: data.user.ativo,
+                // 🎯 CORREÇÃO: Remover sectorName que pode não existir
+                ativo: data.user.ativo !== false, // Default true se não informado
               };
 
               set({
@@ -109,12 +121,14 @@ export const useAuthStore = create<AuthState>()(
 
           // Ação de logout
           logout: () => {
+            console.log('👋 Iniciando logout...');
+
             // Fazer logout no backend
             fetch(`${API_BASE_URL}/api/auth/logout`, {
               method: 'POST',
               credentials: 'include',
             }).catch((error) => {
-              console.warn('Erro ao fazer logout no backend:', error);
+              console.warn('⚠️ Erro ao fazer logout no backend:', error);
             });
 
             // Limpar estado local
@@ -127,7 +141,7 @@ export const useAuthStore = create<AuthState>()(
             console.log('✅ Logout realizado');
           },
 
-          // Verificar autenticação (ao carregar a página) - COM PROTEÇÃO CONTRA LOOP
+          // 🎯 CORREÇÃO: Verificar autenticação com proteção contra loop
           checkAuth: async () => {
             // Prevenir múltiplas verificações simultâneas
             if (isCheckingAuth) {
@@ -138,15 +152,22 @@ export const useAuthStore = create<AuthState>()(
             }
 
             isCheckingAuth = true;
+            console.log('🔍 Verificando autenticação...');
+
             set({ isLoading: true });
 
             try {
               const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-                credentials: 'include',
+                method: 'GET',
+                credentials: 'include', // Para cookies httpOnly
+                cache: 'no-cache',
               });
+
+              console.log('📡 Status da verificação:', response.status);
 
               if (response.ok) {
                 const data = await response.json();
+                console.log('📦 Dados do usuário verificados:', data);
 
                 const user: User = {
                   id: data.id,
@@ -155,8 +176,8 @@ export const useAuthStore = create<AuthState>()(
                   roles: data.roles || [],
                   permissions: data.permissions || [],
                   sectorId: data.sectorId,
-                  sectorName: data.sectorName,
-                  ativo: data.ativo,
+                  // 🎯 CORREÇÃO: Remover sectorName que pode não existir
+                  ativo: data.ativo !== false,
                 };
 
                 set({
@@ -167,13 +188,18 @@ export const useAuthStore = create<AuthState>()(
 
                 console.log('✅ Autenticação verificada:', user.email);
               } else {
+                console.log(
+                  '⚠️ Usuário não autenticado (status:',
+                  response.status,
+                  ')'
+                );
+
                 // Token inválido ou expirado
                 set({
                   user: null,
                   isAuthenticated: false,
                   isLoading: false,
                 });
-                console.log('⚠️ Usuário não autenticado');
               }
             } catch (error) {
               console.error('❌ Erro ao verificar autenticação:', error);
@@ -190,26 +216,45 @@ export const useAuthStore = create<AuthState>()(
           // Verificações de permissão
           hasPermission: (permission: Permission): boolean => {
             const { user } = get();
-            return user?.permissions?.includes(permission) || false;
+            const hasPermission =
+              user?.permissions?.includes(permission) || false;
+            console.log(
+              `🔐 Verificando permissão ${permission}:`,
+              hasPermission
+            );
+            return hasPermission;
           },
 
           hasAnyPermission: (permissions: Permission[]): boolean => {
             const { user } = get();
             if (!user?.permissions) return false;
-            return permissions.some((permission) =>
+            const hasAny = permissions.some((permission) =>
               user.permissions.includes(permission)
             );
+            console.log(
+              `🔐 Verificando qualquer permissão de [${permissions.join(', ')}]:`,
+              hasAny
+            );
+            return hasAny;
           },
 
           hasRole: (role: Role): boolean => {
             const { user } = get();
-            return user?.roles?.includes(role) || false;
+            const hasRole = user?.roles?.includes(role) || false;
+            console.log(`👤 Verificando role ${role}:`, hasRole);
+            return hasRole;
           },
 
           // Setters internos
-          setUser: (user: User | null) =>
-            set({ user, isAuthenticated: !!user }),
-          setLoading: (loading: boolean) => set({ isLoading: loading }),
+          setUser: (user: User | null) => {
+            console.log('🔄 Atualizando usuário:', user?.email || 'null');
+            set({ user, isAuthenticated: !!user });
+          },
+
+          setLoading: (loading: boolean) => {
+            console.log('⏳ Atualizando loading:', loading);
+            set({ isLoading: loading });
+          },
         };
       },
       {
@@ -225,11 +270,30 @@ export const useAuthStore = create<AuthState>()(
                 roles: state.user.roles,
                 permissions: state.user.permissions,
                 sectorId: state.user.sectorId,
-                sectorName: state.user.sectorName,
+                // 🎯 CORREÇÃO: Remover sectorName que pode não existir
                 ativo: state.user.ativo,
               }
             : null,
         }),
+        // 🎯 CORREÇÃO: Revalidar estado ao hidratar
+        onRehydrateStorage: () => (state) => {
+          console.log(
+            '💧 Estado hidratado do localStorage:',
+            state?.isAuthenticated
+          );
+
+          // Se estado diz que está autenticado, verificar no servidor
+          if (state?.isAuthenticated) {
+            console.log('🔄 Revalidando autenticação após hidratação...');
+            // Aguardar um tick para evitar conflitos de hidratação
+            setTimeout(() => {
+              state.checkAuth();
+            }, 100);
+          } else {
+            // Se não está autenticado localmente, definir loading como false
+            state?.setLoading(false);
+          }
+        },
       }
     ),
     {
