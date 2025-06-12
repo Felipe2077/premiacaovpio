@@ -78,7 +78,7 @@ interface CalculationModalProps {
     sectorId?: number | null;
     calculationMethod: string;
     adjustmentPercentage?: number;
-    finalValueFrontend?: number; // O valor calculado pelo frontend, para log/metadados
+    finalValue?: number; // O valor calculado pelo frontend, para log/metadados
     wasRounded?: boolean;
     roundingMethod?: string;
     roundingDecimalPlaces?: number;
@@ -300,7 +300,7 @@ export default function CalculationModal({
       sectorId: calculateData.setorId,
       calculationMethod: calculationMethod,
       adjustmentPercentage: parseFloat(calculationAdjustment) || 0,
-      finalValueFrontend: calculatedValueLocal, // O valor que o frontend calculou localmente
+      finalValue: calculatedValueLocal, // O valor que o frontend calculou localmente
       wasRounded:
         roundingMethod !== 'none' &&
         roundingMethod !== '' &&
