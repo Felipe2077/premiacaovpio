@@ -1,8 +1,10 @@
-// apps/api/src/modules/expurgos/expurgo.service.ts (REFATORADO PARA NOVAS REGRAS)
+// apps/api/src/modules/expurgos/expurgo.service.ts
 
 import { AppDataSource } from '@/database/data-source';
 import { CompetitionPeriodEntity } from '@/entity/competition-period.entity';
 import { CriterionEntity } from '@/entity/criterion.entity';
+import { ExpurgoAutomationHook } from './expurgo-automation.hook';
+
 import {
   ExpurgoEventEntity,
   ExpurgoStatus,
@@ -38,6 +40,7 @@ export class ExpurgoService {
   private readonly userRepo: Repository<UserEntity>;
   private readonly auditLogService: AuditLogService;
   private readonly attachmentService: ExpurgoAttachmentService;
+  private readonly automationHook: ExpurgoAutomationHook;
 
   // Critérios elegíveis para expurgo
   private readonly ELIGIBLE_CRITERIA = [
@@ -58,6 +61,7 @@ export class ExpurgoService {
     this.userRepo = AppDataSource.getRepository(UserEntity);
     this.auditLogService = new AuditLogService();
     this.attachmentService = new ExpurgoAttachmentService();
+    this.automationHook = new ExpurgoAutomationHook();
 
     console.log(
       '[ExpurgoService] Serviço inicializado com repositórios e serviços configurados.'
@@ -533,6 +537,28 @@ export class ExpurgoService {
           `${approvingUser.nome} - Valor: ${validatedData.valorAprovado}/${expurgo.valorSolicitado}`
       );
 
+      // 🚀 ===== DISPARO AUTOMÁTICO DO RECÁLCULO =====
+      console.log(
+        `[ExpurgoService] 🚀 Disparando recálculo automático pós-aprovação...`
+      );
+
+      // Executa de forma assíncrona para não bloquear a resposta ao usuário
+      this.automationHook
+        .onExpurgoApproved(expurgoId, approvingUser.id)
+        .then(() => {
+          console.log(
+            `[ExpurgoService] ✅ Recálculo automático concluído para expurgo ${expurgoId}`
+          );
+        })
+        .catch((error) => {
+          console.error(
+            `[ExpurgoService] ❌ Erro no recálculo automático para expurgo ${expurgoId}:`,
+            error
+          );
+          // Em produção, você pode querer enviar notificação para administradores
+          // await this.notifyAdministrators('Falha no recálculo automático', error, expurgoId);
+        });
+
       return this.convertToResponseDto(updatedExpurgo);
     } catch (error: any) {
       console.error(
@@ -540,6 +566,139 @@ export class ExpurgoService {
         error
       );
       throw error;
+    }
+  }
+
+  /**
+   * Método auxiliar para verificar se sistema está pronto para automação
+   * Útil para validações antes de operações críticas
+   */
+  async isSystemReadyForAutomation(): Promise<boolean> {
+    try {
+      return await this.automationHook.isSystemReadyForAutomation();
+    } catch (error) {
+      console.error(
+        '[ExpurgoService] Erro ao verificar prontidão do sistema para automação:',
+        error
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Método para testar conectividade com sistema de automação
+   * Útil para healthchecks e diagnósticos
+   */
+  async testAutomationConnectivity(): Promise<{
+    isReady: boolean;
+    activePeriod: string | null;
+    error?: string;
+  }> {
+    try {
+      const isReady = await this.isSystemReadyForAutomation();
+
+      if (isReady) {
+        // Buscar informações da vigência ativa para diagnóstico
+        const activePeriod = await this.periodRepo.findOne({
+          where: { status: 'ATIVA' },
+        });
+
+        return {
+          isReady: true,
+          activePeriod: activePeriod?.mesAno || null,
+        };
+      } else {
+        return {
+          isReady: false,
+          activePeriod: null,
+          error: 'Nenhuma vigência ativa encontrada ou sistema não pronto',
+        };
+      }
+    } catch (error) {
+      console.error(
+        '[ExpurgoService] Erro ao testar conectividade com automação:',
+        error
+      );
+      return {
+        isReady: false,
+        activePeriod: null,
+        error: error instanceof Error ? error.message : 'Erro desconhecido',
+      };
+    }
+  }
+
+  // ===== MÉTODO OPCIONAL: Disparo manual de recálculo =====
+  /**
+   * Permite disparar recálculo manual para um expurgo específico
+   * Útil para casos de erro ou necessidade de reprocessamento
+   */
+  async triggerManualRecalculation(
+    expurgoId: number,
+    triggeringUser: UserEntity,
+    reason: string = 'Recálculo manual solicitado'
+  ): Promise<{ success: boolean; message: string; error?: string }> {
+    console.log(
+      `[ExpurgoService] Usuário ${triggeringUser.id} solicitou recálculo manual para expurgo ${expurgoId}`
+    );
+
+    try {
+      // Verificar se expurgo existe e está aprovado
+      const expurgo = await this.findExpurgoById(expurgoId);
+      if (!expurgo) {
+        throw new Error(`Expurgo com ID ${expurgoId} não encontrado`);
+      }
+
+      if (!expurgo.isAprovado()) {
+        throw new Error(
+          `Expurgo ${expurgoId} não está aprovado. Status: ${expurgo.getStatusDescription()}`
+        );
+      }
+
+      // Verificar se sistema está pronto
+      const systemReady = await this.isSystemReadyForAutomation();
+      if (!systemReady) {
+        throw new Error(
+          'Sistema de automação não está pronto (nenhuma vigência ativa)'
+        );
+      }
+
+      // Registrar auditoria da solicitação manual
+      await this.auditLogService.createLog({
+        userId: triggeringUser.id,
+        userName: triggeringUser.nome,
+        actionType: 'RECALCULO_MANUAL_SOLICITADO',
+        entityType: 'ExpurgoEventEntity',
+        entityId: expurgoId.toString(),
+        details: {
+          reason,
+          expurgoStatus: expurgo.status,
+          valorAprovado: expurgo.valorAprovado,
+        },
+        justification: reason,
+        competitionPeriodId: expurgo.competitionPeriodId,
+      });
+
+      // Disparar recálculo
+      await this.automationHook.onExpurgoApproved(expurgoId, triggeringUser.id);
+
+      return {
+        success: true,
+        message: 'Recálculo manual disparado com sucesso',
+      };
+    } catch (error) {
+      console.error(
+        `[ExpurgoService] Erro no recálculo manual para expurgo ${expurgoId}:`,
+        error
+      );
+
+      const errorMessage =
+        error instanceof Error ? error.message : 'Erro desconhecido';
+
+      return {
+        success: false,
+        message: 'Falha ao disparar recálculo manual',
+        error: errorMessage,
+      };
     }
   }
 

@@ -1,4 +1,4 @@
-// apps/api/src/server.ts (VERSÃO FINAL E LIMPA)
+// apps/api/src/server.ts (VERSÃO COM AUTOMAÇÃO INTEGRADA)
 import * as dotenv from 'dotenv';
 import { ServerConfig } from './config/server';
 import authPlugin from './plugins/auth.plugin';
@@ -9,6 +9,8 @@ import servicesPlugin from './plugins/services';
 import adminRoutes from './routes/admin.routes';
 import auditRoutes from './routes/audit.routes';
 import { authRoutes } from './routes/auth.routes';
+// ===== ADICIONAR ESTA IMPORTAÇÃO =====
+import automationRoutes from './routes/automation.routes';
 import expurgosRoutes from './routes/expurgos.routes';
 import healthRoutes from './routes/health.routes';
 import historicalResultsRoutes from './routes/historical-results.routes'; // 👈 1. IMPORT CORRIGIDO
@@ -45,11 +47,15 @@ const start = async () => {
     await fastify.register(adminRoutes);
     await fastify.register(historicalResultsRoutes);
 
-    console.log('✅ Todas as rotas foram registradas.');
+    // ===== ADICIONAR ESTA LINHA =====
+    await fastify.register(automationRoutes); // 🚀 ROTAS DE AUTOMAÇÃO
+
+    console.log('✅ Todas as rotas foram registradas (incluindo automação).');
 
     // 3. Inicia o servidor
     await serverConfig.start();
     console.log('🎉 Servidor iniciado com sucesso!');
+    console.log('🔧 Sistema de automação ETL disponível em /api/automation/*');
   } catch (err) {
     console.error('❌ Erro fatal ao iniciar servidor:', err);
     process.exit(1);
