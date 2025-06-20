@@ -22,6 +22,7 @@ export default function RootLayout({
     <html lang='pt-BR'>
       <body className={inter.className}>
         {/* QueryClientProvider deve estar fora do AuthProvider */}
+
         <QueryClientProvider>
           {/* AuthProvider pode usar queries dentro do QueryClientProvider */}
           <AuthProvider>

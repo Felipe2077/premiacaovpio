@@ -1,4 +1,4 @@
-// apps/web/src/app/page.tsx (VERSÃO REFATORADA COM HOOK)
+// apps/web/src/app/page.tsx (COM FILTROS REPOSICIONADOS)
 'use client';
 
 import FilterControls from '@/components/filters/FilterControls';
@@ -6,7 +6,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 
 import PerformanceTable from '@/components/competition/PerformanceTable';
 import PointsTable from '@/components/competition/PointsTable';
-import RankingTable from '@/components/competition/RankingTable';
+import Header from '@/components/home/Header';
 import { useCompetitionData } from '@/hooks/useCompetitionData';
 
 export default function HomePage() {
@@ -15,88 +15,89 @@ export default function HomePage() {
     activeCriteria,
     resultsBySector,
     uniqueCriteria,
-    isLoading, // Estado de loading combinado
-    error, // Estado de erro combinado
+    isLoading,
+    error,
   } = useCompetitionData();
-
-  console.log('[homepage]: rankingData', rankingData);
-  console.log('[homepage]: activeCriteria', activeCriteria);
-  console.log('[homepage]: resultsBySector', resultsBySector);
-  console.log('[homepage]: uniqueCriteria', uniqueCriteria);
-
-  console.log(useCompetitionData());
 
   function getDataAtual() {
     const hoje = new Date();
     const dia = String(hoje.getDate()).padStart(2, '0');
-    const mes = String(hoje.getMonth() + 1).padStart(2, '0'); // Janeiro é 0
+    const mes = String(hoje.getMonth() + 1).padStart(2, '0');
     const ano = hoje.getFullYear();
-
     return `${dia}/${mes}/${ano}`;
   }
+
   return (
     <TooltipProvider>
-      <main className='container mx-auto px-4 lg:px-6 flex flex-col gap-8 flex-1'>
-        {/* Exibição de Erro Geral (vindo do hook) */}
+      <Header />
+      <main className='w-full flex flex-col gap-8 p-4 sm:p-6'>
+        {/* Exibição de Erro Geral */}
         {error && (
-          <p className='text-red-500 text-center font-semibold mb-4'>
+          <p className='text-red-500 text-center font-semibold w-full'>
             Erro ao carregar dados:
             {error instanceof Error ? error.message : 'Erro desconhecido'}
           </p>
         )}
 
-        <section>
-          <div className='flex justify-between mt-4 mb-2 items-center'>
-            <div>
-              <h2 className='text-2xl font-semibold my-1'>
-                🏆 Ranking Atual - Atualizado em: {getDataAtual()}
-              </h2>
+        {/* --- LINHA 1: Contém as duas primeiras colunas --- */}
+        <div className='flex flex-col lg:flex-row gap-6'>
+          {/* COLUNA 1.1 (Ranking) */}
+          {/* <div className='lg:w-[400px] flex-shrink-0'>
+            <section>
+              <div className='mb-2'>
+                <h2 className='text-2xl font-semibold my-1'>
+                  🏆 Ranking Atual
+                </h2>
+                <p className='text-sm text-gray-600 dark:text-gray-400 italic'>
+                  Atualizado em: {getDataAtual()}
+                </p>
+              </div>
               <p className='text-sm text-gray-600 dark:text-gray-400 italic mb-3'>
-                Classificação final baseada na soma dos pontos por critério
-                (Menor pontuação = Melhor posição).
+                Menor pontuação = Melhor posição.
               </p>
-            </div>
+              <RankingTable
+                data={rankingData}
+                isLoading={isLoading}
+                error={error}
+              />
+            </section>
+          </div> */}
 
-            <FilterControls />
+          {/* COLUNA 1.2 (Desempenho vs Meta) */}
+          <div className='flex-1 min-w-0'>
+            <section>
+              {/* Cabeçalho da Seção com Título à esquerda e Filtros à direita */}
+              <div className='flex justify-between items-center mb-3'>
+                <h2 className='text-2xl font-semibold'>
+                  📈 Desempenho vs Meta
+                </h2>
+                {/* Filtros agora estão aqui */}
+                <FilterControls />
+              </div>
+              <PerformanceTable
+                resultsBySector={resultsBySector}
+                uniqueCriteria={uniqueCriteria}
+                activeCriteria={activeCriteria}
+                isLoading={isLoading}
+                error={error}
+              />
+            </section>
           </div>
+        </div>
 
-          {/* Passa os dados e estados do hook para o componente */}
-          <RankingTable
-            data={rankingData}
-            isLoading={isLoading} // Usa isLoading combinado
-            error={error} // Passa o erro combinado (componente pode decidir não mostrar)
-          />
-        </section>
-
-        {/* --- NOVA SEÇÃO: Desempenho vs Meta --- */}
-        <section>
-          <h2 className='text-2xl font-semibold mb-3'>📈 Desempenho vs Meta</h2>
-          <PerformanceTable
-            resultsBySector={resultsBySector}
-            uniqueCriteria={uniqueCriteria}
-            activeCriteria={activeCriteria} // Passa activeCriteria para a lógica de progresso/cor
-            isLoading={isLoading}
-            error={error}
-          />
-        </section>
-        {/* --------------------------------------- */}
-        {/* Seção Detalhes por Critério */}
+        {/* --- LINHA 2: Seção de largura total para a tabela de pontos --- */}
         <section>
           <h2 className='text-2xl font-semibold mb-3'>
             📊 Desempenho Detalhado por Critério
           </h2>
-          {/* Passa os dados e estados do hook para o componente */}
           <PointsTable
             resultsBySector={resultsBySector}
             uniqueCriteria={uniqueCriteria}
-            activeCriteria={activeCriteria} // Passa critérios ativos para lógica de cor
-            isLoading={isLoading} // Usa isLoading combinado
-            error={error} // Passa erro combinado
+            activeCriteria={activeCriteria}
+            isLoading={isLoading}
+            error={error}
           />
         </section>
-
-        {/* Link admin */}
-        <div className='mt-10 text-center'></div>
       </main>
     </TooltipProvider>
   );
