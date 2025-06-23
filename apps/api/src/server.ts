@@ -1,5 +1,6 @@
-// apps/api/src/server.ts (VERSÃO COM AUTOMAÇÃO INTEGRADA)
+// apps/api/src/server.ts (VERSÃO COM AUTOMAÇÃO INTEGRADA + SWAGGER - TIPOS CORRIGIDOS)
 import * as dotenv from 'dotenv';
+import { FastifyReply, FastifyRequest } from 'fastify';
 import { ServerConfig } from './config/server';
 import authPlugin from './plugins/auth.plugin';
 import multipartPlugin from './plugins/multipart.plugin';
@@ -27,6 +28,93 @@ const start = async () => {
     console.log('🚀 Iniciando servidor...');
     const serverConfig = new ServerConfig();
     const fastify = await serverConfig.configure();
+
+    // 📚 Configurar Swagger
+    await fastify.register(require('@fastify/swagger'), {
+      openapi: {
+        openapi: '3.0.0',
+        info: {
+          title: 'Sistema Premiação API',
+          description:
+            'API do Sistema de Premiação com automação ETL integrada',
+          version: '0.1.0',
+          contact: {
+            name: 'Lipe',
+            email: 'contato@sistema-premiacao.com',
+          },
+        },
+        servers: [
+          {
+            url: 'http://localhost:3001',
+            description: 'Development server',
+          },
+        ],
+        tags: [
+          { name: 'auth', description: 'Autenticação e autorização' },
+          { name: 'health', description: 'Status e saúde do sistema' },
+          { name: 'results', description: 'Resultados e premiações' },
+          { name: 'metadata', description: 'Metadados do sistema' },
+          { name: 'parameters', description: 'Parâmetros de configuração' },
+          { name: 'periods', description: 'Períodos e ciclos' },
+          { name: 'expurgos', description: 'Limpeza e expurgo de dados' },
+          { name: 'audit', description: 'Auditoria e logs' },
+          { name: 'admin', description: 'Administração do sistema' },
+          { name: 'automation', description: 'Automação ETL e processamento' },
+          { name: 'historical', description: 'Dados históricos' },
+          { name: 'test', description: 'Endpoints de teste' },
+        ],
+        components: {
+          securitySchemes: {
+            bearerAuth: {
+              type: 'http',
+              scheme: 'bearer',
+              bearerFormat: 'JWT',
+            },
+          },
+        },
+      },
+    });
+
+    // 📖 Configurar Swagger UI
+    await fastify.register(require('@fastify/swagger-ui'), {
+      routePrefix: '/docs',
+      uiConfig: {
+        docExpansion: 'list',
+        deepLinking: false,
+        defaultModelsExpandDepth: 1,
+        defaultModelExpandDepth: 1,
+      },
+      uiHooks: {
+        onRequest: function (
+          request: FastifyRequest,
+          reply: FastifyReply,
+          next: () => void
+        ) {
+          next();
+        },
+        preHandler: function (
+          request: FastifyRequest,
+          reply: FastifyReply,
+          next: () => void
+        ) {
+          next();
+        },
+      },
+      staticCSP: true,
+      transformStaticCSP: (header: string) => header,
+      transformSpecification: (
+        swaggerObject: any,
+        request: FastifyRequest,
+        reply: FastifyReply
+      ) => {
+        return swaggerObject;
+      },
+      transformSpecificationClone: true,
+    });
+
+    console.log(
+      '📚 Swagger configurado - disponível em http://localhost:3001/docs'
+    );
 
     // 1. Registra plugins de utilidade
     await fastify.register(servicesPlugin);
@@ -56,6 +144,12 @@ const start = async () => {
     await serverConfig.start();
     console.log('🎉 Servidor iniciado com sucesso!');
     console.log('🔧 Sistema de automação ETL disponível em /api/automation/*');
+    console.log(
+      '📚 Documentação Swagger disponível em http://localhost:3001/docs'
+    );
+    console.log(
+      '📄 OpenAPI JSON disponível em http://localhost:3001/docs/json'
+    );
   } catch (err) {
     console.error('❌ Erro fatal ao iniciar servidor:', err);
     process.exit(1);

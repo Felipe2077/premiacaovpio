@@ -10,9 +10,6 @@ const envPath = path.resolve(__dirname, 'apps/api/.env');
 dotenv.config({ path: envPath });
 
 async function checkDatabaseStructure() {
-  console.log('🔍 Verificando estrutura do banco de dados...');
-  console.log('');
-
   try {
     if (!AppDataSource.isInitialized) {
       await AppDataSource.initialize();

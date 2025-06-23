@@ -5,22 +5,25 @@ import { AutomationController } from '../controllers/automation.controller';
 
 /**
  * Plugin de rotas para automação do ETL
- * Registra endpoints para controle e monitoramento do sistema
+ * VERSÃO 2: Integrado com sistema de queue e WebSockets
  */
 const automationRoutes: FastifyPluginAsync = async (
   fastify: FastifyInstance
 ) => {
   const controller = new AutomationController();
 
+  // ===== REGISTRAR WEBSOCKETS =====
+  await controller.registerWebSocketRoutes(fastify);
+
   /**
    * POST /api/automation/trigger-update
-   * Dispara atualização completa ou parcial do sistema
+   * Dispara atualização do sistema ETL (com suporte a queue)
    */
   fastify.post(
     '/api/automation/trigger-update',
     {
       schema: {
-        description: 'Dispara atualização do sistema ETL',
+        description: 'Dispara atualização do sistema ETL via queue ou síncrono',
         tags: ['Automation'],
         body: {
           type: 'object',
@@ -40,9 +43,37 @@ const automationRoutes: FastifyPluginAsync = async (
               default: false,
               description: 'Se true, executa apenas recálculo (sem ETL)',
             },
+            useQueue: {
+              type: 'boolean',
+              default: true,
+              description: 'Se true, usa sistema de queue assíncrono',
+            },
+            priority: {
+              type: 'number',
+              minimum: 1,
+              maximum: 10,
+              default: 5,
+              description: 'Prioridade do job (1=baixa, 10=alta)',
+            },
           },
         },
         response: {
+          202: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              message: { type: 'string' },
+              data: {
+                type: 'object',
+                properties: {
+                  jobId: { type: 'string' },
+                  status: { type: 'string' },
+                  mode: { type: 'string' },
+                  websocketEndpoint: { type: 'string' },
+                },
+              },
+            },
+          },
           200: {
             type: 'object',
             properties: {
@@ -54,14 +85,7 @@ const automationRoutes: FastifyPluginAsync = async (
                   periodId: { type: 'number' },
                   periodMesAno: { type: 'string' },
                   executionTimeMs: { type: 'number' },
-                  recordsProcessed: {
-                    type: 'object',
-                    properties: {
-                      rawRecords: { type: 'number' },
-                      performanceRecords: { type: 'number' },
-                      rankingRecords: { type: 'number' },
-                    },
-                  },
+                  mode: { type: 'string' },
                 },
               },
             },
@@ -70,6 +94,131 @@ const automationRoutes: FastifyPluginAsync = async (
       },
     },
     controller.triggerUpdate.bind(controller)
+  );
+
+  /**
+   * GET /api/automation/jobs/:jobId
+   * Retorna o progresso de um job específico
+   */
+  fastify.get(
+    '/api/automation/jobs/:jobId',
+    {
+      schema: {
+        description: 'Busca progresso de um job específico',
+        tags: ['Automation', 'Jobs'],
+        params: {
+          type: 'object',
+          properties: {
+            jobId: { type: 'string' },
+          },
+          required: ['jobId'],
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              message: { type: 'string' },
+              data: {
+                type: 'object',
+                properties: {
+                  jobId: { type: 'string' },
+                  type: { type: 'string' },
+                  status: { type: 'string' },
+                  progress: { type: 'number' },
+                  currentStep: { type: 'string' },
+                  startedAt: { type: 'string' },
+                  estimatedTimeRemaining: { type: 'number' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    controller.getJobProgress.bind(controller)
+  );
+
+  /**
+   * GET /api/automation/jobs
+   * Lista todos os jobs ativos
+   */
+  fastify.get(
+    '/api/automation/jobs',
+    {
+      schema: {
+        description: 'Lista todos os jobs ativos na queue',
+        tags: ['Automation', 'Jobs'],
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              message: { type: 'string' },
+              data: {
+                type: 'object',
+                properties: {
+                  jobs: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        jobId: { type: 'string' },
+                        type: { type: 'string' },
+                        status: { type: 'string' },
+                        progress: { type: 'number' },
+                      },
+                    },
+                  },
+                  totalJobs: { type: 'number' },
+                  websocketClients: { type: 'number' },
+                  activeSubscriptions: { type: 'number' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    controller.getActiveJobs.bind(controller)
+  );
+
+  /**
+   * DELETE /api/automation/jobs/:jobId
+   * Cancela um job específico
+   */
+  fastify.delete(
+    '/api/automation/jobs/:jobId',
+    {
+      schema: {
+        description: 'Cancela um job específico',
+        tags: ['Automation', 'Jobs'],
+        params: {
+          type: 'object',
+          properties: {
+            jobId: { type: 'string' },
+          },
+          required: ['jobId'],
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              message: { type: 'string' },
+              data: {
+                type: 'object',
+                properties: {
+                  jobId: { type: 'string' },
+                  status: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    controller.cancelJob.bind(controller)
   );
 
   /**
@@ -96,6 +245,8 @@ const automationRoutes: FastifyPluginAsync = async (
                   dataInicio: { type: 'string' },
                   dataFim: { type: 'string' },
                   status: { type: 'string' },
+                  createdAt: { type: 'string' },
+                  updatedAt: { type: 'string' },
                 },
               },
             },
@@ -114,8 +265,8 @@ const automationRoutes: FastifyPluginAsync = async (
     '/api/automation/trigger-expurgo-recalculation',
     {
       schema: {
-        description: 'Dispara recálculo após aprovação de expurgo',
-        tags: ['Automation'],
+        description: 'Dispara recálculo após aprovação de expurgo via queue',
+        tags: ['Automation', 'Expurgo'],
         body: {
           type: 'object',
           properties: {
@@ -129,6 +280,24 @@ const automationRoutes: FastifyPluginAsync = async (
             },
           },
         },
+        response: {
+          202: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              message: { type: 'string' },
+              data: {
+                type: 'object',
+                properties: {
+                  jobId: { type: 'string' },
+                  expurgoId: { type: 'number' },
+                  status: { type: 'string' },
+                  websocketEndpoint: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
       },
     },
     controller.triggerExpurgoRecalculation.bind(controller)
@@ -136,13 +305,14 @@ const automationRoutes: FastifyPluginAsync = async (
 
   /**
    * GET /api/automation/status
-   * Status geral do sistema de automação
+   * Status geral do sistema de automação (expandido)
    */
   fastify.get(
     '/api/automation/status',
     {
       schema: {
-        description: 'Status geral do sistema de automação',
+        description:
+          'Status geral do sistema de automação com informações de queue',
         tags: ['Automation'],
         response: {
           200: {
@@ -163,6 +333,21 @@ const automationRoutes: FastifyPluginAsync = async (
                     },
                   },
                   systemReady: { type: 'boolean' },
+                  queueStatus: {
+                    type: 'object',
+                    properties: {
+                      activeJobs: { type: 'number' },
+                      processingJobs: { type: 'number' },
+                      waitingJobs: { type: 'number' },
+                    },
+                  },
+                  websocketStatus: {
+                    type: 'object',
+                    properties: {
+                      connectedClients: { type: 'number' },
+                      activeSubscriptions: { type: 'number' },
+                    },
+                  },
                   lastUpdate: { type: 'string' },
                 },
               },
@@ -207,9 +392,11 @@ const automationRoutes: FastifyPluginAsync = async (
     controller.validateActivePeriod.bind(controller)
   );
 
-  fastify.log.info('✅ Rotas de Automação registradas');
+  fastify.log.info(
+    '✅ Rotas de Automação v2 registradas (com Queue e WebSockets)'
+  );
 };
 
 export default fp(automationRoutes, {
-  name: 'automation-routes',
+  name: 'automation-routes-v2',
 });
