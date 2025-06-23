@@ -21,6 +21,7 @@ import metadataRoutes from './routes/metadata.routes';
 import parametersRoutes from './routes/parameters.routes';
 import periodsRoutes from './routes/periods.routes';
 import resultsRoutes from './routes/results.routes';
+import schedulingRoutes from './routes/scheduling.routes';
 import testRoutes from './routes/test.routes';
 
 dotenv.config();
@@ -141,6 +142,7 @@ const start = async () => {
     await fastify.register(historicalResultsRoutes);
     await fastify.register(automationTriggersRoutes);
     await fastify.register(automationRoutes);
+    await fastify.register(schedulingRoutes);
 
     console.log('✅ Todas as rotas foram registradas (incluindo automação).');
 

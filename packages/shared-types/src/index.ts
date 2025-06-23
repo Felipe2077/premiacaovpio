@@ -136,3 +136,6 @@ export {
   formatSessionDevice,
   validatePassword,
 } from './dto/auth.dto';
+
+// ===== SCHEDULING TYPES (SPRINT 2 FASE 3) =====
+export * from './dto/scheduling.dto';
