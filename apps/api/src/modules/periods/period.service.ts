@@ -6,16 +6,20 @@ import 'reflect-metadata';
 import { Repository } from 'typeorm'; // Importar operadores
 import { AuditLogService } from '../audit/audit.service';
 import { CalculationService } from '../calculation/calculation.service';
+import { ExpurgoAutomationHook } from '../expurgos/expurgo-automation.hook';
 
 export class CompetitionPeriodService {
   private periodRepo: Repository<CompetitionPeriodEntity>;
   private calculationService: CalculationService; // Já estava declarado
   private auditLogService: AuditLogService; // Já estava declarado
+  private automationHook: ExpurgoAutomationHook;
 
   constructor() {
     this.periodRepo = AppDataSource.getRepository(CompetitionPeriodEntity);
     this.calculationService = new CalculationService();
     this.auditLogService = new AuditLogService();
+    this.automationHook = new ExpurgoAutomationHook();
+
     console.log(
       '[CompetitionPeriodService] Instanciado e repositório configurado.'
     );
@@ -246,25 +250,35 @@ export class CompetitionPeriodService {
       );
     }
 
-    // TODO: Validação Avançada - Verificar se TODAS as metas para este período foram cadastradas
-    // Isso envolveria contar os critérios ativos e os setores ativos, e verificar se
-    // existem (critérios.length * setores.length) registros em parameter_values para este periodId.
-    // Por simplicidade para V1 inicial, podemos pular essa validação ou fazer uma mais simples.
-    // Exemplo:
-    // const activeCriteriaCount = await AppDataSource.getRepository(CriterionEntity).count({ where: { ativo: true } });
-    // const activeSectorsCount = await AppDataSource.getRepository(SectorEntity).count({ where: { ativo: true } });
-    // const expectedTargets = activeCriteriaCount * activeSectorsCount;
-    // const currentTargets = await this.parameterRepo.count({ where: { competitionPeriodId: period.id } }); // Supondo que ParameterValueEntity tem competitionPeriodId
-    // if (currentTargets < expectedTargets) {
-    //   throw new Error(`Não é possível iniciar o período ${period.mesAno}. Metas incompletas: <span class="math-inline">\{currentTargets\}/</span>{expectedTargets} definidas.`);
-    // }
-    // console.log(`[PeriodService] Validação de metas para período ${period.mesAno} OK.`);
-
     period.status = 'ATIVA';
     const updatedPeriod = await this.periodRepo.save(period);
     console.log(
       `[PeriodService] Período ${updatedPeriod.mesAno} (ID: ${updatedPeriod.id}) iniciado com sucesso.`
     );
+
+    // 🚀 NOVO: Hook de automação para período ativado
+    console.log(
+      `[PeriodService] 🚀 Disparando hook de automação para período ativado...`
+    );
+
+    this.automationHook
+      .onPeriodStatusChanged(
+        updatedPeriod.id,
+        'PLANEJAMENTO',
+        'ATIVA',
+        actingUser.id
+      )
+      .then((result) => {
+        console.log(
+          `[PeriodService] ✅ Hook de período ativado: ${result.message}`
+        );
+      })
+      .catch((error) => {
+        console.error(
+          `[PeriodService] ❌ Erro no hook de período ativado:`,
+          error
+        );
+      });
 
     // TODO: Registrar no AuditLog
     // await this.auditLogService.registerLog({
@@ -307,15 +321,13 @@ export class CompetitionPeriodService {
 
     // Validação da Data: Só pode fechar se a data de fim do período já passou ou é hoje.
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Zera a hora para comparar apenas a data
-    const periodEndDate = new Date(period.dataFim); // Assume que dataFim é 'YYYY-MM-DD'
-    periodEndDate.setDate(periodEndDate.getDate() + 1); // Para incluir o dia todo
+    today.setHours(0, 0, 0, 0);
+    const periodEndDate = new Date(period.dataFim);
+    periodEndDate.setDate(periodEndDate.getDate() + 1);
 
-    // Ajuste para comparar corretamente as datas, considerando apenas a parte da data
-    const periodEndDateDay = new Date(period.dataFim + 'T00:00:00'); // Adiciona hora para evitar problemas de fuso na comparação <
+    const periodEndDateDay = new Date(period.dataFim + 'T00:00:00');
 
     if (today < periodEndDateDay) {
-      // Se hoje ainda é ANTES do dia seguinte ao fim do período
       throw new Error(
         `Período ${period.mesAno} só pode ser fechado após ${period.dataFim}. Data atual: ${today.toISOString().split('T')[0]}`
       );
@@ -323,13 +335,13 @@ export class CompetitionPeriodService {
 
     period.status = 'FECHADA';
     period.fechadaPorUserId = actingUser.id;
-    period.fechadaEm = new Date(); // Timestamp do fechamento
+    period.fechadaEm = new Date();
     const updatedPeriod = await this.periodRepo.save(period);
     console.log(
       `[PeriodService] Período ${updatedPeriod.mesAno} (ID: ${updatedPeriod.id}) fechado com sucesso.`
     );
 
-    // DISPARAR O CÁLCULO DA PREMIAÇÃO
+    // DISPARAR O CÁLCULO DA PREMIAÇÃO (SEU CÓDIGO ORIGINAL)
     console.log(
       `[PeriodService] Disparando cálculo final para o período ${updatedPeriod.mesAno}...`
     );
@@ -339,6 +351,30 @@ export class CompetitionPeriodService {
     console.log(
       `[PeriodService] Cálculo para ${updatedPeriod.mesAno} concluído após fechamento.`
     );
+
+    // 🚀 NOVO: Hook de automação para período fechado
+    console.log(
+      `[PeriodService] 🚀 Disparando hook de automação para período fechado...`
+    );
+
+    this.automationHook
+      .onPeriodStatusChanged(
+        updatedPeriod.id,
+        'ATIVA',
+        'FECHADA',
+        actingUser.id
+      )
+      .then((result) => {
+        console.log(
+          `[PeriodService] ✅ Hook de período fechado: ${result.message}`
+        );
+      })
+      .catch((error) => {
+        console.error(
+          `[PeriodService] ❌ Erro no hook de período fechado:`,
+          error
+        );
+      });
 
     // TODO: Registrar no AuditLog
     // await this.auditLogService.registerLog({
@@ -351,5 +387,16 @@ export class CompetitionPeriodService {
     // });
 
     return updatedPeriod;
+  }
+  async isSystemReadyForAutomation(): Promise<boolean> {
+    try {
+      return await this.automationHook.isSystemReadyForAutomation();
+    } catch (error) {
+      console.error(
+        '[PeriodService] Erro ao verificar prontidão do sistema para automação:',
+        error
+      );
+      return false;
+    }
   }
 }

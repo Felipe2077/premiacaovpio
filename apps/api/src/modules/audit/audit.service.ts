@@ -22,6 +22,29 @@ export interface CreateAuditLogDto {
   competitionPeriodId?: number; // ID do período de competição, se relevante para a ação
 }
 
+export interface TriggerAuditLogData {
+  userId: number;
+  userName: string;
+  triggerType:
+    | 'EXPURGO_APROVADO'
+    | 'META_ALTERADA'
+    | 'PERIODO_MUDANCA_STATUS'
+    | 'RECALCULO_MANUAL'
+    | 'SISTEMA_AUTOMACAO';
+  actionType: string;
+  entityType: string;
+  entityId: string;
+  details: {
+    [key: string]: any;
+    triggerSource?: 'automatic' | 'manual' | 'system';
+    executionTimeMs?: number;
+    success?: boolean;
+    error?: string;
+  };
+  justification: string;
+  competitionPeriodId?: number;
+}
+
 export class AuditLogService {
   private logRepo = AppDataSource.getRepository(AuditLogEntity);
   // Se você precisar buscar UserEntity pelo ID dentro do createLog:
@@ -101,6 +124,175 @@ export class AuditLogService {
       // Se a auditoria é mandatória, o erro deve propagar para potencialmente
       // reverter a transação principal (se houver uma).
       throw new Error(`Falha ao criar log de auditoria. Causa:`);
+    }
+  }
+
+  /**
+   * 🆕 Log especializado para triggers (usa seu createLog() internamente)
+   */
+  async createTriggerLog(data: TriggerAuditLogData): Promise<AuditLogEntity> {
+    console.log(
+      `[AuditLogService] 📝 Criando log de trigger - Tipo: ${data.triggerType}`
+    );
+
+    // Usar seu método createLog() existente com dados enriquecidos
+    const enrichedData: CreateAuditLogDto = {
+      userId: data.userId,
+      userName: data.userName,
+      actionType: data.actionType,
+      entityType: data.entityType,
+      entityId: data.entityId,
+      justification: data.justification,
+      competitionPeriodId: data.competitionPeriodId,
+      details: {
+        ...data.details,
+        triggerType: data.triggerType,
+        timestamp: new Date().toISOString(),
+        version: '3.1.0',
+        phase: 'FASE_3_SPRINT_1',
+      },
+    };
+
+    return this.createLog(enrichedData); // Reutiliza seu método original!
+  }
+
+  /**
+   * 🆕 Buscar logs de triggers por período
+   */
+  async findTriggerLogsByPeriod(
+    periodMesAno: string,
+    limit: number = 100
+  ): Promise<AuditLogEntity[]> {
+    console.log(
+      `[AuditLogService] 🔍 Buscando logs de triggers - Período: ${periodMesAno}`
+    );
+
+    try {
+      const logs = await this.logRepo
+        .createQueryBuilder('audit')
+        .leftJoinAndSelect('audit.competitionPeriod', 'period')
+        .where('period.mesAno = :periodMesAno', { periodMesAno })
+        .andWhere(`audit.details->>'triggerType' IS NOT NULL`)
+        .orderBy('audit.timestamp', 'DESC')
+        .limit(limit)
+        .getMany();
+
+      console.log(
+        `[AuditLogService] ✅ Encontrados ${logs.length} logs de triggers`
+      );
+      return logs;
+    } catch (error) {
+      console.error(
+        `[AuditLogService] ❌ Erro ao buscar logs de triggers:`,
+        error
+      );
+      throw new Error('Falha ao buscar logs de triggers.');
+    }
+  }
+
+  /**
+   * 🆕 Estatísticas básicas de triggers
+   */
+  async getTriggerStatistics(periodMesAno: string): Promise<{
+    totalTriggers: number;
+    triggersByType: Record<string, number>;
+    successRate: number;
+    errorCount: number;
+  }> {
+    console.log(
+      `[AuditLogService] 📊 Calculando estatísticas - Período: ${periodMesAno}`
+    );
+
+    try {
+      const triggerLogs = await this.findTriggerLogsByPeriod(periodMesAno);
+
+      if (triggerLogs.length === 0) {
+        return {
+          totalTriggers: 0,
+          triggersByType: {},
+          successRate: 0,
+          errorCount: 0,
+        };
+      }
+
+      const totalTriggers = triggerLogs.length;
+      const triggersByType: Record<string, number> = {};
+      let successfulTriggers = 0;
+      let errorCount = 0;
+
+      triggerLogs.forEach((log) => {
+        // Contar por tipo
+        const triggerType = log.details?.triggerType || 'UNKNOWN';
+        triggersByType[triggerType] = (triggersByType[triggerType] || 0) + 1;
+
+        // Contar sucessos e erros
+        if (log.details?.error) {
+          errorCount++;
+        } else {
+          successfulTriggers++;
+        }
+      });
+
+      const successRate = (successfulTriggers / totalTriggers) * 100;
+
+      return {
+        totalTriggers,
+        triggersByType,
+        successRate: Math.round(successRate * 100) / 100,
+        errorCount,
+      };
+    } catch (error) {
+      console.error(
+        `[AuditLogService] ❌ Erro ao calcular estatísticas:`,
+        error
+      );
+      throw new Error('Falha ao calcular estatísticas de triggers.');
+    }
+  }
+
+  /**
+   * 🆕 Buscar erros críticos de triggers
+   */
+  async findCriticalTriggerErrors(
+    periodMesAno?: string,
+    limit: number = 50
+  ): Promise<AuditLogEntity[]> {
+    console.log(
+      `[AuditLogService] 🚨 Buscando erros críticos - Período: ${periodMesAno || 'todos'}`
+    );
+
+    try {
+      const queryBuilder = this.logRepo
+        .createQueryBuilder('audit')
+        .leftJoinAndSelect('audit.competitionPeriod', 'period')
+        .where(`audit.details->>'error' IS NOT NULL`)
+        .andWhere(`audit.details->>'triggerType' IS NOT NULL`)
+        .andWhere(
+          `(audit.actionType LIKE '%ERRO_CRITICO%' OR 
+            audit.actionType LIKE '%FALHOU%')`
+        );
+
+      if (periodMesAno) {
+        queryBuilder.andWhere('period.mesAno = :periodMesAno', {
+          periodMesAno,
+        });
+      }
+
+      const criticalErrors = await queryBuilder
+        .orderBy('audit.timestamp', 'DESC')
+        .limit(limit)
+        .getMany();
+
+      console.log(
+        `[AuditLogService] ✅ Encontrados ${criticalErrors.length} erros críticos`
+      );
+      return criticalErrors;
+    } catch (error) {
+      console.error(
+        `[AuditLogService] ❌ Erro ao buscar erros críticos:`,
+        error
+      );
+      throw new Error('Falha ao buscar erros críticos.');
     }
   }
 }

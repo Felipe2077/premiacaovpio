@@ -16,6 +16,7 @@ import {
 import 'reflect-metadata';
 import { DeepPartial, FindOptionsWhere, In, IsNull, Repository } from 'typeorm';
 import { AuditLogService } from '../audit/audit.service';
+import { ExpurgoAutomationHook } from '../expurgos/expurgo-automation.hook';
 import { CriterionCalculationSettingsService } from './criterion-calculation-settings.service';
 
 /**
@@ -30,6 +31,7 @@ export class ParameterService {
   private readonly performanceDataRepo: Repository<PerformanceDataEntity>;
   private readonly auditLogService: AuditLogService;
   private readonly criterionCalculationSettingsService: CriterionCalculationSettingsService;
+  private automationHook: ExpurgoAutomationHook;
 
   constructor() {
     this.parameterRepo = AppDataSource.getRepository(ParameterValueEntity);
@@ -40,6 +42,7 @@ export class ParameterService {
       PerformanceDataEntity
     );
     this.auditLogService = new AuditLogService();
+    this.automationHook = new ExpurgoAutomationHook();
     this.criterionCalculationSettingsService =
       new CriterionCalculationSettingsService();
 
@@ -879,6 +882,26 @@ export class ParameterService {
     console.log(
       `[ParameterService] Parâmetro criado com ID: ${savedParameter.id}`
     );
+
+    // 🚀 NOVO: Hook de automação para meta criada
+    console.log(
+      `[ParameterService] 🚀 Disparando hook de automação para meta criada...`
+    );
+
+    this.automationHook
+      .onMetaChanged(savedParameter.id, actingUser.id)
+      .then((result) => {
+        console.log(
+          `[ParameterService] ✅ Hook de meta criada: ${result.message}`
+        );
+      })
+      .catch((error) => {
+        console.error(
+          `[ParameterService] ❌ Erro no hook de meta criada:`,
+          error
+        );
+      });
+
     return savedParameter;
   }
 
@@ -1050,12 +1073,59 @@ export class ParameterService {
     // Validações básicas
     this.validateUpdateParameter(oldParameter, data);
 
-    // ⭐ NOVA LÓGICA: Versionamento por timestamp
-    return this.executeParameterVersioningByTimestamp(
+    //  Versionamento por timestamp
+    const updatedParameter = await this.executeParameterVersioningByTimestamp(
       oldParameter,
       data,
       actingUser
     );
+
+    // 🚀 NOVO: Hook de automação para meta alterada
+    console.log(
+      `[ParameterService] 🚀 Disparando hook de automação para meta alterada...`
+    );
+
+    this.automationHook
+      .onMetaChanged(updatedParameter.id, actingUser.id)
+      .then((result) => {
+        console.log(
+          `[ParameterService] ✅ Hook de meta alterada: ${result.message}`
+        );
+      })
+      .catch((error) => {
+        console.error(
+          `[ParameterService] ❌ Erro no hook de meta alterada:`,
+          error
+        );
+      });
+
+    return updatedParameter;
+  }
+
+  async testAutomationConnectivity(): Promise<{
+    isReady: boolean;
+    message: string;
+  }> {
+    try {
+      const isReady = await this.automationHook.isSystemReadyForAutomation();
+
+      return {
+        isReady,
+        message: isReady
+          ? 'Sistema de automação está pronto'
+          : 'Sistema de automação não está pronto',
+      };
+    } catch (error) {
+      console.error(
+        '[ParameterService] Erro ao testar conectividade com automação:',
+        error
+      );
+
+      return {
+        isReady: false,
+        message: `Erro na conectividade: ${error instanceof Error ? error.message : 'Desconhecido'}`,
+      };
+    }
   }
 
   /**

@@ -1,4 +1,6 @@
-// apps/api/src/server.ts (VERSÃO COM AUTOMAÇÃO INTEGRADA + SWAGGER - TIPOS CORRIGIDOS)
+// apps/api/src/server.ts (VERSÃO CORRIGIDA)
+import fastifySwagger from '@fastify/swagger';
+import fastifySwaggerUi from '@fastify/swagger-ui';
 import * as dotenv from 'dotenv';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { ServerConfig } from './config/server';
@@ -10,11 +12,11 @@ import servicesPlugin from './plugins/services';
 import adminRoutes from './routes/admin.routes';
 import auditRoutes from './routes/audit.routes';
 import { authRoutes } from './routes/auth.routes';
-// ===== ADICIONAR ESTA IMPORTAÇÃO =====
+import automationTriggersRoutes from './routes/automation-triggers.routes';
 import automationRoutes from './routes/automation.routes';
 import expurgosRoutes from './routes/expurgos.routes';
 import healthRoutes from './routes/health.routes';
-import historicalResultsRoutes from './routes/historical-results.routes'; // 👈 1. IMPORT CORRIGIDO
+import historicalResultsRoutes from './routes/historical-results.routes';
 import metadataRoutes from './routes/metadata.routes';
 import parametersRoutes from './routes/parameters.routes';
 import periodsRoutes from './routes/periods.routes';
@@ -29,8 +31,11 @@ const start = async () => {
     const serverConfig = new ServerConfig();
     const fastify = await serverConfig.configure();
 
-    // 📚 Configurar Swagger
-    await fastify.register(require('@fastify/swagger'), {
+    // 📚 CORREÇÃO: Remover o tipo genérico explícito e definir o modo.
+    // O erro "No overload matches" ocorre por um conflito de tipos.
+    // Esta é a forma correta de registrar o plugin.
+    await fastify.register(fastifySwagger, {
+      mode: 'dynamic', // Garante que o modo correto seja usado
       openapi: {
         openapi: '3.0.0',
         info: {
@@ -75,8 +80,8 @@ const start = async () => {
       },
     });
 
-    // 📖 Configurar Swagger UI
-    await fastify.register(require('@fastify/swagger-ui'), {
+    // 📖 CORREÇÃO: Remover o tipo genérico explícito.
+    await fastify.register(fastifySwaggerUi, {
       routePrefix: '/docs',
       uiConfig: {
         docExpansion: 'list',
@@ -118,7 +123,7 @@ const start = async () => {
 
     // 1. Registra plugins de utilidade
     await fastify.register(servicesPlugin);
-    await fastify.register(authPlugin); // A ÚNICA fonte de autenticação
+    await fastify.register(authPlugin);
     await fastify.register(multipartPlugin);
     console.log('✅ Plugins de utilidade registrados.');
 
@@ -134,9 +139,8 @@ const start = async () => {
     await fastify.register(auditRoutes);
     await fastify.register(adminRoutes);
     await fastify.register(historicalResultsRoutes);
-
-    // ===== ADICIONAR ESTA LINHA =====
-    await fastify.register(automationRoutes); // 🚀 ROTAS DE AUTOMAÇÃO
+    await fastify.register(automationTriggersRoutes);
+    await fastify.register(automationRoutes);
 
     console.log('✅ Todas as rotas foram registradas (incluindo automação).');
 
