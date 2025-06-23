@@ -13,7 +13,10 @@ export type ScheduleStatus = 'ACTIVE' | 'INACTIVE' | 'PAUSED' | 'ERROR';
 /**
  * Tipo de job que pode ser agendado
  */
-export type ScheduleJobType = 'FULL_ETL' | 'PARTIAL_RECALCULATION' | 'DATA_VALIDATION';
+export type ScheduleJobType =
+  | 'FULL_ETL'
+  | 'PARTIAL_RECALCULATION'
+  | 'DATA_VALIDATION';
 
 /**
  * Status da última execução

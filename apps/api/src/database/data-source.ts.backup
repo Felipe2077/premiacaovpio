@@ -99,7 +99,6 @@ console.log('[data-source.ts] Configuração do MySQL:', {
 const entities = [
   // === CORE ENTITIES ===
   UserEntity,
-  ScheduleConfigEntity,
   RoleEntity,
   SessionEntity, // NOVA
   SectorEntity,
