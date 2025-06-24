@@ -72,7 +72,7 @@ const actionMap: Record<string, ActionInfo> = {
     icon: XCircle,
     variant: 'outline',
     className: 'bg-red-50 text-red-700 border-red-300 hover:bg-red-100',
-    priority: 'critical',
+    priority: 'high',
   },
   EXPURGO_ANEXO_ENVIADO: {
     label: 'Anexo Enviado',
@@ -130,7 +130,7 @@ const actionMap: Record<string, ActionInfo> = {
     variant: 'outline',
     className:
       'bg-orange-50 text-orange-700 border-orange-300 hover:bg-orange-100',
-    priority: 'high',
+    priority: 'medium',
   },
   META_VERSIONADA_TIMESTAMP: {
     label: 'Meta Versionada',
@@ -204,7 +204,6 @@ const actionMap: Record<string, ActionInfo> = {
   },
 
   // === AGENDAMENTOS ===
-  // === AGENDAMENTOS ===
   SCHEDULE_CREATED: {
     label: 'Agendamento Criado',
     description: 'Um novo job foi agendado para execução automática.',
@@ -227,12 +226,12 @@ const actionMap: Record<string, ActionInfo> = {
     icon: Zap,
     variant: 'outline',
     className: 'bg-sky-50 text-sky-700 border-sky-300 hover:bg-sky-100',
-    priority: 'low',
+    priority: 'high',
   },
 
   // === AUTOMAÇÃO ===
   ETL_INICIADO: {
-    label: 'Início de ETL',
+    label: 'Início de atualização completa',
     description: 'O processo de Atualização Completa (ETL) foi iniciado.',
     icon: RefreshCw,
     variant: 'outline',
@@ -241,7 +240,7 @@ const actionMap: Record<string, ActionInfo> = {
     priority: 'medium',
   },
   ETL_CONCLUIDO: {
-    label: 'ETL Concluído',
+    label: 'Atualização completa Concluída',
     description: 'O processo de Atualização Completa (ETL) foi finalizado.',
     icon: CheckCircle2,
     variant: 'outline',
@@ -308,6 +307,57 @@ const actionMap: Record<string, ActionInfo> = {
     icon: TrendingUp,
     variant: 'outline',
     className: 'bg-pink-50 text-pink-700 border-pink-300 hover:bg-pink-100',
+    priority: 'medium',
+  },
+  // === AÇÕES DE USUÁRIO  ===
+  CREATE_USER: {
+    label: 'Criação de Usuário',
+    description: 'Um novo usuário foi registrado no sistema.',
+    icon: PlusCircle,
+    variant: 'outline',
+    className: 'bg-green-50 text-green-700 border-green-300 hover:bg-green-100',
+    priority: 'high',
+  },
+  RESET_USER_PASSWORD: {
+    label: 'Reset de Senha',
+    description: 'A senha de um usuário foi resetada por um administrador.',
+    icon: Shield,
+    variant: 'outline',
+    className:
+      'bg-orange-50 text-orange-700 border-orange-300 hover:bg-orange-100',
+    priority: 'critical',
+  },
+  DEACTIVATE_USER: {
+    label: 'Usuário Desativado',
+    description: 'A conta de um usuário foi desativada.',
+    icon: XCircle,
+    variant: 'outline',
+    className: 'bg-red-50 text-red-700 border-red-300 hover:bg-red-100',
+    priority: 'high',
+  },
+  DELETE_USER: {
+    label: 'Usuário Removido',
+    description: 'Um usuário foi permanentemente removido do sistema.',
+    icon: Trash2,
+    variant: 'destructive', // Variante destrutiva para chamar atenção
+    className: 'bg-red-100 text-red-800 border-red-300 hover:bg-red-200',
+    priority: 'critical',
+  },
+  ACTIVATE_USER: {
+    label: 'Usuário Ativado',
+    description: 'A conta de um usuário foi reativada.',
+    icon: CheckCircle,
+    variant: 'outline',
+    className: 'bg-green-50 text-green-700 border-green-300 hover:bg-green-100',
+    priority: 'high',
+  },
+  UPDATE_USER: {
+    label: 'Usuário Atualizado',
+    description: 'Os dados de um usuário foram modificados.',
+    icon: Pencil,
+    variant: 'outline',
+    className:
+      'bg-yellow-50 text-yellow-700 border-yellow-300 hover:bg-yellow-100',
     priority: 'medium',
   },
 };

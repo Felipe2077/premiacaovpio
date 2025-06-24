@@ -503,10 +503,111 @@ export function LogDetailRenderer({ log }: LogDetailRendererProps) {
   // --- INÍCIO DO BLOCO DE RENDERIZAÇÃO CUSTOMIZADA ---
   // Um 'switch' para tratar os casos especiais antes da lógica genérica.
   switch (actionType) {
+    // --- Casos de Gestão de Usuário ---
+    case 'DELETE_USER': {
+      const user = details.userDeactivated; // Nome do campo conforme o log
+      return (
+        <p>
+          O usuário <strong>{user.nome}</strong> (Email: {user.email}) foi
+          permanentemente removido do sistema.
+        </p>
+      );
+    }
+    case 'UPDATE_USER': {
+      return (
+        <div className='space-y-3'>
+          <p>
+            Foram submetidos os seguintes dados para atualização do usuário:
+          </p>
+          <Card>
+            <CardContent className='pt-4 space-y-1'>
+              {Object.entries(details.newData).map(([key, value]) => {
+                const config = fieldConfig[key];
+                const displayConfig = config || {
+                  label: key.charAt(0).toUpperCase() + key.slice(1),
+                  icon: Info,
+                  type: 'text',
+                };
+                return (
+                  <CompactField
+                    key={key}
+                    fieldKey={key}
+                    value={value}
+                    config={displayConfig}
+                  />
+                );
+              })}
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+    case 'CREATE_USER': {
+      const user = details.userCreated;
+      return (
+        <div className='space-y-2'>
+          <p>Um novo usuário foi criado no sistema:</p>
+          <ul className='list-disc list-inside pl-4 text-sm text-muted-foreground'>
+            {user.nome && (
+              <li>
+                <strong>Nome:</strong> {user.nome}
+              </li>
+            )}
+            {user.email && (
+              <li>
+                <strong>Email:</strong> {user.email}
+              </li>
+            )}
+            {user.role && (
+              <li>
+                <strong>Função:</strong> {user.role}
+              </li>
+            )}
+          </ul>
+        </div>
+      );
+    }
+    case 'RESET_USER_PASSWORD': {
+      const user = details.targetUser;
+      return (
+        <p>
+          A senha do usuário <strong>{user.nome}</strong> foi resetada.
+        </p>
+      );
+    }
+    case 'DEACTIVATE_USER':
+    case 'ACTIVATE_USER': {
+      const user = details.targetUser;
+      const actionText =
+        actionType === 'ACTIVATE_USER' ? 'ativada' : 'desativada';
+      return (
+        <p>
+          A conta do usuário <strong>{user.nome}</strong> foi{' '}
+          <strong
+            className={
+              actionText === 'ativada' ? 'text-green-600' : 'text-red-600'
+            }
+          >
+            {actionText}
+          </strong>
+          .
+        </p>
+      );
+    }
+
+    // --- Casos de Agendamento ---
+    case 'SCHEDULE_DELETED':
+      return (
+        <p>
+          O agendamento chamado{' '}
+          <strong>"{details.scheduleName || `ID ${log.entityId}`}"</strong> foi
+          removido do sistema.
+        </p>
+      );
     case 'SCHEDULE_CREATED':
       return (
         <div className='space-y-2'>
-          <p>Um novo agendamento foi criado com os seguintes detalhes:</p>
+          <p>Um novo agendamento foi criado:</p>
           <ul className='list-disc list-inside pl-4 text-sm text-muted-foreground'>
             {details.scheduleName && (
               <li>
@@ -515,119 +616,65 @@ export function LogDetailRenderer({ log }: LogDetailRendererProps) {
             )}
             {details.jobType && (
               <li>
-                <strong>Tipo de Job:</strong> {details.jobType}
-              </li>
-            )}
-            {details.frequency && (
-              <li>
-                <strong>Frequência:</strong> {details.frequency}
-              </li>
-            )}
-            {details.timeOfDay && (
-              <li>
-                <strong>Horário:</strong> {details.timeOfDay}
-              </li>
-            )}
-            {details.nextRunAt && (
-              <li>
-                <strong>Próxima Execução:</strong>{' '}
-                {formatValue(details.nextRunAt, 'date')}
+                <strong>Tipo:</strong> {details.jobType}
               </li>
             )}
           </ul>
         </div>
       );
-
-    case 'SCHEDULE_DELETED':
-      return (
-        <p>
-          O agendamento chamado{' '}
-          <strong>"{details.scheduleName || 'ID: ' + log.entityId}"</strong> foi
-          removido do sistema.
-        </p>
-      );
-
     case 'SCHEDULED_JOB_EXECUTED':
       return (
         <p>
-          O job agendado <strong>"{details.scheduleName}"</strong> (Tipo:{' '}
-          {details.jobType}) foi executado automaticamente.
+          O job agendado <strong>"{details.scheduleName}"</strong> foi
+          executado.
         </p>
       );
 
+    // --- Casos de Automação ---
     case 'ETL_INICIADO':
     case 'RECALCULO_INICIADO': {
       const isEtl = actionType === 'ETL_INICIADO';
-      const title = isEtl
-        ? 'Atualização Completa (ETL)'
-        : 'Recálculo de Resultados';
+      const title = isEtl ? 'Atualização Completa' : 'Recálculo';
       return (
         <p>
           O processo de <strong>{title}</strong> foi iniciado para a vigência{' '}
           <strong>{details.periodMesAno}</strong>.
-          <br />
-          Disparado de forma:{' '}
-          <span className='font-medium capitalize'>{details.triggeredBy}</span>.
         </p>
       );
     }
-
     case 'ETL_CONCLUIDO': {
       const etlSeconds = (details.executionTimeMs / 1000)
         .toFixed(2)
         .replace('.', ',');
       return (
-        <div className='space-y-2'>
-          <p>
-            O processo de <strong>Atualização Completa (ETL)</strong> para a
-            vigência <strong>{details.periodMesAno}</strong> foi concluído.
-          </p>
-          <ul className='list-disc list-inside pl-4 text-sm text-muted-foreground'>
-            <li>
-              <strong>Duração:</strong> {etlSeconds} segundos
-            </li>
-            <li>
-              <strong>Registros Processados:</strong>{' '}
-              {formatValue(details.rawRecords, 'number')}
-            </li>
-            <li>
-              <strong>Registros Antigos Apagados:</strong>{' '}
-              {formatValue(details.deletedRecords, 'number')}
-            </li>
-          </ul>
-        </div>
+        <p>
+          A <strong>Atualização Completa</strong> foi concluída em{' '}
+          <strong>{etlSeconds} segundos</strong>.
+        </p>
       );
     }
-
     case 'RECALCULO_CONCLUIDO': {
       const recalcSeconds = (details.executionTimeMs / 1000)
         .toFixed(2)
         .replace('.', ',');
       return (
         <p>
-          O processo de <strong>Recálculo de Resultados</strong> foi concluído
-          em <strong>{recalcSeconds} segundos</strong>.
+          O <strong>Recálculo</strong> foi concluído em{' '}
+          <strong>{recalcSeconds} segundos</strong>.
         </p>
       );
     }
 
-    // Para qualquer outro caso, ele continua para a lógica original
     default:
-      // Se não for um dos casos acima, o 'break' não é necessário, pois a função
-      // continuará a executar o código abaixo.
       break;
   }
   // --- FIM DO BLOCO DE RENDERIZAÇÃO CUSTOMIZADA ---
 
   // ▼ LÓGICA ORIGINAL (PARA TODOS OS OUTROS EVENTOS) ▼
-  // Esta parte do código permanece 100% intacta.
-
-  // Separar campos que formam comparações
   const hasComparison =
     details.valorAntigo !== undefined && details.valorNovo !== undefined;
   const comparisonFields = hasComparison ? ['valorAntigo', 'valorNovo'] : [];
 
-  // Categorizar campos conhecidos
   const categorizedFields: Record<
     string,
     Array<{ key: string; value: any; config: (typeof fieldConfig)[string] }>
@@ -640,15 +687,12 @@ export function LogDetailRenderer({ log }: LogDetailRendererProps) {
     system: [],
   };
 
-  // Processar todos os campos
   Object.entries(details).forEach(([key, value]) => {
-    if (comparisonFields.includes(key)) return; // Pular campos de comparação
-
+    if (comparisonFields.includes(key)) return;
     const config = fieldConfig[key];
     if (config) {
       categorizedFields[config.category].push({ key, value, config });
     } else {
-      // Campo não catalogado - adicionar como sistema
       categorizedFields.system.push({
         key,
         value,
@@ -664,12 +708,9 @@ export function LogDetailRenderer({ log }: LogDetailRendererProps) {
     }
   });
 
-  // Filtrar categorias vazias
   const nonEmptyCategories = Object.entries(categorizedFields).filter(
     ([, fields]) => fields.length > 0
   );
-
-  // Se tem poucos campos, usar layout compacto
   const totalFields = nonEmptyCategories.reduce(
     (acc, [, fields]) => acc + fields.length,
     0
@@ -678,20 +719,16 @@ export function LogDetailRenderer({ log }: LogDetailRendererProps) {
 
   return (
     <div className='space-y-3'>
-      {/* Comparação de valores (se existir) */}
       {hasComparison && (
         <CompactComparison
           label='Alteração de Valor'
           oldValue={details.valorAntigo}
           newValue={details.valorNovo}
-          type='number'
         />
       )}
-
-      {/* Layout compacto para poucos campos */}
       {isCompact ? (
         <div className='space-y-2'>
-          {nonEmptyCategories.map(([category, fields]) =>
+          {nonEmptyCategories.map(([, fields]) =>
             fields.map(({ key, value, config }) => (
               <CompactField
                 key={key}
@@ -703,7 +740,6 @@ export function LogDetailRenderer({ log }: LogDetailRendererProps) {
           )}
         </div>
       ) : (
-        /* Layout por categorias para muitos campos */
         nonEmptyCategories.map(([category, fields]) => {
           const categoryLabels: Record<
             string,
@@ -740,21 +776,11 @@ export function LogDetailRenderer({ log }: LogDetailRendererProps) {
               icon: Database,
             },
           };
-
           const categoryInfo = categoryLabels[category];
           if (!categoryInfo) return null;
-
           const CategoryIcon = categoryInfo.icon;
-
           return (
-            <Card
-              key={category}
-              className='border-l-4'
-              style={{
-                borderLeftColor:
-                  getCategoryColor(category).match(/border-(\w+)-/)?.[0],
-              }}
-            >
+            <Card key={category} className='border-l-4'>
               <CardHeader className='pb-2'>
                 <CardTitle className='text-sm flex items-center gap-2'>
                   <CategoryIcon className='h-4 w-4' />
@@ -780,8 +806,6 @@ export function LogDetailRenderer({ log }: LogDetailRendererProps) {
           );
         })
       )}
-
-      {/* Dados brutos apenas se houver campos não reconhecidos e em modo de desenvolvimento */}
       {process.env.NODE_ENV === 'development' &&
         Object.keys(details).some(
           (key) => !fieldConfig[key] && !comparisonFields.includes(key)

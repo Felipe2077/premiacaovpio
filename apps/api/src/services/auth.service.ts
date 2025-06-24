@@ -43,8 +43,8 @@ interface LoginResult {
 export class AuthService {
   private readonly MAX_FAILED_ATTEMPTS = 5;
   private readonly LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutos
-  private readonly ACCESS_TOKEN_EXPIRY = '15m'; // 15 minutos
-  private readonly REFRESH_TOKEN_EXPIRY = '7d'; // 7 dias
+  private readonly ACCESS_TOKEN_EXPIRY = '24h'; // 15 minutos
+  private readonly REFRESH_TOKEN_EXPIRY = '30d'; // 7 dias
 
   // JWT Secret
   private readonly JWT_SECRET =
@@ -136,7 +136,7 @@ export class AuthService {
         role: user.role,
         permissions: user.getPermissions(),
       },
-      expiresIn: 900, // 15 minutos em segundos
+      expiresIn: 86400, // 24h em segundos
     };
   }
 
