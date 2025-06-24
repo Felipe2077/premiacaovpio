@@ -18,12 +18,10 @@ import { Permission } from '@sistema-premiacao/shared-types';
 import {
   AlertTriangle,
   BarChart3,
-  Calendar,
   Clock,
   FileText,
   Settings,
   Shield,
-  TrendingUp,
   Users,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -82,12 +80,12 @@ function AdminSidebar() {
       icon: BarChart3,
       show: true,
     },
-    {
-      title: 'Relatórios',
-      href: '/admin/reports',
-      icon: TrendingUp,
-      show: canViewReports(),
-    },
+    // {
+    //   title: 'Relatórios',
+    //   href: '/admin/reports',
+    //   icon: TrendingUp,
+    //   show: canViewReports(),
+    // },
     {
       title: 'Gerenciar Metas',
       href: '/admin/parameters',
@@ -100,12 +98,12 @@ function AdminSidebar() {
       icon: AlertTriangle,
       show: canApproveExpurgos() || true, // Gerentes podem pelo menos visualizar/solicitar
     },
-    {
-      title: 'Períodos',
-      href: '/admin/periods',
-      icon: Calendar,
-      show: isDirector(), // Apenas diretores podem gerenciar períodos
-    },
+    // {
+    //   title: 'Períodos',
+    //   href: '/admin/periods',
+    //   icon: Calendar,
+    //   show: isDirector(), // Apenas diretores podem gerenciar períodos
+    // },
     {
       title: 'Usuários',
       href: '/admin/users',
@@ -119,8 +117,8 @@ function AdminSidebar() {
       show: isDirector(),
     },
     {
-      title: 'Configurações',
-      href: '/admin/settings',
+      title: 'Agendamentos',
+      href: '/admin/scheduling',
       icon: Settings,
       show: isDirector(),
     },
