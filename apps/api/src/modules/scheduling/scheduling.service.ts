@@ -129,7 +129,7 @@ export class SchedulingService {
 
       // Audit log da inicialização
       await this.auditLogService.createLog({
-        userId: 0, // Sistema
+        userId: null, // Sistema
         userName: 'Sistema',
         actionType: 'SCHEDULING_SYSTEM_STARTED',
         entityType: 'SchedulingService',
@@ -166,7 +166,7 @@ export class SchedulingService {
 
       // Audit log da parada
       await this.auditLogService.createLog({
-        userId: 0, // Sistema
+        userId: null, // Sistema
         userName: 'Sistema',
         actionType: 'SCHEDULING_SYSTEM_STOPPED',
         entityType: 'SchedulingService',
@@ -646,7 +646,7 @@ export class SchedulingService {
 
       // Audit log da execução
       await this.auditLogService.createLog({
-        userId: 0, // Sistema
+        userId: null, // Sistema
         userName: 'Sistema Agendado',
         actionType: 'SCHEDULED_JOB_EXECUTED',
         entityType: 'ScheduleConfigEntity',
@@ -710,7 +710,7 @@ export class SchedulingService {
 
       // Audit log da notificação
       await this.auditLogService.createLog({
-        userId: 0,
+        userId: null,
         userName: 'Sistema',
         actionType: 'SCHEDULE_FAILURE_NOTIFICATION',
         entityType: 'ScheduleConfigEntity',

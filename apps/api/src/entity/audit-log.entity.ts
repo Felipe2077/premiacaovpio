@@ -8,8 +8,8 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { UserEntity } from './user.entity';
 import { CompetitionPeriodEntity } from './competition-period.entity';
+import { UserEntity } from './user.entity';
 
 @Entity({ name: 'audit_logs' })
 @Index(['userId', 'actionType', 'timestamp'])
@@ -22,7 +22,7 @@ export class AuditLogEntity {
   timestamp!: Date;
 
   @Column({ type: 'int', nullable: true })
-  userId?: number;
+  userId: number | null;
 
   @Column({ type: 'varchar', length: 255, nullable: true }) // Mantém nome aqui para log rápido
   userName?: string;

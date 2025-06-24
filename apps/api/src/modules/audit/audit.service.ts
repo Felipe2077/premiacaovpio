@@ -11,7 +11,7 @@ import { FindManyOptions } from 'typeorm';
  * Define a estrutura dos dados esperados pelo método createLog.
  */
 export interface CreateAuditLogDto {
-  userId: number;
+  userId: number | null;
   userName?: string; // Nome do usuário para denormalização/log rápido
   actionType: string; // Tipo da ação realizada (ex: 'META_CRIADA', 'USUARIO_ATUALIZADO')
   entityType?: string; // Tipo da entidade principal afetada (ex: 'ParameterValueEntity', 'UserEntity')
@@ -123,7 +123,11 @@ export class AuditLogService {
       // É crucial decidir a política de tratamento de erro aqui.
       // Se a auditoria é mandatória, o erro deve propagar para potencialmente
       // reverter a transação principal (se houver uma).
-      throw new Error(`Falha ao criar log de auditoria. Causa:`);
+      const causeMessage =
+        error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Falha ao criar log de auditoria. Causa: ${causeMessage}`
+      );
     }
   }
 
