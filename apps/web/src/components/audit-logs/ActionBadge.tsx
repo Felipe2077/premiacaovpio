@@ -203,6 +203,69 @@ const actionMap: Record<string, ActionInfo> = {
     priority: 'critical',
   },
 
+  // === AGENDAMENTOS ===
+  // === AGENDAMENTOS ===
+  SCHEDULE_CREATED: {
+    label: 'Agendamento Criado',
+    description: 'Um novo job foi agendado para execução automática.',
+    icon: Clock,
+    variant: 'outline',
+    className: 'bg-cyan-50 text-cyan-700 border-cyan-300 hover:bg-cyan-100',
+    priority: 'medium',
+  },
+  SCHEDULE_DELETED: {
+    label: 'Agendamento Removido',
+    description: 'Um job agendado foi removido do sistema.',
+    icon: Trash2,
+    variant: 'outline',
+    className: 'bg-gray-50 text-gray-700 border-gray-300 hover:bg-gray-100',
+    priority: 'medium',
+  },
+  SCHEDULED_JOB_EXECUTED: {
+    label: 'Execução Agendada',
+    description: 'Um job agendado foi executado automaticamente.',
+    icon: Zap,
+    variant: 'outline',
+    className: 'bg-sky-50 text-sky-700 border-sky-300 hover:bg-sky-100',
+    priority: 'low',
+  },
+
+  // === AUTOMAÇÃO ===
+  ETL_INICIADO: {
+    label: 'Início de ETL',
+    description: 'O processo de Atualização Completa (ETL) foi iniciado.',
+    icon: RefreshCw,
+    variant: 'outline',
+    className:
+      'bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100',
+    priority: 'medium',
+  },
+  ETL_CONCLUIDO: {
+    label: 'ETL Concluído',
+    description: 'O processo de Atualização Completa (ETL) foi finalizado.',
+    icon: CheckCircle2,
+    variant: 'outline',
+    className: 'bg-green-50 text-green-700 border-green-300 hover:bg-green-100',
+    priority: 'medium',
+  },
+  RECALCULO_INICIADO: {
+    label: 'Início de Recálculo',
+    description: 'O processo de Recálculo de Resultados foi iniciado.',
+    icon: RefreshCw,
+    variant: 'outline',
+    className:
+      'bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100',
+    priority: 'medium',
+  },
+  RECALCULO_CONCLUIDO: {
+    label: 'Recálculo Concluído',
+    description: 'O processo de Recálculo de Resultados foi finalizado.',
+    icon: CheckCircle,
+    variant: 'outline',
+    className: 'bg-green-50 text-green-700 border-green-300 hover:bg-green-100',
+    priority: 'medium',
+  },
+
   // === PERÍODOS ===
   PERIODO_CRIADO: {
     label: 'Período Criado',

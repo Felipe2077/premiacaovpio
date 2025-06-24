@@ -1,7 +1,13 @@
 // hooks/useScheduling.ts
 import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 // Tipos baseados no seu backend
+
+export enum JobType {
+  FULL_ETL = 'FULL_ETL',
+  PARTIAL_RECALCULATION = 'PARTIAL_RECALCULATION',
+}
 export interface ScheduleConfig {
   id: number;
   name: string;
@@ -17,6 +23,7 @@ export interface ScheduleConfig {
     saturday: boolean;
     sunday: boolean;
   };
+
   dayOfMonth?: number;
   jobType: 'FULL_ETL' | 'PARTIAL_RECALCULATION' | 'DATA_VALIDATION';
   status: 'ACTIVE' | 'INACTIVE' | 'PAUSED' | 'ERROR';
@@ -117,8 +124,7 @@ export interface UseSchedulingReturn {
     data: UpdateScheduleDto
   ) => Promise<ScheduleConfig>;
   deleteSchedule: (id: number) => Promise<void>;
-  executeSchedule: (id: number) => Promise<void>;
-  toggleScheduleStatus: (id: number, isActive: boolean) => Promise<void>;
+  triggerJobByType: (jobType: JobType) => Promise<void>;
 
   // Utilitários
   getScheduleById: (id: number) => ScheduleConfig | undefined;
@@ -242,13 +248,19 @@ export const useScheduling = (): UseSchedulingReturn => {
           loading: false,
         }));
 
-        // Recarregar status do sistema
         loadSystemStatus();
+
+        toast.success('Agendamento criado com sucesso!');
 
         return newSchedule;
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : 'Erro ao criar agendamento';
+
+        toast.error('Falha ao criar agendamento', {
+          description: errorMessage,
+        });
+
         setState((prev) => ({
           ...prev,
           error: errorMessage,
@@ -257,7 +269,7 @@ export const useScheduling = (): UseSchedulingReturn => {
         throw error;
       }
     },
-    [loadSystemStatus]
+    [loadSystemStatus, apiRequest] // Adicionado apiRequest para refletir seu uso
   );
 
   const updateSchedule = useCallback(
@@ -280,8 +292,9 @@ export const useScheduling = (): UseSchedulingReturn => {
           loading: false,
         }));
 
-        // Recarregar status do sistema
         loadSystemStatus();
+
+        toast.success(`Agendamento "${updatedSchedule.name}" atualizado!`);
 
         return updatedSchedule;
       } catch (error) {
@@ -289,6 +302,11 @@ export const useScheduling = (): UseSchedulingReturn => {
           error instanceof Error
             ? error.message
             : 'Erro ao atualizar agendamento';
+
+        toast.error('Falha ao atualizar agendamento', {
+          description: errorMessage,
+        });
+
         setState((prev) => ({
           ...prev,
           error: errorMessage,
@@ -297,7 +315,7 @@ export const useScheduling = (): UseSchedulingReturn => {
         throw error;
       }
     },
-    [loadSystemStatus]
+    [loadSystemStatus, apiRequest] // Adicionado apiRequest para refletir seu uso
   );
 
   const deleteSchedule = useCallback(
@@ -317,14 +335,21 @@ export const useScheduling = (): UseSchedulingReturn => {
 
         // Recarregar status do sistema
         loadSystemStatus();
+        toast.success('Agendamento excluído com sucesso!');
       } catch (error) {
         const errorMessage =
           error instanceof Error
             ? error.message
             : 'Erro ao excluir agendamento';
+
+        // 👇 ADICIONE ESTA LINHA
+        toast.error('Falha ao excluir agendamento', {
+          description: errorMessage,
+        });
+
         setState((prev) => ({
           ...prev,
-          error: errorMessage,
+          error: errorMessage, // Pode manter ou remover, mas o toast já faz o trabalho
           loading: false,
         }));
         throw error;
@@ -333,23 +358,59 @@ export const useScheduling = (): UseSchedulingReturn => {
     [loadSystemStatus]
   );
 
-  const executeSchedule = useCallback(
-    async (id: number): Promise<void> => {
-      try {
-        setState((prev) => ({ ...prev, error: null }));
+  const triggerJobByType = useCallback(
+    async (jobType: JobType): Promise<void> => {
+      // Define se a atualização é parcial com base no JobType
+      const isPartial = jobType === JobType.PARTIAL_RECALCULATION;
 
-        await apiRequest(`/schedules/${id}/execute`, {
+      // Monta o corpo da requisição conforme a documentação da rota
+      const body = JSON.stringify({
+        partialUpdate: isPartial,
+        triggeredBy: 'manual', // Informa que a origem é manual
+        useQueue: true, // Usa o sistema de filas, como padrão na rota
+      });
+
+      try {
+        // Usa 'fetch' diretamente com a URL e o corpo corretos.
+        // Desta vez, o Content-Type é necessário porque estamos enviando um corpo.
+        const response = await fetch(`/api/automation/trigger-update`, {
           method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: body, // Envia o corpo que montamos
         });
 
-        // Recarregar dados após execução
+        const data = await response.json();
+
+        // A lógica de tratamento de erro permanece a mesma
+        if (!response.ok) {
+          // Usa a mensagem de erro da API, se disponível
+          throw new Error(
+            data.message || data.error || `HTTP ${response.status}`
+          );
+        }
+
+        if (data.success === false) {
+          throw new Error(
+            data.message || data.error || 'A API de automação retornou um erro'
+          );
+        }
+        // 👇 ADICIONE O TOAST DE SUCESSO AQUI
+        const successMessage = isPartial
+          ? 'Recálculo iniciado com sucesso!'
+          : 'Atualização completa iniciada com sucesso!';
+        toast.success(successMessage, {
+          description: 'A tarefa foi adicionada à fila e começará em breve.',
+        });
+        // Recarrega os dados da página para refletir o novo job na fila
         loadSchedules();
         loadSystemStatus();
       } catch (error) {
         const errorMessage =
           error instanceof Error
             ? error.message
-            : 'Erro ao executar agendamento';
+            : `Erro ao executar o job '${jobType}'`;
         setState((prev) => ({
           ...prev,
           error: errorMessage,
@@ -358,13 +419,6 @@ export const useScheduling = (): UseSchedulingReturn => {
       }
     },
     [loadSchedules, loadSystemStatus]
-  );
-
-  const toggleScheduleStatus = useCallback(
-    async (id: number, isActive: boolean): Promise<void> => {
-      await updateSchedule(id, { isActive });
-    },
-    [updateSchedule]
   );
 
   // ===============================
@@ -465,8 +519,7 @@ export const useScheduling = (): UseSchedulingReturn => {
     createSchedule,
     updateSchedule,
     deleteSchedule,
-    executeSchedule,
-    toggleScheduleStatus,
+    triggerJobByType,
 
     // Utilitários
     getScheduleById,

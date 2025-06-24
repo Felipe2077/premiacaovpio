@@ -1,58 +1,119 @@
-// packages/shared-types/src/index.ts (ATUALIZADO)
+// packages/shared-types/src/index.ts - CORRIGIDO SEM DUPLICAÇÕES
 
-// === ENUMS ===
+// ===================================
+// ENUMS PRINCIPAIS
+// ===================================
 export * from './enums/expurgo-status.enum';
+export * from './enums/permission.enum';
 
-// === DTOs E INTERFACES ===
+// ===================================
+// DTOs E INTERFACES PRINCIPAIS
+// ===================================
+export * from './dto/attachment.dto';
+export * from './dto/auth.dto';
 export * from './dto/expurgo.dto';
-export * from './dto/history.dto'; // Se existir
 export * from './dto/parameter.dto';
 export * from './dto/planning.dto';
 export * from './dto/ranking.dto';
+export * from './dto/user.dto'; // 🆕 NOVO - CRUD de usuários
 
-// === FUNÇÕES UTILITÁRIAS DOS ENUMS ===
+// ===================================
+// FUNÇÕES UTILITÁRIAS DOS ENUMS
+// ===================================
+
+// Expurgo Status
 export {
   getExpurgoStatusColor,
   getExpurgoStatusDescription,
-  getExpurgoStatusIcon, // 🆕
-  getNextPossibleStatuses, // 🆕
+  getExpurgoStatusIcon,
+  getNextPossibleStatuses,
   isStatusAprovado,
-  isValidExpurgoStatus, // 🆕
+  isValidExpurgoStatus,
   statusPermiteEdicao,
 } from './enums/expurgo-status.enum';
 
-// === FUNÇÕES DE VALIDAÇÃO ===
+// Permissions e Roles
+export {
+  getPermissionLabel,
+  getRoleLabel,
+  getRolePermissions,
+} from './enums/permission.enum';
+
+// ===================================
+// FUNÇÕES DE VALIDAÇÃO
+// ===================================
+
+// Validações de Expurgos
 export {
   validateApproveExpurgo,
-  validateCreateExpurgo, // 🆕
-  validateFindExpurgos, // 🆕
+  validateCreateExpurgo,
+  validateFindExpurgos,
   validateRejectExpurgo,
 } from './dto/expurgo.dto';
 
-// === EXPORTS DIRETOS PARA CONVENIENCE ===
+// 🆕 Validações de Usuários
+export {
+  validateAdminAction,
+  validateCreateUser,
+  validateUpdateUser,
+  validateUserFilters,
+} from './dto/user.dto';
+
+// Validações de Auth
+export { formatSessionDevice, validatePassword } from './dto/auth.dto';
+
+// ===================================
+// EXPORTS DIRETOS (ENUMS)
+// ===================================
 export { ExpurgoStatus } from './enums/expurgo-status.enum';
+export { Permission, Role } from './enums/permission.enum';
 
-// === EXPORTS DIRETOS DE RANKING (para compatibilidade) ===
+// ===================================
+// TYPES PARA CONVENIÊNCIA
+// ===================================
+
+// 🆕 User Management Types
 export type {
-  DetailedResultsResponseDto,
-  EntradaRanking,
-  EntradaResultadoDetalhado,
-  GetRankingDto,
-  GetResultsDto,
-  RankingResponseDto,
-  RegrasAplicadasPadrao,
-} from './dto/ranking.dto';
+  // Ações administrativas
+  AdminResetPasswordDto,
+  // Principais DTOs de usuário
+  CreateUserDto,
+  CreateUserResponse,
+  PaginatedUsersResponse,
+  ResetPasswordResponse,
+  ToggleUserStatusDto,
+  UnlockUserDto,
+  UpdateUserDto,
+  UserActivity,
+  UserDetail,
+  UserFilters,
+  UserStatistics,
+  UserSummary,
+} from './dto/user.dto';
 
-// === EXPORTS DIRETOS DE PLANNING (para compatibilidade) ===
+// Auth Types
 export type {
-  CalculateProposedMetaDto,
-  GetPlanningDataDto,
-  HistoricalPerformanceDataItem,
-  PlanningCellOutput,
-  ProposedMetaResponseDto,
-} from './dto/planning.dto';
+  ActiveSessionsResponse,
+  AuthAuditEvent,
+  // Errors e Audit
+  AuthError,
+  AuthErrorCode,
+  AuthUser,
+  ChangePasswordDto,
+  ForgotPasswordDto,
+  // Login e autenticação
+  LoginDto,
+  LoginResponse,
+  PasswordValidation,
+  RefreshTokenDto,
+  RefreshTokenResponse,
+  ResetPasswordDto,
+  // Sessões e perfil
+  SessionInfo,
+  UserProfile,
+} from './dto/auth.dto';
 
-// === 🆕 EXPORTS DIRETOS DE EXPURGO (NOVOS) ===
+// Expurgo Types
 export type {
   ApproveExpurgoDto,
   ApproveRejectExpurgoDto,
@@ -65,7 +126,7 @@ export type {
   UploadExpurgoAttachmentDto,
 } from './dto/expurgo.dto';
 
-// === EXPORTS DIRETOS DE PARAMETER (para compatibilidade) ===
+// Parameter Types
 export type {
   CalculateData,
   CalculateParameterDto,
@@ -77,14 +138,27 @@ export type {
   UpdateParameterDto,
 } from './dto/parameter.dto';
 
-// ================================
-// 🆕 NOVAS EXPORTAÇÕES - ANEXOS
-// ================================
+// Ranking Types
+export type {
+  DetailedResultsResponseDto,
+  EntradaRanking,
+  EntradaResultadoDetalhado,
+  GetRankingDto,
+  GetResultsDto,
+  RankingResponseDto,
+  RegrasAplicadasPadrao,
+} from './dto/ranking.dto';
 
-// DTOs de Anexos
-export * from './dto/attachment.dto';
+// Planning Types
+export type {
+  CalculateProposedMetaDto,
+  GetPlanningDataDto,
+  HistoricalPerformanceDataItem,
+  PlanningCellOutput,
+  ProposedMetaResponseDto,
+} from './dto/planning.dto';
 
-// Tipos específicos de anexos
+// Attachment Types
 export type {
   AttachmentConstraints,
   AttachmentEntity,
@@ -100,7 +174,7 @@ export type {
   UploadResponseDto,
 } from './dto/attachment.dto';
 
-// Enums e constantes de anexos
+// Attachment utilities
 export {
   ATTACHMENT_CONSTRAINTS,
   FileType,
@@ -109,33 +183,26 @@ export {
   validateFile,
 } from './dto/attachment.dto';
 
-// ================================
-// VERSÃO E METADADOS
-// ================================
+// ===================================
+// CONSTANTES E METADADOS
+// ===================================
 
-export const SHARED_TYPES_VERSION = '2.0.0'; // Incrementado para incluir anexos
+export const SHARED_TYPES_VERSION = '2.1.0'; // 🆕 Incrementado para incluir user management
+export const USER_MANAGEMENT_VERSION = '1.0.0'; // 🆕 Nova feature
 export const ATTACHMENT_FEATURE_VERSION = '1.0.0';
 
-// packages/shared-types/src/index.ts
+// 🆕 Constantes utilitárias para usuários
+export const USER_CONSTRAINTS = {
+  MIN_PASSWORD_LENGTH: 8,
+  MAX_PASSWORD_LENGTH: 128,
+  MIN_NAME_LENGTH: 2,
+  MAX_NAME_LENGTH: 100,
+  MAX_EMAIL_LENGTH: 150,
+  MAX_JUSTIFICATION_LENGTH: 500,
+  MIN_JUSTIFICATION_LENGTH: 10,
+  DEFAULT_PAGE_SIZE: 20,
+  MAX_PAGE_SIZE: 100,
+} as const;
 
-// === NOVOS DTOs DE AUTH ===
-export * from './dto/auth.dto';
-
-// === RE-EXPORTS ESPECÍFICOS PARA COMPATIBILIDADE ===
-export {
-  getPermissionLabel,
-  getRoleLabel,
-  getRolePermissions,
-  Permission,
-  Role,
-} from './enums/permission.enum';
-
-export {
-  AuthAuditEvent,
-  AuthErrorCode,
-  formatSessionDevice,
-  validatePassword,
-} from './dto/auth.dto';
-
-// ===== SCHEDULING TYPES (SPRINT 2 FASE 3) =====
-export * from './dto/scheduling.dto';
+// Nota: UserFilters será importado via export * from './dto/user.dto'
+// então não precisamos da tipagem aqui para evitar erro de referência circular

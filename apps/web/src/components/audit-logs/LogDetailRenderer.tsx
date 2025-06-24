@@ -1,4 +1,4 @@
-// apps/web/src/components/audit-logs/LogDetailRenderer.tsx - VERSÃO OTIMIZADA
+// apps/web/src/components/audit-logs/LogDetailRenderer.tsx
 import {
   Card,
   CardContent,
@@ -19,6 +19,7 @@ import {
   MapPin,
   Percent,
   Target,
+  Trash2,
   User,
 } from 'lucide-react';
 
@@ -58,6 +59,62 @@ const fieldConfig: Record<
     icon: MapPin,
     type: 'text',
     category: 'location',
+  },
+
+  // ===  CAMPOS DE AGENDAMENTO E AUTOMAÇÃO ===
+  scheduleName: {
+    label: 'Nome do Agendamento',
+    icon: FileText,
+    type: 'text',
+    category: 'system',
+  },
+  cronExpression: {
+    label: 'Expressão Cron',
+    icon: Clock,
+    type: 'text',
+    category: 'system',
+  },
+  nextRunAt: {
+    label: 'Próxima Execução',
+    icon: Calendar,
+    type: 'date',
+    category: 'system',
+  },
+  jobId: {
+    label: 'ID do Job',
+    icon: Hash,
+    type: 'text',
+    category: 'system',
+  },
+  executionCount: {
+    label: 'Contador de Execuções',
+    icon: Hash,
+    type: 'number',
+    category: 'system',
+  },
+  triggeredBy: {
+    label: 'Disparado Por',
+    icon: User,
+    type: 'text',
+    category: 'user',
+  },
+  rawRecords: {
+    label: 'Registros Processados',
+    icon: Database,
+    type: 'number',
+    category: 'numeric',
+  },
+  deletedRecords: {
+    label: 'Registros Antigos Apagados',
+    icon: Trash2,
+    type: 'number',
+    category: 'numeric',
+  },
+  executionTimeMs: {
+    label: 'Tempo de Execução (ms)',
+    icon: Clock,
+    type: 'number',
+    category: 'numeric',
   },
 
   // Critérios e Metas
@@ -428,7 +485,10 @@ interface LogDetailRendererProps {
   details?: Record<string, any>;
 }
 
-export function LogDetailRenderer({ details }: LogDetailRendererProps) {
+export function LogDetailRenderer({ log }: LogDetailRendererProps) {
+  // Extraímos 'details' e 'actionType' do log
+  const { details, actionType } = log;
+
   if (!details || Object.keys(details).length === 0) {
     return (
       <div className='text-center py-4 text-muted-foreground'>
@@ -439,6 +499,128 @@ export function LogDetailRenderer({ details }: LogDetailRendererProps) {
       </div>
     );
   }
+
+  // --- INÍCIO DO BLOCO DE RENDERIZAÇÃO CUSTOMIZADA ---
+  // Um 'switch' para tratar os casos especiais antes da lógica genérica.
+  switch (actionType) {
+    case 'SCHEDULE_CREATED':
+      return (
+        <div className='space-y-2'>
+          <p>Um novo agendamento foi criado com os seguintes detalhes:</p>
+          <ul className='list-disc list-inside pl-4 text-sm text-muted-foreground'>
+            {details.scheduleName && (
+              <li>
+                <strong>Nome:</strong> {details.scheduleName}
+              </li>
+            )}
+            {details.jobType && (
+              <li>
+                <strong>Tipo de Job:</strong> {details.jobType}
+              </li>
+            )}
+            {details.frequency && (
+              <li>
+                <strong>Frequência:</strong> {details.frequency}
+              </li>
+            )}
+            {details.timeOfDay && (
+              <li>
+                <strong>Horário:</strong> {details.timeOfDay}
+              </li>
+            )}
+            {details.nextRunAt && (
+              <li>
+                <strong>Próxima Execução:</strong>{' '}
+                {formatValue(details.nextRunAt, 'date')}
+              </li>
+            )}
+          </ul>
+        </div>
+      );
+
+    case 'SCHEDULE_DELETED':
+      return (
+        <p>
+          O agendamento chamado{' '}
+          <strong>"{details.scheduleName || 'ID: ' + log.entityId}"</strong> foi
+          removido do sistema.
+        </p>
+      );
+
+    case 'SCHEDULED_JOB_EXECUTED':
+      return (
+        <p>
+          O job agendado <strong>"{details.scheduleName}"</strong> (Tipo:{' '}
+          {details.jobType}) foi executado automaticamente.
+        </p>
+      );
+
+    case 'ETL_INICIADO':
+    case 'RECALCULO_INICIADO': {
+      const isEtl = actionType === 'ETL_INICIADO';
+      const title = isEtl
+        ? 'Atualização Completa (ETL)'
+        : 'Recálculo de Resultados';
+      return (
+        <p>
+          O processo de <strong>{title}</strong> foi iniciado para a vigência{' '}
+          <strong>{details.periodMesAno}</strong>.
+          <br />
+          Disparado de forma:{' '}
+          <span className='font-medium capitalize'>{details.triggeredBy}</span>.
+        </p>
+      );
+    }
+
+    case 'ETL_CONCLUIDO': {
+      const etlSeconds = (details.executionTimeMs / 1000)
+        .toFixed(2)
+        .replace('.', ',');
+      return (
+        <div className='space-y-2'>
+          <p>
+            O processo de <strong>Atualização Completa (ETL)</strong> para a
+            vigência <strong>{details.periodMesAno}</strong> foi concluído.
+          </p>
+          <ul className='list-disc list-inside pl-4 text-sm text-muted-foreground'>
+            <li>
+              <strong>Duração:</strong> {etlSeconds} segundos
+            </li>
+            <li>
+              <strong>Registros Processados:</strong>{' '}
+              {formatValue(details.rawRecords, 'number')}
+            </li>
+            <li>
+              <strong>Registros Antigos Apagados:</strong>{' '}
+              {formatValue(details.deletedRecords, 'number')}
+            </li>
+          </ul>
+        </div>
+      );
+    }
+
+    case 'RECALCULO_CONCLUIDO': {
+      const recalcSeconds = (details.executionTimeMs / 1000)
+        .toFixed(2)
+        .replace('.', ',');
+      return (
+        <p>
+          O processo de <strong>Recálculo de Resultados</strong> foi concluído
+          em <strong>{recalcSeconds} segundos</strong>.
+        </p>
+      );
+    }
+
+    // Para qualquer outro caso, ele continua para a lógica original
+    default:
+      // Se não for um dos casos acima, o 'break' não é necessário, pois a função
+      // continuará a executar o código abaixo.
+      break;
+  }
+  // --- FIM DO BLOCO DE RENDERIZAÇÃO CUSTOMIZADA ---
+
+  // ▼ LÓGICA ORIGINAL (PARA TODOS OS OUTROS EVENTOS) ▼
+  // Esta parte do código permanece 100% intacta.
 
   // Separar campos que formam comparações
   const hasComparison =

@@ -14,6 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { Toaster } from '@/components/ui/sonner';
 import { Permission } from '@sistema-premiacao/shared-types';
 import {
   AlertTriangle,
@@ -52,7 +53,10 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           {/* Conteúdo principal */}
           <main className='flex-1 lg:ml-64'>
             <div className='py-6'>
-              <div className='mx-auto px-4 sm:px-6 lg:px-8'>{children}</div>
+              <div className='mx-auto px-4 sm:px-6 lg:px-8'>
+                {children}
+                <Toaster richColors position='top-right' />
+              </div>
             </div>
           </main>
         </div>

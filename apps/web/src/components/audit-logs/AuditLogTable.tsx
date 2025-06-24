@@ -140,6 +140,7 @@ export function AuditLogTable({ logs, onRowClick }: AuditLogTableProps) {
               const contextInfo = getContextInfo(log);
               const criticality = getActionCriticality(log.actionType);
               const userName = log.user?.nome ?? log.userName ?? 'Sistema';
+              console.log('Dados do Log de Auditoria:', log);
 
               return (
                 <TableRow

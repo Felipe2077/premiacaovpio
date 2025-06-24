@@ -31,7 +31,7 @@ export default function ExpurgosPage() {
 
   const handleRegisterExpurgo = (event: React.FormEvent) => {
     event.preventDefault();
-    toast.info('Registro de Expurgo enviado! (Simulação MVP)');
+    toast.info('Registro de Expurgo enviado!');
     setIsExpurgoModalOpen(false);
   };
 
@@ -50,7 +50,7 @@ export default function ExpurgosPage() {
         <CardHeader>
           <div className='flex justify-between items-start sm:items-center flex-col sm:flex-row gap-2'>
             <div>
-              <CardTitle>Expurgos Registrados (MVP)</CardTitle>
+              <CardTitle>Expurgos Registrados </CardTitle>
               <CardDescription>
                 Demonstração do registro auditado de expurgos autorizados.
               </CardDescription>

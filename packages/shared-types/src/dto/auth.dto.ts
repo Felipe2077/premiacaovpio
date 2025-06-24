@@ -1,7 +1,10 @@
-// packages/shared-types/src/dto/auth.dto.ts
+// packages/shared-types/src/dto/auth.dto.ts - SEM CONFLITOS COM USER.dto
 import { Permission, Role } from '../enums/permission.enum';
 
-// === LOGIN ===
+// ===================================
+// LOGIN E AUTENTICAÇÃO BÁSICA
+// ===================================
+
 export interface LoginDto {
   email: string;
   password: string;
@@ -16,7 +19,6 @@ export interface LoginResponse {
   sessionId: string;
 }
 
-// === USUÁRIO AUTENTICADO ===
 export interface AuthUser {
   id: number;
   nome: string;
@@ -33,33 +35,15 @@ export interface AuthUser {
   }[];
 }
 
-// === REGISTRO DE USUÁRIO ===
-export interface RegisterUserDto {
-  nome: string;
-  email: string;
-  password: string;
-  roles: Role[];
-  sectorId?: number;
-}
+// ===================================
+// ALTERAÇÃO DE SENHA
+// ===================================
 
-export interface RegisterUserResponse {
-  user: {
-    id: number;
-    nome: string;
-    email: string;
-    roles: Role[];
-    ativo: boolean;
-  };
-  temporaryPassword?: string; // Se gerada automaticamente
-}
-
-// === ALTERAÇÃO DE SENHA ===
 export interface ChangePasswordDto {
   currentPassword: string;
   newPassword: string;
 }
 
-// === RECUPERAÇÃO DE SENHA ===
 export interface ForgotPasswordDto {
   email: string;
 }
@@ -69,7 +53,10 @@ export interface ResetPasswordDto {
   newPassword: string;
 }
 
-// === REFRESH TOKEN ===
+// ===================================
+// REFRESH TOKEN
+// ===================================
+
 export interface RefreshTokenDto {
   refreshToken: string;
   sessionId: string;
@@ -80,42 +67,10 @@ export interface RefreshTokenResponse {
   expiresIn: number;
 }
 
-// === GESTÃO DE USUÁRIOS ===
-export interface UpdateUserDto {
-  nome?: string;
-  email?: string;
-  roles?: Role[];
-  sectorId?: number;
-  ativo?: boolean;
-}
+// ===================================
+// SESSÕES
+// ===================================
 
-export interface UserFilters {
-  active?: boolean;
-  role?: Role;
-  sectorId?: number;
-  search?: string; // busca por nome ou email
-}
-
-export interface PaginatedUsers {
-  data: UserSummary[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-}
-
-export interface UserSummary {
-  id: number;
-  nome: string;
-  email: string;
-  roles: Role[];
-  ativo: boolean;
-  lastLoginAt?: Date;
-  sectorId?: number;
-  createdAt: Date;
-}
-
-// === SESSÕES ===
 export interface SessionInfo {
   id: string;
   deviceInfo?: string;
@@ -132,7 +87,10 @@ export interface ActiveSessionsResponse {
   total: number;
 }
 
-// === PERFIL DO USUÁRIO ===
+// ===================================
+// PERFIL DO USUÁRIO AUTENTICADO
+// ===================================
+
 export interface UserProfile {
   id: number;
   nome: string;
@@ -150,7 +108,10 @@ export interface UserProfile {
   }[];
 }
 
-// === VALIDAÇÕES ===
+// ===================================
+// VALIDAÇÕES DE SENHA
+// ===================================
+
 export interface PasswordValidation {
   minLength: boolean;
   hasUppercase: boolean;
@@ -161,45 +122,6 @@ export interface PasswordValidation {
   score: number; // 0-100
 }
 
-// === ERROS DE AUTENTICAÇÃO ===
-export enum AuthErrorCode {
-  INVALID_CREDENTIALS = 'INVALID_CREDENTIALS',
-  ACCOUNT_LOCKED = 'ACCOUNT_LOCKED',
-  ACCOUNT_INACTIVE = 'ACCOUNT_INACTIVE',
-  TOKEN_EXPIRED = 'TOKEN_EXPIRED',
-  TOKEN_INVALID = 'TOKEN_INVALID',
-  SESSION_EXPIRED = 'SESSION_EXPIRED',
-  PERMISSION_DENIED = 'PERMISSION_DENIED',
-  PASSWORD_TOO_WEAK = 'PASSWORD_TOO_WEAK',
-  EMAIL_ALREADY_EXISTS = 'EMAIL_ALREADY_EXISTS',
-  RESET_TOKEN_INVALID = 'RESET_TOKEN_INVALID',
-  TOO_MANY_ATTEMPTS = 'TOO_MANY_ATTEMPTS',
-}
-
-export interface AuthError {
-  code: AuthErrorCode;
-  message: string;
-  details?: Record<string, any>;
-  retryAfter?: number; // segundos para tentar novamente
-}
-
-// === AUDIT EVENTS ===
-export enum AuthAuditEvent {
-  LOGIN_SUCCESS = 'LOGIN_SUCCESS',
-  LOGIN_FAILED = 'LOGIN_FAILED',
-  LOGOUT = 'LOGOUT',
-  PASSWORD_CHANGED = 'PASSWORD_CHANGED',
-  PASSWORD_RESET_REQUESTED = 'PASSWORD_RESET_REQUESTED',
-  PASSWORD_RESET_COMPLETED = 'PASSWORD_RESET_COMPLETED',
-  ACCOUNT_LOCKED = 'ACCOUNT_LOCKED',
-  ACCOUNT_UNLOCKED = 'ACCOUNT_UNLOCKED',
-  SESSION_CREATED = 'SESSION_CREATED',
-  SESSION_INVALIDATED = 'SESSION_INVALIDATED',
-  PERMISSION_DENIED = 'PERMISSION_DENIED',
-  SUSPICIOUS_ACTIVITY = 'SUSPICIOUS_ACTIVITY',
-}
-
-// === UTILITÁRIOS ===
 export function validatePassword(password: string): PasswordValidation {
   const validation: PasswordValidation = {
     minLength: password.length >= 8,
@@ -225,6 +147,10 @@ export function validatePassword(password: string): PasswordValidation {
   return validation;
 }
 
+// ===================================
+// UTILITÁRIOS DE SESSÃO
+// ===================================
+
 export function formatSessionDevice(userAgent: string): string {
   const ua = userAgent.toLowerCase();
 
@@ -242,4 +168,48 @@ export function formatSessionDevice(userAgent: string): string {
   else if (ua.includes('iphone') || ua.includes('ipad')) os = 'iOS';
 
   return `${browser} • ${os}`;
+}
+
+// ===================================
+// ERROS DE AUTENTICAÇÃO
+// ===================================
+
+export enum AuthErrorCode {
+  INVALID_CREDENTIALS = 'INVALID_CREDENTIALS',
+  ACCOUNT_LOCKED = 'ACCOUNT_LOCKED',
+  ACCOUNT_INACTIVE = 'ACCOUNT_INACTIVE',
+  TOKEN_EXPIRED = 'TOKEN_EXPIRED',
+  TOKEN_INVALID = 'TOKEN_INVALID',
+  SESSION_EXPIRED = 'SESSION_EXPIRED',
+  PERMISSION_DENIED = 'PERMISSION_DENIED',
+  PASSWORD_TOO_WEAK = 'PASSWORD_TOO_WEAK',
+  EMAIL_ALREADY_EXISTS = 'EMAIL_ALREADY_EXISTS',
+  RESET_TOKEN_INVALID = 'RESET_TOKEN_INVALID',
+  TOO_MANY_ATTEMPTS = 'TOO_MANY_ATTEMPTS',
+}
+
+export interface AuthError {
+  code: AuthErrorCode;
+  message: string;
+  details?: Record<string, any>;
+  retryAfter?: number; // segundos para tentar novamente
+}
+
+// ===================================
+// EVENTOS DE AUDITORIA
+// ===================================
+
+export enum AuthAuditEvent {
+  LOGIN_SUCCESS = 'LOGIN_SUCCESS',
+  LOGIN_FAILED = 'LOGIN_FAILED',
+  LOGOUT = 'LOGOUT',
+  PASSWORD_CHANGED = 'PASSWORD_CHANGED',
+  PASSWORD_RESET_REQUESTED = 'PASSWORD_RESET_REQUESTED',
+  PASSWORD_RESET_COMPLETED = 'PASSWORD_RESET_COMPLETED',
+  ACCOUNT_LOCKED = 'ACCOUNT_LOCKED',
+  ACCOUNT_UNLOCKED = 'ACCOUNT_UNLOCKED',
+  SESSION_CREATED = 'SESSION_CREATED',
+  SESSION_INVALIDATED = 'SESSION_INVALIDATED',
+  PERMISSION_DENIED = 'PERMISSION_DENIED',
+  SUSPICIOUS_ACTIVITY = 'SUSPICIOUS_ACTIVITY',
 }

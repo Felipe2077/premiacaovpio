@@ -1,31 +1,49 @@
+//apps/web/src/app/admin/scheduling/page.tsx
 'use client';
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import {
   Activity,
   AlertCircle,
   BarChart3,
   Calendar,
   CheckCircle,
-  ChevronDown,
   Clock,
   Database,
   Edit,
+  HardDriveDownload,
   HelpCircle,
   Info,
-  Pause,
-  Play,
+  Loader2,
   Plus,
   RefreshCw,
   Settings,
   Trash2,
   XCircle,
-  Zap,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-// ✨ IMPORTAR O HOOK CUSTOMIZADO
 import type { ScheduleConfig } from '@/hooks/useScheduling';
-import { CreateScheduleDto, useScheduling } from '@/hooks/useScheduling';
+import {
+  CreateScheduleDto,
+  JobType,
+  useScheduling,
+} from '@/hooks/useScheduling';
 
 interface CreateScheduleForm {
   name: string;
@@ -54,8 +72,7 @@ export default function SchedulingAdminPage() {
     error,
     createSchedule,
     deleteSchedule,
-    executeSchedule,
-    toggleScheduleStatus, // ✨ NOVO: para pause/play
+    triggerJobByType,
     getActiveSchedules,
     startAutoRefresh,
     stopAutoRefresh,
@@ -63,13 +80,16 @@ export default function SchedulingAdminPage() {
 
   // Estados locais apenas para UI
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [jobToExecute, setJobToExecute] = useState<JobType | null>(null);
+
+  const [scheduleToDelete, setScheduleToDelete] =
+    useState<ScheduleConfig | null>(null);
+
   const [editingSchedule, setEditingSchedule] = useState<ScheduleConfig | null>(
     null
   );
-  const [showHelpModal, setShowHelpModal] = useState(false); // ✨ NOVO
-  const [showExecuteDropdown, setShowExecuteDropdown] = useState<number | null>(
-    null
-  ); // ✨ NOVO
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showExecuteDropdown, setShowExecuteDropdown] = useState(false);
 
   // Estados do formulário
   const [formData, setFormData] = useState<CreateScheduleForm>({
@@ -98,53 +118,6 @@ export default function SchedulingAdminPage() {
 
   // ✨ NOVOS HANDLERS
 
-  const handleTogglePause = async (schedule: ScheduleConfig) => {
-    const newStatus = !schedule.isActive;
-    const action = newStatus ? 'reativar' : 'pausar';
-
-    if (!confirm(`Tem certeza que deseja ${action} este agendamento?`)) return;
-
-    try {
-      await toggleScheduleStatus(schedule.id, newStatus);
-    } catch (error) {
-      alert(`Erro ao ${action} agendamento: ` + (error as Error).message);
-    }
-  };
-
-  const handleExecuteWithType = async (
-    scheduleId: number,
-    jobType: 'FULL_ETL' | 'PARTIAL_RECALCULATION'
-  ) => {
-    const jobNames = {
-      FULL_ETL: 'Atualização Completa dos Dados',
-      PARTIAL_RECALCULATION: 'Recálculo dos Resultados',
-    };
-
-    const jobDescriptions = {
-      FULL_ETL:
-        'Irá buscar novos dados dos sistemas legados e recalcular todos os rankings. Pode demorar bastante (30min - 2h).',
-      PARTIAL_RECALCULATION:
-        'Irá recalcular apenas os rankings com os dados já disponíveis. Processo mais rápido (5-15min).',
-    };
-
-    const confirmed = confirm(
-      `Executar: ${jobNames[jobType]}\n\n` +
-        `${jobDescriptions[jobType]}\n\n` +
-        'Deseja continuar?'
-    );
-
-    if (!confirmed) return;
-
-    setShowExecuteDropdown(null);
-
-    try {
-      await executeSchedule(scheduleId);
-      alert(`${jobNames[jobType]} executada com sucesso!`);
-    } catch (error) {
-      alert(`Erro ao executar: ` + (error as Error).message);
-    }
-  };
-
   // Handlers originais mantidos
   const handleCreateSchedule = async () => {
     try {
@@ -156,13 +129,22 @@ export default function SchedulingAdminPage() {
     }
   };
 
-  const handleDeleteSchedule = async (id: number) => {
-    if (!confirm('Tem certeza que deseja excluir este agendamento?')) return;
+  const handleTriggerJob = async (jobType: JobType) => {
+    // A confirmação foi removida daqui
+    try {
+      await triggerJobByType(jobType);
+    } catch (error) {
+    } finally {
+      setShowExecuteDropdown(false);
+    }
+  };
 
+  // 3. ESTA FUNÇÃO NÃO TEM MAIS O 'confirm()'
+  const handleDeleteSchedule = async (id: number) => {
     try {
       await deleteSchedule(id);
     } catch (error) {
-      alert('Erro ao excluir agendamento: ' + (error as Error).message);
+      console.error('Falha ao deletar na página:', error);
     }
   };
 
@@ -188,16 +170,6 @@ export default function SchedulingAdminPage() {
   // ✨ FUNÇÕES UTILITÁRIAS MELHORADAS
 
   const getStatusInfo = (schedule: ScheduleConfig) => {
-    if (!schedule.isActive) {
-      return {
-        icon: <Play className='w-4 h-4 text-gray-500' />,
-        text: 'Pausado',
-        color: 'text-gray-600',
-        bg: 'bg-gray-100',
-        description: 'Agendamento pausado manualmente',
-      };
-    }
-
     switch (schedule.status) {
       case 'ACTIVE':
         return {
@@ -205,7 +177,16 @@ export default function SchedulingAdminPage() {
           text: 'Ativo',
           color: 'text-green-600',
           bg: 'bg-green-100',
-          description: 'Funcionando normalmente',
+          description: 'Agendado e funcionando normalmente.',
+        };
+      case 'PAUSED':
+      case 'INACTIVE': // Tratamos INACTIVE como PAUSED para o usuário
+        return {
+          icon: <Clock className='w-4 h-4 text-gray-500' />,
+          text: 'Pausado',
+          color: 'text-gray-600',
+          bg: 'bg-gray-100',
+          description: 'Este agendamento não será executado automaticamente.',
         };
       case 'ERROR':
         return {
@@ -213,15 +194,16 @@ export default function SchedulingAdminPage() {
           text: 'Erro',
           color: 'text-red-600',
           bg: 'bg-red-100',
-          description: 'Última execução falhou',
+          description: 'A última execução falhou. Verifique os logs.',
         };
+      // Adicione outros status que sua API possa retornar aqui
       default:
         return {
           icon: <AlertCircle className='w-4 h-4 text-yellow-500' />,
-          text: schedule.status,
+          text: schedule.status, // Mostra o status desconhecido
           color: 'text-yellow-600',
           bg: 'bg-yellow-100',
-          description: 'Status indefinido',
+          description: 'Status desconhecido.',
         };
     }
   };
@@ -319,7 +301,7 @@ export default function SchedulingAdminPage() {
 
           <button
             onClick={() => setShowHelpModal(true)}
-            className='flex items-center px-4 py-2 text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100'
+            className='flex items-center px-4 py-2 text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 cursor-pointer'
           >
             <HelpCircle className='w-4 h-4 mr-2' />
             Como Funciona
@@ -328,25 +310,24 @@ export default function SchedulingAdminPage() {
       </div>
 
       {/* ✨ CARD EXPLICATIVO */}
-      <div className='bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6 mb-8'>
-        <h2 className='text-lg font-semibold text-blue-900 mb-4 flex items-center'>
-          <Info className='w-5 h-5 mr-2' />
+      <div className='bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-lg p-4 mb-8'>
+        <h2 className='text-lg font-semibold text-yellow-800 mb-4 flex items-center'>
+          <Info className='w-5 h-5 mr-2 text-yellow-400' />
           Tipos de Agendamento
         </h2>
 
         <div className='grid md:grid-cols-2 gap-4'>
           <div className='flex items-start space-x-3'>
-            <div className='p-2 bg-blue-100 rounded-lg'>
-              <Database className='w-5 h-5 text-blue-600' />
+            <div className='p-2 bg-yellow-200 rounded-lg'>
+              <Database className='w-5 h-5 text-yellow-600' />
             </div>
             <div>
-              <h3 className='font-medium text-blue-900'>
+              <h3 className='font-medium text-amber-900'>
                 Atualização Completa dos Dados
               </h3>
-              <p className='text-sm text-blue-700 mt-1'>
-                Busca novos dados dos sistemas legados (Oracle/MySQL) e
-                recalcula todos os rankings e pontuações. Processo mais
-                demorado.
+              <p className='text-sm text-yellow-700 mt-1'>
+                Busca novos dados de todas fontes de dados (Globus e negócio
+                Perfeito) e recalcula todos os rankings e pontuações.
               </p>
             </div>
           </div>
@@ -368,20 +349,9 @@ export default function SchedulingAdminPage() {
         </div>
       </div>
 
-      {/* Exibir erros do hook */}
-      {error && (
-        <div className='bg-red-50 border border-red-200 rounded-lg p-4 mb-6'>
-          <div className='flex items-center'>
-            <XCircle className='w-5 h-5 text-red-500 mr-2' />
-            <span className='text-red-800 font-medium'>Erro no Sistema</span>
-          </div>
-          <p className='text-red-700 mt-1'>{error}</p>
-        </div>
-      )}
-
       {/* Status do Sistema */}
       {systemStatus && (
-        <div className='bg-white rounded-lg shadow-sm border p-6 mb-8'>
+        <div className='bg-white rounded-lg shadow-sm border p-4 mb-8'>
           <h2 className='text-xl font-semibold mb-4 flex items-center'>
             <Activity className='w-5 h-5 mr-2' />
             Status do Sistema
@@ -432,17 +402,265 @@ export default function SchedulingAdminPage() {
 
       {/* Botões de Ação */}
       <div className='flex justify-between items-center mb-6'>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className='bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center'
-        >
-          <Plus className='w-4 h-4 mr-2' />
-          Novo Agendamento
-        </button>
+        {/* Botão de Novo Agendamento (permanece à esquerda) */}
+        <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
+          <DialogTrigger asChild>
+            <button className='bg-yellow-300 hover:bg-yellow-500 text-black px-4 py-2 rounded-lg flex items-center cursor-pointer'>
+              <Plus className='w-4 h-4 mr-2' />
+              Novo Agendamento
+            </button>
+          </DialogTrigger>
+          <DialogContent className='sm:max-w-md max-h-[90vh] overflow-y-auto p-6'>
+            {/* 1. Título e estrutura interna replicando o layout original */}
+            <h3 className='text-lg font-semibold mb-4'>Novo Agendamento</h3>
+            <DialogTitle className='sr-only'>
+              Criar um Novo Agendamento
+            </DialogTitle>
 
-        <div className='text-sm text-gray-600'>
-          {getActiveSchedules().length} de {schedules.length} agendamentos
-          ativos
+            {/* 2. Formulário mantido dentro de uma div com o espaçamento original */}
+            <div className='space-y-4'>
+              {/* Nome */}
+              <div>
+                <label
+                  className='block text-sm font-medium mb-1'
+                  htmlFor='schedule-name'
+                >
+                  Nome
+                </label>
+                <input
+                  id='schedule-name'
+                  type='text'
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  className='w-full border rounded-lg px-3 py-2'
+                  placeholder='Ex: Atualização Diária Manhã'
+                />
+              </div>
+
+              {/* Descrição */}
+              <div>
+                <label
+                  className='block text-sm font-medium mb-1'
+                  htmlFor='schedule-description'
+                >
+                  Descrição
+                </label>
+                <textarea
+                  id='schedule-description'
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
+                  className='w-full border rounded-lg px-3 py-2'
+                  rows={2}
+                  placeholder='Opcional: Descreva o que este agendamento faz...'
+                />
+              </div>
+
+              {/* Tipo de Execução */}
+              <div>
+                <label
+                  className='block text-sm font-medium mb-1'
+                  htmlFor='schedule-jobtype'
+                >
+                  Tipo de Execução
+                </label>
+                <select
+                  id='schedule-jobtype'
+                  value={formData.jobType}
+                  onChange={(e) =>
+                    setFormData({ ...formData, jobType: e.target.value as any })
+                  }
+                  className='w-full border rounded-lg px-3 py-2'
+                >
+                  <option value='FULL_ETL'>
+                    Atualização Completa dos Dados
+                  </option>
+                  <option value='PARTIAL_RECALCULATION'>
+                    Recálculo dos Resultados
+                  </option>
+                </select>
+                <div className='mt-1 text-xs text-gray-500'>
+                  {formData.jobType === 'FULL_ETL'
+                    ? '🔄 Busca novos dados e recalcula tudo (mais demorado).'
+                    : '📊 Recalcula apenas os rankings (mais rápido).'}
+                </div>
+              </div>
+
+              {/* Frequência */}
+              <div>
+                <label
+                  className='block text-sm font-medium mb-1'
+                  htmlFor='schedule-frequency'
+                >
+                  Frequência
+                </label>
+                <select
+                  id='schedule-frequency'
+                  value={formData.frequency}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      frequency: e.target.value as any,
+                    })
+                  }
+                  className='w-full border rounded-lg px-3 py-2'
+                >
+                  <option value='DAILY'>Diário</option>
+                  <option value='WEEKLY'>Semanal</option>
+                  <option value='MONTHLY'>Mensal</option>
+                </select>
+              </div>
+
+              {/* Horário */}
+              <div>
+                <label
+                  className='block text-sm font-medium mb-1'
+                  htmlFor='schedule-time'
+                >
+                  Horário
+                </label>
+                <input
+                  id='schedule-time'
+                  type='time'
+                  value={formData.timeOfDay}
+                  onChange={(e) =>
+                    setFormData({ ...formData, timeOfDay: e.target.value })
+                  }
+                  className='w-full border rounded-lg px-3 py-2'
+                />
+                <div className='mt-1 text-xs text-gray-500'>
+                  💡 Recomendado: madrugada (01:00 - 05:00) para menor impacto.
+                </div>
+              </div>
+
+              {/* Dias da Semana (Condicional) */}
+              {formData.frequency === 'WEEKLY' && (
+                <div>
+                  <label className='block text-sm font-medium mb-2'>
+                    Dias da Semana
+                  </label>
+                  <div className='grid grid-cols-2 gap-2'>
+                    {Object.entries(formData.weekDays || {}).map(
+                      ([day, checked]) => (
+                        <label key={day} className='flex items-center'>
+                          <input
+                            type='checkbox'
+                            checked={checked}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                weekDays: {
+                                  ...formData.weekDays!,
+                                  [day]: e.target.checked,
+                                },
+                              })
+                            }
+                            className='mr-2'
+                          />
+                          <span className='text-sm capitalize'>
+                            {day
+                              .replace('day', '')
+                              .replace('nes', 's')
+                              .replace('urs', 'int')}
+                          </span>
+                        </label>
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Dia do Mês (Condicional) */}
+              {formData.frequency === 'MONTHLY' && (
+                <div>
+                  <label
+                    className='block text-sm font-medium mb-1'
+                    htmlFor='schedule-dayofmonth'
+                  >
+                    Dia do Mês
+                  </label>
+                  <input
+                    id='schedule-dayofmonth'
+                    type='number'
+                    min='1'
+                    max='31'
+                    value={formData.dayOfMonth}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        dayOfMonth: parseInt(e.target.value),
+                      })
+                    }
+                    className='w-full border rounded-lg px-3 py-2'
+                  />
+                  <div className='mt-1 text-xs text-gray-500'>
+                    ⚠️ Cuidado com dias 29-31 em meses que não os têm.
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 3. Rodapé com os botões alinhados à direita, como no original */}
+            <div className='flex justify-end space-x-3 mt-6'>
+              <button
+                type='button'
+                onClick={() => setShowCreateModal(false)}
+                className='px-4 py-2 text-gray-600 border rounded-lg hover:bg-gray-50'
+              >
+                Cancelar
+              </button>
+              <button
+                type='button'
+                onClick={handleCreateSchedule}
+                disabled={loading.actions && loading.actions.has('new')}
+                className='px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50'
+              >
+                {loading.actions && loading.actions.has('new')
+                  ? 'Criando...'
+                  : 'Criar Agendamento'}
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* NOVO BOTÃO CENTRAL DE EXECUÇÃO (à direita) */}
+        <div className='relative'>
+          <button
+            onClick={() => setShowExecuteDropdown(!showExecuteDropdown)}
+            disabled={loading.trigger}
+            className='bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 px-4 py-2 rounded-lg flex items-center disabled:opacity-50 cursor-pointer'
+          >
+            {loading.trigger ? (
+              <Loader2 className='w-4 h-4 mr-2 animate-spin' />
+            ) : (
+              <HardDriveDownload className='w-4 h-4 mr-2' />
+            )}
+            {loading.trigger ? 'Iniciando...' : 'Executar Agora'}
+          </button>
+
+          {showExecuteDropdown && (
+            <div className='absolute right-0 top-full mt-1 w-64 bg-white border rounded-lg shadow-lg z-50'>
+              <div className='py-1'>
+                <button
+                  onClick={() => setJobToExecute(JobType.FULL_ETL)}
+                  className='w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center cursor-pointer'
+                >
+                  <Database className='w-4 h-4 mr-2 text-blue-600' />
+                  Atualização Completa
+                </button>
+                <button
+                  onClick={() => setJobToExecute(JobType.PARTIAL_RECALCULATION)}
+                  className='w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center cursor-pointer'
+                >
+                  <BarChart3 className='w-4 h-4 mr-2 text-green-600' />
+                  Recálculo dos Resultados
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
       {/* ✨ LISTA DE AGENDAMENTOS MELHORADA */}
@@ -477,6 +695,7 @@ export default function SchedulingAdminPage() {
                 </thead>
                 <tbody>
                   {schedules.map((schedule) => {
+                    console.log('Dados do Agendamento:', schedule);
                     const statusInfo = getStatusInfo(schedule);
                     const jobTypeInfo = getJobTypeInfo(schedule.jobType);
 
@@ -530,104 +749,19 @@ export default function SchedulingAdminPage() {
                         </td>
 
                         <td className='py-3 px-4 text-sm'>
-                          {schedule.isActive
+                          {/* A data só é mostrada se o status for 'ACTIVE' */}
+                          {schedule.status === 'ACTIVE'
                             ? formatDateTime(schedule.nextRunAt)
-                            : 'Pausado'}
+                            : '-'}
                         </td>
 
                         <td className='py-3 px-4 text-sm'>
                           {getLastExecutionText(schedule)}
                         </td>
 
-                        {/* ✨ AÇÕES MELHORADAS - COLUNA COM OVERFLOW VISIBLE */}
-                        <td className='py-3 px-4 relative'>
+                        {/* AÇÕES SIMPLIFICADAS */}
+                        <td className='py-3 px-4'>
                           <div className='flex space-x-2'>
-                            {/* ✨ BOTÃO PAUSE/PLAY */}
-                            <button
-                              onClick={() => handleTogglePause(schedule)}
-                              className={`p-1 hover:scale-110 transition-transform ${
-                                schedule.isActive
-                                  ? 'text-yellow-600 hover:text-yellow-800'
-                                  : 'text-green-600 hover:text-green-800'
-                              }`}
-                              title={
-                                schedule.isActive
-                                  ? 'Pausar agendamento'
-                                  : 'Reativar agendamento'
-                              }
-                            >
-                              {schedule.isActive ? (
-                                <Pause className='w-4 h-4' />
-                              ) : (
-                                <Play className='w-4 h-4' />
-                              )}
-                            </button>
-
-                            {/* ✨ DROPDOWN EXECUTAR - CORRIGIDO */}
-                            <div className='relative'>
-                              <button
-                                onClick={() =>
-                                  setShowExecuteDropdown(
-                                    showExecuteDropdown === schedule.id
-                                      ? null
-                                      : schedule.id
-                                  )
-                                }
-                                className='p-1 text-blue-600 hover:text-blue-800 hover:scale-110 transition-transform'
-                                title='Executar agora'
-                              >
-                                <div className='flex items-center'>
-                                  <Zap className='w-4 h-4' />
-                                  <ChevronDown className='w-3 h-3 ml-1' />
-                                </div>
-                              </button>
-
-                              {showExecuteDropdown === schedule.id && (
-                                <div className='absolute right-0 top-full mt-1 w-56 bg-white border rounded-lg shadow-lg z-50'>
-                                  <div className='py-1'>
-                                    <button
-                                      onClick={() =>
-                                        handleExecuteWithType(
-                                          schedule.id,
-                                          'FULL_ETL'
-                                        )
-                                      }
-                                      className='w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center'
-                                    >
-                                      <Database className='w-4 h-4 mr-2 text-blue-600' />
-                                      <div>
-                                        <div className='font-medium'>
-                                          Atualização Completa
-                                        </div>
-                                        <div className='text-xs text-gray-500'>
-                                          Buscar novos dados
-                                        </div>
-                                      </div>
-                                    </button>
-                                    <button
-                                      onClick={() =>
-                                        handleExecuteWithType(
-                                          schedule.id,
-                                          'PARTIAL_RECALCULATION'
-                                        )
-                                      }
-                                      className='w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center'
-                                    >
-                                      <BarChart3 className='w-4 h-4 mr-2 text-green-600' />
-                                      <div>
-                                        <div className='font-medium'>
-                                          Recálculo Resultados
-                                        </div>
-                                        <div className='text-xs text-gray-500'>
-                                          Apenas rankings
-                                        </div>
-                                      </div>
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-
                             <button
                               onClick={() => setEditingSchedule(schedule)}
                               className='p-1 text-gray-600 hover:text-gray-800 hover:scale-110 transition-transform'
@@ -635,9 +769,8 @@ export default function SchedulingAdminPage() {
                             >
                               <Edit className='w-4 h-4' />
                             </button>
-
                             <button
-                              onClick={() => handleDeleteSchedule(schedule.id)}
+                              onClick={() => setScheduleToDelete(schedule)}
                               className='p-1 text-red-600 hover:text-red-800 hover:scale-110 transition-transform'
                               title='Excluir'
                             >
@@ -696,12 +829,13 @@ export default function SchedulingAdminPage() {
                         Atualização Completa dos Dados
                       </div>
                       <div className='text-sm text-gray-600'>
-                        Conecta nos sistemas Oracle e MySQL, busca todos os
+                        Conecta nos sistemas Globus e Negócio perfeito (será
+                        retirado em breve) e dados da Transdata, busca todos os
                         dados atualizados, processa as informações e recalcula
                         rankings e pontuações.
                         <span className='text-orange-600 font-medium'>
                           {' '}
-                          Processo demorado (30min - 2h)
+                          Processo um pouco mais demorado (Até 05min)
                         </span>
                       </div>
                     </div>
@@ -715,11 +849,10 @@ export default function SchedulingAdminPage() {
                       </div>
                       <div className='text-sm text-gray-600'>
                         Usa os dados já disponíveis para recalcular apenas os
-                        rankings e pontuações. Útil após expurgos ou ajustes de
-                        metas.
+                        rankings e pontuações.
                         <span className='text-green-600 font-medium'>
                           {' '}
-                          Processo rápido (5-15min)
+                          Processo rápido
                         </span>
                       </div>
                     </div>
@@ -732,14 +865,6 @@ export default function SchedulingAdminPage() {
                   ⚡ Controles Disponíveis
                 </h4>
                 <ul className='text-sm text-gray-600 space-y-1 ml-4'>
-                  <li>
-                    • <strong>▶️ Play/⏸️ Pause:</strong> Ativa ou pausa o
-                    agendamento
-                  </li>
-                  <li>
-                    • <strong>⚡ Executar Agora:</strong> Execução manual
-                    imediata
-                  </li>
                   <li>
                     • <strong>✏️ Editar:</strong> Modificar configurações
                   </li>
@@ -771,195 +896,6 @@ export default function SchedulingAdminPage() {
                 className='px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700'
               >
                 Entendi
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ✨ MODAL DE CRIAÇÃO ATUALIZADO */}
-      {showCreateModal && (
-        <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50'>
-          <div className='bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto'>
-            <h3 className='text-lg font-semibold mb-4'>Novo Agendamento</h3>
-
-            <div className='space-y-4'>
-              <div>
-                <label className='block text-sm font-medium mb-1'>Nome</label>
-                <input
-                  type='text'
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  className='w-full border rounded-lg px-3 py-2'
-                  placeholder='Ex: Atualização Diária Manhã'
-                />
-              </div>
-
-              <div>
-                <label className='block text-sm font-medium mb-1'>
-                  Descrição
-                </label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
-                  className='w-full border rounded-lg px-3 py-2'
-                  rows={2}
-                  placeholder='Descrição opcional...'
-                />
-              </div>
-
-              <div>
-                <label className='block text-sm font-medium mb-1'>
-                  Tipo de Execução
-                </label>
-                <select
-                  value={formData.jobType}
-                  onChange={(e) =>
-                    setFormData({ ...formData, jobType: e.target.value as any })
-                  }
-                  className='w-full border rounded-lg px-3 py-2'
-                >
-                  <option value='FULL_ETL'>
-                    Atualização Completa dos Dados
-                  </option>
-                  <option value='PARTIAL_RECALCULATION'>
-                    Recálculo dos Resultados
-                  </option>
-                </select>
-                <div className='mt-1 text-xs text-gray-500'>
-                  {formData.jobType === 'FULL_ETL'
-                    ? '🔄 Busca novos dados e recalcula tudo (mais demorado)'
-                    : '📊 Recalcula apenas os rankings (mais rápido)'}
-                </div>
-              </div>
-
-              <div>
-                <label className='block text-sm font-medium mb-1'>
-                  Frequência
-                </label>
-                <select
-                  value={formData.frequency}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      frequency: e.target.value as any,
-                    })
-                  }
-                  className='w-full border rounded-lg px-3 py-2'
-                >
-                  <option value='DAILY'>Diário</option>
-                  <option value='WEEKLY'>Semanal</option>
-                  <option value='MONTHLY'>Mensal</option>
-                </select>
-              </div>
-
-              <div>
-                <label className='block text-sm font-medium mb-1'>
-                  Horário
-                </label>
-                <input
-                  type='time'
-                  value={formData.timeOfDay}
-                  onChange={(e) =>
-                    setFormData({ ...formData, timeOfDay: e.target.value })
-                  }
-                  className='w-full border rounded-lg px-3 py-2'
-                />
-                <div className='mt-1 text-xs text-gray-500'>
-                  💡 Recomendado: madrugada (01:00 - 05:00) para menor impacto
-                </div>
-              </div>
-
-              {formData.frequency === 'WEEKLY' && (
-                <div>
-                  <label className='block text-sm font-medium mb-2'>
-                    Dias da Semana
-                  </label>
-                  <div className='grid grid-cols-2 gap-2'>
-                    {Object.entries(formData.weekDays || {}).map(
-                      ([day, checked]) => (
-                        <label key={day} className='flex items-center'>
-                          <input
-                            type='checkbox'
-                            checked={checked}
-                            onChange={(e) =>
-                              setFormData({
-                                ...formData,
-                                weekDays: {
-                                  ...formData.weekDays!,
-                                  [day]: e.target.checked,
-                                },
-                              })
-                            }
-                            className='mr-2'
-                          />
-                          <span className='text-sm'>
-                            {day === 'monday'
-                              ? 'Segunda'
-                              : day === 'tuesday'
-                                ? 'Terça'
-                                : day === 'wednesday'
-                                  ? 'Quarta'
-                                  : day === 'thursday'
-                                    ? 'Quinta'
-                                    : day === 'friday'
-                                      ? 'Sexta'
-                                      : day === 'saturday'
-                                        ? 'Sábado'
-                                        : 'Domingo'}
-                          </span>
-                        </label>
-                      )
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {formData.frequency === 'MONTHLY' && (
-                <div>
-                  <label className='block text-sm font-medium mb-1'>
-                    Dia do Mês
-                  </label>
-                  <input
-                    type='number'
-                    min='1'
-                    max='31'
-                    value={formData.dayOfMonth}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        dayOfMonth: parseInt(e.target.value),
-                      })
-                    }
-                    className='w-full border rounded-lg px-3 py-2'
-                  />
-                  <div className='mt-1 text-xs text-gray-500'>
-                    ⚠️ Cuidado com dias 29-31 em meses menores
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className='flex justify-end space-x-3 mt-6'>
-              <button
-                onClick={() => {
-                  setShowCreateModal(false);
-                  resetForm();
-                }}
-                className='px-4 py-2 text-gray-600 border rounded-lg hover:bg-gray-50'
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleCreateSchedule}
-                disabled={loading}
-                className='px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50'
-              >
-                {loading ? 'Criando...' : 'Criar Agendamento'}
               </button>
             </div>
           </div>
@@ -1000,6 +936,86 @@ export default function SchedulingAdminPage() {
           className='fixed inset-0 z-0'
           onClick={() => setShowExecuteDropdown(null)}
         />
+      )}
+      {/* ✨ FECHAR DROPDOWN CENTRAL AO CLICAR FORA */}
+      {showExecuteDropdown && (
+        <div
+          className='fixed inset-0 z-40' // z-index menor que o do dropdown
+          onClick={() => setShowExecuteDropdown(false)}
+        />
+      )}
+
+      {scheduleToDelete && (
+        <AlertDialog
+          open={!!scheduleToDelete}
+          onOpenChange={() => setScheduleToDelete(null)}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Você tem certeza absoluta?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta ação não pode ser desfeita. Isso irá deletar
+                permanentemente o agendamento
+                <strong className='text-destructive font-medium'>
+                  {' '}
+                  "{scheduleToDelete.name}"
+                </strong>
+                .
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setScheduleToDelete(null)}>
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                className='bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                onClick={() => {
+                  if (scheduleToDelete) {
+                    handleDeleteSchedule(scheduleToDelete.id);
+                  }
+                }}
+              >
+                Sim, deletar agendamento
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+      {jobToExecute && (
+        <AlertDialog
+          open={!!jobToExecute}
+          onOpenChange={() => setJobToExecute(null)}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmar Execução Manual</AlertDialogTitle>
+              <AlertDialogDescription>
+                Você está prestes a iniciar o processo de
+                <strong className='text-foreground font-medium'>
+                  {jobToExecute === JobType.FULL_ETL
+                    ? ' Atualização Completa dos Dados'
+                    : ' Recálculo dos Resultados'}
+                </strong>
+                .
+                <br />
+                Esta ação será adicionada à fila de execução. Deseja continuar?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setJobToExecute(null)}>
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  handleTriggerJob(jobToExecute);
+                  setJobToExecute(null); // Fecha o diálogo após confirmar
+                }}
+              >
+                Sim, executar agora
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
     </div>
   );

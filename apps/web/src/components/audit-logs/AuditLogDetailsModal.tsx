@@ -677,7 +677,7 @@ const DefaultLayout = ({
             <Database className='h-4 w-4' />
             Dados Técnicos
           </h4>
-          <LogDetailRenderer details={log.details} />
+          <LogDetailRenderer log={log} />
         </div>
       ) : (
         <div className='bg-blue-50 rounded-lg p-4 border border-blue-200 text-center'>
