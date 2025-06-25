@@ -1,4 +1,4 @@
-// src/components/parameters/ParametersMatrix.tsx - VERSÃO OTIMIZADA FASE 2 (COM MEMOIZAÇÃO)
+// src/components/parameters/ParametersMatrix.tsx - VERSÃO SIMPLIFICADA (SEM CLIQUE)
 'use client';
 
 import {
@@ -23,13 +23,11 @@ import {
   Sector as SectorType,
 } from '@/hooks/useParametersData';
 import { ChevronDown, ChevronUp, History, Info, Loader2 } from 'lucide-react';
-import React, { memo, useMemo, useState } from 'react'; // ✅ Importar 'memo'
+import React, { memo, useMemo, useState } from 'react';
 import { Button } from '../ui/button';
 import { useParametersProgress } from './hooks/useParametersProgress';
 import { PlanningCellCard } from './PlanningCellCard';
-import { SectorProgressIndicator } from './progress/SectorProgressIndicator';
 
-// Interface das props da Matriz
 interface ParametersMatrixProps {
   uniqueCriteria: FullCriterionType[];
   resultsBySector: any;
@@ -68,7 +66,6 @@ interface ParametersMatrixProps {
   }) => void;
 }
 
-// ✅ PASSO 1: CRIAR UM SUBCOMPONENTE MEMOIZADO PARA A LINHA DA MATRIZ
 const MatrixRow = memo(
   ({
     criterion,
@@ -99,7 +96,6 @@ const MatrixRow = memo(
     onAcceptSuggestion: ParametersMatrixProps['onAcceptSuggestion'];
     onOpenHistory?: ParametersMatrixProps['onOpenHistory'];
   }) => {
-    // A função de renderizar a célula foi movida para cá para manter o contexto
     const renderCellContent = (
       criterionFromLoop: FullCriterionType,
       sectorIdStr: string,
@@ -247,11 +243,11 @@ const MatrixRow = memo(
     };
 
     return (
-      <TableRow className='hover:bg-muted/20'>
+      <TableRow className='hover:bg-muted/30'>
         <TableCell className='font-medium sticky left-0 bg-slate-50 dark:bg-slate-800/50 z-10'>
           <TooltipProvider>
             <Tooltip delayDuration={200}>
-              <TooltipTrigger className='flex items-center gap-1 cursor-help text-left w-full'>
+              <TooltipTrigger className='flex items-center gap-1 text-left w-full cursor-help'>
                 <div>{criterion.nome}</div>
                 {criterion.descricao && (
                   <Info className='h-3 w-3 text-muted-foreground' />
@@ -275,9 +271,8 @@ const MatrixRow = memo(
     );
   }
 );
-MatrixRow.displayName = 'MatrixRow'; // Boa prática para debugging
+MatrixRow.displayName = 'MatrixRow';
 
-// ✅ PASSO 2: MEMOIZAR O COMPONENTE PRINCIPAL DA MATRIZ
 const ParametersMatrix: React.FC<ParametersMatrixProps> = memo(
   ({
     uniqueCriteria,
@@ -332,10 +327,9 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = memo(
       );
     }
 
-    // Fallbacks para dados vazios
     if (
-      !resultsBySector ||
-      (Object.keys(resultsBySector).length === 0 && !isLoadingMatrixData)
+      (!resultsBySector || Object.keys(resultsBySector).length === 0) &&
+      !isLoadingMatrixData
     ) {
       return (
         <div className='text-center p-8'>
@@ -345,8 +339,8 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = memo(
     }
 
     if (
-      !uniqueCriteria ||
-      (uniqueCriteria.length === 0 && !isLoadingMatrixData)
+      (!uniqueCriteria || uniqueCriteria.length === 0) &&
+      !isLoadingMatrixData
     ) {
       return (
         <div className='text-center p-8'>Nenhum critério configurado.</div>
@@ -399,24 +393,7 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = memo(
                       className='font-semibold text-center min-w-[220px]'
                     >
                       <div>{(sectorData as any).setorNome}</div>
-                      {isPlanejamento && (
-                        <SectorProgressIndicator
-                          setorNome={(sectorData as any).setorNome}
-                          definidas={
-                            progressData[(sectorData as any).setorNome]
-                              ?.definidas || 0
-                          }
-                          total={
-                            progressData[(sectorData as any).setorNome]
-                              ?.total || 0
-                          }
-                          percentual={
-                            progressData[(sectorData as any).setorNome]
-                              ?.percentual || 0
-                          }
-                          isLoading={progressLoading || isLoadingMatrixData}
-                        />
-                      )}
+                      {isPlanejamento}
                     </TableHead>
                   )
                 )}
@@ -424,7 +401,6 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = memo(
             </TableHeader>
             <TableBody>
               {sortedCriteria.map((criterion: FullCriterionType) => (
-                // Usando o novo componente de linha memoizado
                 <MatrixRow
                   key={criterion.id}
                   criterion={criterion}
@@ -449,6 +425,6 @@ const ParametersMatrix: React.FC<ParametersMatrixProps> = memo(
     );
   }
 );
-ParametersMatrix.displayName = 'ParametersMatrix'; // Boa prática para debugging
+ParametersMatrix.displayName = 'ParametersMatrix';
 
 export default ParametersMatrix;

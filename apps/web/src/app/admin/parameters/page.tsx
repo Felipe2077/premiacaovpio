@@ -1,14 +1,24 @@
-// apps/web/src/app/admin/parameters/page.tsx - VERSÃO OTIMIZADA (CORREÇÃO DE LOADING)
+// apps/web/src/app/admin/parameters/page.tsx - VERSÃO COMPLETA COM FILTRO NA MATRIZ
 'use client';
-import { Loader2 } from 'lucide-react';
+import { FilterX, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 // Componentes
+import { AnalysisPanel } from '@/components/parameters/analysis/AnalysisPanel';
 import { SimpleLazyModals } from '@/components/parameters/LazyModalsSimple';
 import { ParametersHeader } from '@/components/parameters/ParametersHeader';
 import ParametersMatrix from '@/components/parameters/ParametersMatrix';
+import { ProgressCards } from '@/components/parameters/ProgressCards';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 // Hooks
 import { useCalculationActions } from '@/hooks/useCalculationActions';
@@ -24,7 +34,6 @@ import {
   RegrasAplicadasPadrao,
 } from '@sistema-premiacao/shared-types';
 
-// Tipos de payload para os handlers de submit
 type EditPayload = {
   id: number;
   valor: string;
@@ -43,6 +52,10 @@ type CreatePayload = {
 export default function ParametersPage() {
   const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+  // ✅ NOVO ESTADO PARA O FILTRO DA MATRIZ
+  const [matrixCriterionFilterId, setMatrixCriterionFilterId] = useState<
+    string | null
+  >(null);
 
   const [modals, setModals] = useState({
     create: false,
@@ -77,6 +90,16 @@ export default function ParametersPage() {
     [selectedPeriodId, getPeriodById]
   );
 
+  // ✅ NOVA LÓGICA PARA FILTRAR OS CRITÉRIOS A SEREM EXIBIDOS NA MATRIZ
+  const matrixCriteria = useMemo(() => {
+    if (!matrixCriterionFilterId) {
+      return uniqueCriteria; // Se nenhum filtro, mostra todos
+    }
+    return uniqueCriteria.filter(
+      (c) => c.id === Number(matrixCriterionFilterId)
+    );
+  }, [uniqueCriteria, matrixCriterionFilterId]);
+
   const calculationSettings = useCalculationSettings({
     uniqueCriteria,
     fetchCriterionCalculationSettings,
@@ -93,6 +116,7 @@ export default function ParametersPage() {
 
   const handlePeriodChange = useCallback((value: string) => {
     setSelectedPeriodId(parseInt(value));
+    setMatrixCriterionFilterId(null); // Limpa o filtro da matriz ao trocar de período
   }, []);
 
   const handleRefresh = useCallback(async () => {
@@ -136,7 +160,6 @@ export default function ParametersPage() {
           sector?.id || null,
           selectedPeriod?.id || 0
         );
-
         const dataForModal = {
           id: existingParameter?.id,
           criterionId: criterion.id,
@@ -184,7 +207,6 @@ export default function ParametersPage() {
         toast.error('Metas só podem ser calculadas na fase de PLANEJAMENTO.');
         return;
       }
-
       const data = {
         criterioId: criterion.id,
         criterioNome: criterion.nome,
@@ -237,7 +259,6 @@ export default function ParametersPage() {
   const handleCreateSubmit = useCallback(
     async (payload: CreatePayload) => {
       if (!modalData.creating) return;
-
       try {
         await createMutation.mutateAsync({
           criterionId: modalData.creating.criterionId,
@@ -248,9 +269,7 @@ export default function ParametersPage() {
           nomeParametro: payload.nomeParametro,
           dataInicioEfetivo: payload.dataInicioEfetivo,
         } as any);
-
         closeModal('create');
-
         if (selectedPeriod?.mesAno) {
           await fetchResults(selectedPeriod.mesAno);
         }
@@ -274,7 +293,6 @@ export default function ParametersPage() {
         toast.error('Dados de edição não encontrados.');
         return;
       }
-
       try {
         await updateMutation.mutateAsync({
           id: payload.id,
@@ -283,9 +301,7 @@ export default function ParametersPage() {
           nomeParametro: payload.nomeParametro,
           dataInicioEfetivo: payload.dataInicioEfetivo,
         });
-
         closeModal('edit');
-
         if (selectedPeriod?.mesAno) {
           await fetchResults(selectedPeriod.mesAno);
         }
@@ -323,18 +339,13 @@ export default function ParametersPage() {
 
   useEffect(() => {
     if (periods.length > 0 && !selectedPeriodId) {
-      const activePeriod = periods.find(
-        (p: CompetitionPeriod) => p.status === 'ATIVA'
-      );
-      const planningPeriod = periods.find(
-        (p: CompetitionPeriod) => p.status === 'PLANEJAMENTO'
-      );
+      const activePeriod = periods.find((p) => p.status === 'ATIVA');
+      const planningPeriod = periods.find((p) => p.status === 'PLANEJAMENTO');
       const sortedPeriods = [...periods].sort(
         (a, b) =>
-          new Date(b.dataInicio || 0).getTime() -
-          new Date(a.dataInicio || 0).getTime()
+          new Date(b.dataInicio || '').getTime() -
+          new Date(a.dataInicio || '').getTime()
       );
-
       const periodToSelect = activePeriod || planningPeriod || sortedPeriods[0];
       if (periodToSelect) setSelectedPeriodId(periodToSelect.id);
     }
@@ -348,13 +359,9 @@ export default function ParametersPage() {
 
   if (isLoading && !selectedPeriod) {
     return (
-      <div className='container mx-auto py-6'>
-        <div className='flex justify-center items-center h-64'>
-          <Loader2 className='h-8 w-8 animate-spin text-muted-foreground' />
-          <span className='ml-2 text-muted-foreground'>
-            Carregando dados...
-          </span>
-        </div>
+      <div className='container mx-auto py-6 flex justify-center items-center h-64'>
+        <Loader2 className='h-8 w-8 animate-spin text-muted-foreground' />
+        <span className='ml-2 text-muted-foreground'>Carregando dados...</span>
       </div>
     );
   }
@@ -368,7 +375,6 @@ export default function ParametersPage() {
         onPeriodChange={handlePeriodChange}
         onRefresh={handleRefresh}
       />
-
       {!selectedPeriod ? (
         <Card>
           <CardContent className='flex justify-center items-center h-64'>
@@ -376,50 +382,91 @@ export default function ParametersPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              Matriz de Parâmetros - {selectedPeriod.mesAno}
-              <span
-                className={`ml-2 text-sm font-normal px-2 py-0.5 rounded-full ${
-                  selectedPeriod.status === 'PLANEJAMENTO'
-                    ? 'bg-blue-100 text-blue-700'
-                    : selectedPeriod.status === 'ATIVA'
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-gray-100 text-gray-700'
-                }`}
-              >
-                {selectedPeriod.status}
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {/* ✅ MUDANÇA PRINCIPAL AQUI */}
-            {isLoadingResults ? (
-              <div className='flex justify-center items-center min-h-[400px]'>
-                <Loader2 className='h-8 w-8 animate-spin text-muted-foreground' />
-                <span className='ml-2 text-muted-foreground'>
-                  Carregando dados da matriz...
-                </span>
+        <>
+          {selectedPeriod.status === 'PLANEJAMENTO' && (
+            <ProgressCards
+              resultsBySector={resultsBySector}
+              sectors={sectors}
+              totalCriteriaCount={uniqueCriteria.length}
+            />
+          )}
+          <AnalysisPanel
+            allCriteria={uniqueCriteria}
+            sectors={sectors}
+            period={selectedPeriod}
+            resultsBySector={resultsBySector}
+          />
+          <Card>
+            <CardHeader>
+              <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4'>
+                <CardTitle>
+                  Matriz de Parâmetros - {selectedPeriod.mesAno}
+                  <span
+                    className={`ml-2 text-sm font-normal px-2 py-0.5 rounded-full ${
+                      selectedPeriod.status === 'PLANEJAMENTO'
+                        ? 'bg-blue-100 text-blue-700'
+                        : selectedPeriod.status === 'ATIVA'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    {selectedPeriod.status}
+                  </span>
+                </CardTitle>
+                <div className='flex items-center gap-2'>
+                  <Select
+                    value={matrixCriterionFilterId ?? ''}
+                    onValueChange={(value) => setMatrixCriterionFilterId(value)}
+                  >
+                    <SelectTrigger className='w-full sm:w-[250px]'>
+                      <SelectValue placeholder='Filtrar por critério...' />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {uniqueCriteria.map((c) => (
+                        <SelectItem key={c.id} value={String(c.id)}>
+                          {c.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {matrixCriterionFilterId && (
+                    <Button
+                      variant='ghost'
+                      size='icon'
+                      onClick={() => setMatrixCriterionFilterId(null)}
+                    >
+                      <FilterX className='h-4 w-4' />
+                    </Button>
+                  )}
+                </div>
               </div>
-            ) : (
-              <ParametersMatrix
-                uniqueCriteria={uniqueCriteria}
-                resultsBySector={resultsBySector}
-                onEdit={handleEdit}
-                onCreate={handleCreate}
-                onCalculate={handleCalculate}
-                isLoadingMatrixData={isLoadingResults}
-                periodoAtual={selectedPeriod}
-                sectors={sectors}
-                onOpenHistory={handleHistory}
-                onAcceptSuggestion={handleAcceptSuggestion}
-              />
-            )}
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent>
+              {isLoadingResults ? (
+                <div className='flex justify-center items-center min-h-[400px]'>
+                  <Loader2 className='h-8 w-8 animate-spin text-muted-foreground' />
+                  <span className='ml-2 text-muted-foreground'>
+                    Carregando dados da matriz...
+                  </span>
+                </div>
+              ) : (
+                <ParametersMatrix
+                  uniqueCriteria={matrixCriteria}
+                  resultsBySector={resultsBySector}
+                  onEdit={handleEdit}
+                  onCreate={handleCreate}
+                  onCalculate={handleCalculate}
+                  isLoadingMatrixData={isLoadingResults}
+                  periodoAtual={selectedPeriod}
+                  sectors={sectors}
+                  onOpenHistory={handleHistory}
+                  onAcceptSuggestion={handleAcceptSuggestion}
+                />
+              )}
+            </CardContent>
+          </Card>
+        </>
       )}
-
       {isMounted && (
         <SimpleLazyModals
           isCreateModalOpen={modals.create}
