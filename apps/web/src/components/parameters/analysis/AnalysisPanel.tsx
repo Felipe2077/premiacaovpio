@@ -32,12 +32,10 @@ interface AnalysisPanelProps {
 const formatPeriod = (periodString: string | null): string => {
   if (!periodString) return '';
   const [year, month] = periodString.split('-');
-  // Adiciona T12:00:00Z para tratar como UTC e evitar problemas de fuso horário
-  const date = new Date(`${year}-${month}-01T12:00:00Z`);
+  const date = new Date(Number(year), Number(month) - 1);
   const formatted = date.toLocaleString('pt-BR', {
     month: 'long',
     year: 'numeric',
-    timeZone: 'UTC',
   });
   return formatted.charAt(0).toUpperCase() + formatted.slice(1);
 };
@@ -77,6 +75,11 @@ export const AnalysisPanel = ({
 
   const formattedCurrentPeriod = formatPeriod(period?.mesAno || null);
   const formattedPreviousPeriod = formatPeriod(previousMonthPeriod);
+
+  // ✅ ESTA É A LINHA QUE ESTAVA FALTANDO NA SUA VERSÃO
+  const historyPeriodLabel = useMemo(() => {
+    return `Últimos ${historyMonths} meses`;
+  }, [historyMonths]);
 
   const historicalPeriods = useMemo(() => {
     if (!period) return [];
@@ -183,9 +186,14 @@ export const AnalysisPanel = ({
     );
   }, [selectedCriterion, previousMonthResults]);
 
+  const hasCurrentPeriodProjectionData = useMemo(
+    () => currentPeriodFilteredData.some((d) => d.valorRealizado !== null),
+    [currentPeriodFilteredData]
+  );
+
   return (
     <Card className='border-amber-200 dark:border-amber-900'>
-      <CardHeader className=''>
+      <CardHeader>
         <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4'>
           <CardTitle>Painel de Análise de Critérios</CardTitle>
           <div className='flex flex-col sm:flex-row gap-2 w-full sm:w-auto'>
@@ -233,6 +241,7 @@ export const AnalysisPanel = ({
               isLoading={isLoading}
               criterionName={selectedCriterion.nome}
               decimalPlaces={selectedCriterion.casasDecimaisPadrao ?? 0}
+              periodLabel={historyPeriodLabel}
             />
 
             {period.status !== 'FECHADA' && (
