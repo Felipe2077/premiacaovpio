@@ -58,7 +58,6 @@ export const useAuthStore = create<AuthState>()(
 
           // 🎯 CORREÇÃO: Ação de login com verificação de success
           login: async (credentials: LoginCredentials) => {
-            console.log('🔐 Iniciando login...', credentials.email);
             set({ isLoading: true });
 
             try {
@@ -71,8 +70,6 @@ export const useAuthStore = create<AuthState>()(
                 body: JSON.stringify(credentials),
               });
 
-              console.log('📡 Resposta do servidor:', response.status);
-
               if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
                 console.error('❌ Erro na resposta:', errorData);
@@ -82,7 +79,6 @@ export const useAuthStore = create<AuthState>()(
               }
 
               const data = await response.json();
-              console.log('📦 Dados recebidos:', data);
 
               // 🎯 CORREÇÃO: Verificar se o login foi bem-sucedido
               if (!data.success) {
@@ -106,8 +102,6 @@ export const useAuthStore = create<AuthState>()(
                 isAuthenticated: true,
                 isLoading: false,
               });
-
-              console.log('✅ Login realizado com sucesso:', user.email);
             } catch (error) {
               console.error('❌ Erro no login:', error);
               set({
@@ -121,8 +115,6 @@ export const useAuthStore = create<AuthState>()(
 
           // Ação de logout
           logout: () => {
-            console.log('👋 Iniciando logout...');
-
             // Fazer logout no backend
             fetch(`${API_BASE_URL}/api/auth/logout`, {
               method: 'POST',
@@ -137,22 +129,16 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: false,
               isLoading: false,
             });
-
-            console.log('✅ Logout realizado');
           },
 
           // 🎯 CORREÇÃO: Verificar autenticação com proteção contra loop
           checkAuth: async () => {
             // Prevenir múltiplas verificações simultâneas
             if (isCheckingAuth) {
-              console.log(
-                '⚠️ Verificação de auth já em andamento, ignorando...'
-              );
               return;
             }
 
             isCheckingAuth = true;
-            console.log('🔍 Verificando autenticação...');
 
             set({ isLoading: true });
 
@@ -163,11 +149,8 @@ export const useAuthStore = create<AuthState>()(
                 cache: 'no-cache',
               });
 
-              console.log('📡 Status da verificação:', response.status);
-
               if (response.ok) {
                 const data = await response.json();
-                console.log('📦 Dados do usuário verificados:', data);
 
                 const user: User = {
                   id: data.id,
@@ -185,15 +168,12 @@ export const useAuthStore = create<AuthState>()(
                   isAuthenticated: true,
                   isLoading: false,
                 });
-
-                console.log('✅ Autenticação verificada:', user.email);
               } else {
                 console.log(
                   '⚠️ Usuário não autenticado (status:',
                   response.status,
                   ')'
                 );
-
                 // Token inválido ou expirado
                 set({
                   user: null,
@@ -218,10 +198,7 @@ export const useAuthStore = create<AuthState>()(
             const { user } = get();
             const hasPermission =
               user?.permissions?.includes(permission) || false;
-            console.log(
-              `🔐 Verificando permissão ${permission}:`,
-              hasPermission
-            );
+
             return hasPermission;
           },
 
@@ -231,28 +208,22 @@ export const useAuthStore = create<AuthState>()(
             const hasAny = permissions.some((permission) =>
               user.permissions.includes(permission)
             );
-            console.log(
-              `🔐 Verificando qualquer permissão de [${permissions.join(', ')}]:`,
-              hasAny
-            );
+
             return hasAny;
           },
 
           hasRole: (role: Role): boolean => {
             const { user } = get();
             const hasRole = user?.roles?.includes(role) || false;
-            console.log(`👤 Verificando role ${role}:`, hasRole);
             return hasRole;
           },
 
           // Setters internos
           setUser: (user: User | null) => {
-            console.log('🔄 Atualizando usuário:', user?.email || 'null');
             set({ user, isAuthenticated: !!user });
           },
 
           setLoading: (loading: boolean) => {
-            console.log('⏳ Atualizando loading:', loading);
             set({ isLoading: loading });
           },
         };
@@ -277,14 +248,8 @@ export const useAuthStore = create<AuthState>()(
         }),
         // 🎯 CORREÇÃO: Revalidar estado ao hidratar
         onRehydrateStorage: () => (state) => {
-          console.log(
-            '💧 Estado hidratado do localStorage:',
-            state?.isAuthenticated
-          );
-
           // Se estado diz que está autenticado, verificar no servidor
           if (state?.isAuthenticated) {
-            console.log('🔄 Revalidando autenticação após hidratação...');
             // Aguardar um tick para evitar conflitos de hidratação
             setTimeout(() => {
               state.checkAuth();

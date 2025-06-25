@@ -78,8 +78,6 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      console.log('🔐 Tentando fazer login...');
-
       await login(data);
 
       toast.success('Login realizado com sucesso!', {

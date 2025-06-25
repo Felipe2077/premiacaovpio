@@ -24,16 +24,8 @@ export function useCalculationSettings(criterionId: number) {
           }
         );
 
-        console.log(
-          `[useCalculationSettings] Response status para critério ${criterionId}:`,
-          response.status
-        );
-
         // 🎯 MELHORIA: Tratar diferentes status codes
         if (response.status === 404) {
-          console.log(
-            `[useCalculationSettings] Configurações não encontradas para critério ${criterionId}, usando padrão`
-          );
           // Configurações padrão se não encontradas
           setSettings({
             criterionId,
@@ -47,9 +39,6 @@ export function useCalculationSettings(criterionId: number) {
         }
 
         if (response.status === 500) {
-          console.warn(
-            `[useCalculationSettings] Erro 500 para critério ${criterionId}, usando configurações padrão`
-          );
           // Em caso de erro 500, usar configurações padrão em vez de falhar
           setSettings({
             criterionId,
@@ -67,10 +56,6 @@ export function useCalculationSettings(criterionId: number) {
         }
 
         const data = await response.json();
-        console.log(
-          `[useCalculationSettings] Dados recebidos para critério ${criterionId}:`,
-          data
-        );
 
         // 🎯 MELHORIA: Tratar diferentes formatos de resposta
         if (data.defaultSettings) {
@@ -82,15 +67,6 @@ export function useCalculationSettings(criterionId: number) {
           setSettings(data);
         }
       } catch (err) {
-        console.error(
-          `[useCalculationSettings] Erro ao buscar configurações para critério ${criterionId}:`,
-          err
-        );
-
-        // 🎯 MELHORIA: Não definir como erro, usar configurações padrão
-        console.log(
-          `[useCalculationSettings] Usando configurações padrão devido ao erro`
-        );
         setSettings({
           criterionId,
           calculationMethod: 'media3',

@@ -1,4 +1,4 @@
-// src/components/parameters/ParameterDialogs.tsx
+// src/components/parameters/ParameterDialogs.tsx - VERSÃO OTIMIZADA FASE 1
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -12,59 +12,73 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { CreateData, EditData } from '@/types/parameters.types';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+
+// Tipos para o payload de salvamento
+type EditPayload = {
+  id: number;
+  valor: string;
+  justificativa: string;
+  nomeParametro: string;
+  dataInicioEfetivo: string;
+};
+
+type CreatePayload = {
+  valor: string;
+  justificativa: string;
+  nomeParametro: string;
+  dataInicioEfetivo: string;
+};
 
 interface EditDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editData: EditData | null;
-  newMetaValue: string;
-  onMetaValueChange: (value: string) => void;
-  onSave: (
-    justificativa: string,
-    nomeParametro?: string,
-    dataInicioEfetivo?: string
-  ) => void;
+  onSave: (payload: EditPayload) => void; // Assinatura do onSave alterada
 }
 
 export const EditDialog: React.FC<EditDialogProps> = ({
   open,
   onOpenChange,
   editData,
-  newMetaValue,
-  onMetaValueChange,
   onSave,
 }) => {
+  // ✅ ESTADO AGORA É LOCAL DO COMPONENTE
+  const [valor, setValor] = useState('');
   const [justificativa, setJustificativa] = useState('');
-  const [nomeParametro, setNomeParametro] = useState(
-    editData?.nomeParametro || ''
-  );
-  const [dataInicioEfetivo, setDataInicioEfetivo] = useState(
-    editData?.dataInicioEfetivo || ''
-  );
+  const [nomeParametro, setNomeParametro] = useState('');
+  const [dataInicioEfetivo, setDataInicioEfetivo] = useState('');
 
-  // Reset fields when dialog opens/closes
-  React.useEffect(() => {
+  // Efeito para popular o formulário quando os dados de edição mudam
+  useEffect(() => {
     if (open && editData) {
+      setValor(editData.valor?.toString() || '');
       setNomeParametro(editData.nomeParametro || '');
-      setDataInicioEfetivo(editData.dataInicioEfetivo || '');
-      setJustificativa('');
-    } else if (!open) {
-      setJustificativa('');
-      setNomeParametro('');
-      setDataInicioEfetivo('');
+      setDataInicioEfetivo(
+        editData.dataInicioEfetivo || new Date().toISOString().split('T')[0]
+      );
+      setJustificativa(''); // Limpa a justificativa a cada abertura
     }
   }, [open, editData]);
 
   const handleSave = () => {
-    if (!justificativa.trim()) {
-      return; // Validação básica - poderia mostrar toast de erro
+    if (!justificativa.trim() || !valor.trim() || !editData?.id) {
+      toast.error('Valor e Justificativa são obrigatórios.');
+      return;
     }
-    onSave(justificativa, nomeParametro, dataInicioEfetivo);
+    // ✅ Envia um payload completo ao invés de apenas a justificativa
+    onSave({
+      id: editData.id,
+      valor,
+      justificativa,
+      nomeParametro,
+      dataInicioEfetivo,
+    });
   };
 
   const isFormValid =
-    justificativa.trim().length > 0 && (newMetaValue || '').trim().length > 0;
+    justificativa.trim().length > 0 && valor.trim().length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -72,14 +86,11 @@ export const EditDialog: React.FC<EditDialogProps> = ({
         <DialogHeader>
           <DialogTitle>Editar Meta</DialogTitle>
           <DialogDescription>
-            Atualize o valor da meta para {editData?.criterioNome} no setor
-            {editData?.setorNome}. Uma justificativa é obrigatória para a
-            alteração.
+            Atualize o valor da meta para {editData?.criterionName} no setor{' '}
+            {editData?.sectorName}.
           </DialogDescription>
         </DialogHeader>
-
         <div className='grid gap-4 py-4'>
-          {/* Nome do Parâmetro */}
           <div className='grid grid-cols-4 items-center gap-4'>
             <Label htmlFor='nomeParametro' className='text-right'>
               Nome da Meta
@@ -89,27 +100,22 @@ export const EditDialog: React.FC<EditDialogProps> = ({
               value={nomeParametro}
               onChange={(e) => setNomeParametro(e.target.value)}
               className='col-span-3'
-              placeholder='Nome do parâmetro'
             />
           </div>
-
-          {/* Valor da Meta */}
           <div className='grid grid-cols-4 items-center gap-4'>
             <Label htmlFor='meta' className='text-right'>
               Valor da Meta
             </Label>
+            {/* ✅ Input agora usa o estado local */}
             <Input
               id='meta'
               type='number'
               step='0.01'
-              value={newMetaValue || ''}
-              onChange={(e) => onMetaValueChange(e.target.value)}
+              value={valor}
+              onChange={(e) => setValor(e.target.value)}
               className='col-span-3'
-              placeholder='Valor da meta'
             />
           </div>
-
-          {/* Data de Início */}
           <div className='grid grid-cols-4 items-center gap-4'>
             <Label htmlFor='dataInicio' className='text-right'>
               Data de Início
@@ -122,30 +128,20 @@ export const EditDialog: React.FC<EditDialogProps> = ({
               className='col-span-3'
             />
           </div>
-
-          {/* Justificativa - Campo Obrigatório */}
           <div className='grid grid-cols-4 items-start gap-4'>
             <Label htmlFor='justificativa' className='text-right mt-2'>
               Justificativa <span className='text-red-500'>*</span>
             </Label>
-            <div className='col-span-3'>
-              <Textarea
-                id='justificativa'
-                value={justificativa}
-                onChange={(e) => setJustificativa(e.target.value)}
-                placeholder='Informe o motivo da alteração da meta...'
-                rows={3}
-                className='resize-none'
-              />
-              {justificativa.trim().length === 0 && (
-                <p className='text-sm text-red-500 mt-1'>
-                  Justificativa é obrigatória
-                </p>
-              )}
-            </div>
+            <Textarea
+              id='justificativa'
+              value={justificativa}
+              onChange={(e) => setJustificativa(e.target.value)}
+              placeholder='Informe o motivo da alteração da meta...'
+              className='col-span-3'
+              rows={3}
+            />
           </div>
         </div>
-
         <DialogFooter>
           <Button variant='outline' onClick={() => onOpenChange(false)}>
             Cancelar
@@ -163,54 +159,52 @@ interface CreateDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   createData: CreateData | null;
-  newMetaValue: string;
-  onMetaValueChange: (value: string) => void;
-  onSave: (
-    justificativa: string,
-    nomeParametro?: string,
-    dataInicioEfetivo?: string
-  ) => void;
+  onSave: (payload: CreatePayload) => void; // Assinatura do onSave alterada
 }
 
 export const CreateDialog: React.FC<CreateDialogProps> = ({
   open,
   onOpenChange,
   createData,
-  newMetaValue,
-  onMetaValueChange,
   onSave,
 }) => {
+  // ✅ ESTADO AGORA É LOCAL DO COMPONENTE
+  const [valor, setValor] = useState('');
   const [justificativa, setJustificativa] = useState('');
   const [nomeParametro, setNomeParametro] = useState('');
-  const [dataInicioEfetivo, setDataInicioEfetivo] = useState('');
+  const [dataInicioEfetivo, setDataInicioEfetivo] = useState(
+    new Date().toISOString().split('T')[0]
+  );
 
-  // Reset fields when dialog opens/closes
-  React.useEffect(() => {
-    if (open) {
-      // Auto-gerar nome do parâmetro baseado no critério e setor
-      if (createData) {
-        const autoName = `META_${createData.criterioNome.replace(/\s+/g, '_').toUpperCase()}_SETOR${createData.setorId}`;
-        setNomeParametro(autoName);
-      }
+  useEffect(() => {
+    if (open && createData) {
+      // Reseta os campos ao abrir
+      setValor('');
       setJustificativa('');
-      setDataInicioEfetivo('');
-    } else {
-      setJustificativa('');
-      setNomeParametro('');
-      setDataInicioEfetivo('');
+      setDataInicioEfetivo(new Date().toISOString().split('T')[0]);
+      setNomeParametro(
+        `Meta ${createData.criterionName} - ${createData.sectorName}`
+      );
     }
   }, [open, createData]);
 
   const handleSave = () => {
-    if (!justificativa.trim()) {
-      return; // Validação básica
+    if (!justificativa.trim() || !valor.trim()) {
+      toast.error('Valor e Justificativa são obrigatórios.');
+      return;
     }
-    onSave(justificativa, nomeParametro, dataInicioEfetivo);
+    // ✅ Envia um payload completo ao invés de apenas a justificativa
+    onSave({
+      valor,
+      justificativa,
+      nomeParametro,
+      dataInicioEfetivo,
+    });
   };
 
   const isFormValid =
     justificativa.trim().length > 0 &&
-    (newMetaValue || '').trim().length > 0 &&
+    valor.trim().length > 0 &&
     nomeParametro.trim().length > 0;
 
   return (
@@ -219,13 +213,11 @@ export const CreateDialog: React.FC<CreateDialogProps> = ({
         <DialogHeader>
           <DialogTitle>Criar Meta</DialogTitle>
           <DialogDescription>
-            Defina o valor da meta para {createData?.criterioNome} no setor
-            {createData?.setorNome}. Uma justificativa é obrigatória.
+            Defina o valor da meta para {createData?.criterionName} no setor{' '}
+            {createData?.sectorName}.
           </DialogDescription>
         </DialogHeader>
-
         <div className='grid gap-4 py-4'>
-          {/* Nome do Parâmetro */}
           <div className='grid grid-cols-4 items-center gap-4'>
             <Label htmlFor='nomeParametroCreate' className='text-right'>
               Nome da Meta
@@ -235,27 +227,22 @@ export const CreateDialog: React.FC<CreateDialogProps> = ({
               value={nomeParametro}
               onChange={(e) => setNomeParametro(e.target.value)}
               className='col-span-3'
-              placeholder='Nome do parâmetro'
             />
           </div>
-
-          {/* Valor da Meta */}
           <div className='grid grid-cols-4 items-center gap-4'>
             <Label htmlFor='newMeta' className='text-right'>
               Valor da Meta
             </Label>
+            {/* ✅ Input agora usa o estado local */}
             <Input
               id='newMeta'
               type='number'
               step='0.01'
-              value={newMetaValue || ''}
-              onChange={(e) => onMetaValueChange(e.target.value)}
+              value={valor}
+              onChange={(e) => setValor(e.target.value)}
               className='col-span-3'
-              placeholder='Valor da meta'
             />
           </div>
-
-          {/* Data de Início */}
           <div className='grid grid-cols-4 items-center gap-4'>
             <Label htmlFor='dataInicioCreate' className='text-right'>
               Data de Início
@@ -268,30 +255,20 @@ export const CreateDialog: React.FC<CreateDialogProps> = ({
               className='col-span-3'
             />
           </div>
-
-          {/* Justificativa - Campo Obrigatório */}
           <div className='grid grid-cols-4 items-start gap-4'>
             <Label htmlFor='justificativaCreate' className='text-right mt-2'>
               Justificativa <span className='text-red-500'>*</span>
             </Label>
-            <div className='col-span-3'>
-              <Textarea
-                id='justificativaCreate'
-                value={justificativa}
-                onChange={(e) => setJustificativa(e.target.value)}
-                placeholder='Informe o motivo da criação da meta...'
-                rows={3}
-                className='resize-none'
-              />
-              {justificativa.trim().length === 0 && (
-                <p className='text-sm text-red-500 mt-1'>
-                  Justificativa é obrigatória
-                </p>
-              )}
-            </div>
+            <Textarea
+              id='justificativaCreate'
+              value={justificativa}
+              onChange={(e) => setJustificativa(e.target.value)}
+              placeholder='Informe o motivo da criação da meta...'
+              className='col-span-3'
+              rows={3}
+            />
           </div>
         </div>
-
         <DialogFooter>
           <Button variant='outline' onClick={() => onOpenChange(false)}>
             Cancelar
