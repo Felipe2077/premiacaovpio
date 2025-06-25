@@ -483,9 +483,9 @@ export default function PerformanceTable({
                 })}
 
                 {/* LINHA DE TOTAIS */}
-                <tr className='bg-yellow-200 border-t-2 border-yellow-400'>
+                <tr className='bg-blue-100 border-t-2 border-blue-300'>
                   {/* Célula de cabeçalho para totais */}
-                  <td className='sticky left-0 bg-yellow-200 px-3 py-3 border-r font-bold text-blue-900'>
+                  <td className='sticky left-0 bg-blue-100 px-3 py-3 border-r font-bold text-blue-900'>
                     <div className='flex items-center gap-2'>
                       <span className='text-lg'>📊</span>
                       <div>
