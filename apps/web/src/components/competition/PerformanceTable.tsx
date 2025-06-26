@@ -61,32 +61,34 @@ const formatNumberByCriterion = (
   num: number | undefined | null,
   criterionName: string
 ): string => {
-  if (!num && num !== 0) return '0';
+  if (num === null || num === undefined) return '0';
 
   const normalizedName = criterionName.toUpperCase().trim();
+  const roundedNum = Math.round(num);
 
-  // Critérios com formatação especial
-  if (normalizedName.includes('COMBUSTIVEL')) {
-    return `${num.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 1 })}L`;
-  }
-  if (normalizedName.includes('PNEUS')) {
-    return `R$ ${num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  }
-  if (normalizedName.includes('PEÇAS')) {
-    return `R$ ${num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  }
-
-  // Para outros critérios, mostrar valor completo
-  if (num >= 1000) {
-    return num.toLocaleString('pt-BR', {
+  // Formatação para valores monetários (arredondado)
+  if (normalizedName.includes('PNEUS') || normalizedName.includes('PEÇAS')) {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'decimal',
+      currency: 'BRL',
       minimumFractionDigits: 0,
-      maximumFractionDigits: 1,
-    });
+      maximumFractionDigits: 0,
+    }).format(roundedNum);
   }
+
+  // Formatação para litros (arredondado)
+  if (normalizedName.includes('COMBUSTIVEL')) {
+    return `${roundedNum.toLocaleString('pt-BR')}L`;
+  }
+
+  // Formatação padrão para outros números
   if (num % 1 === 0) {
-    return num.toString();
+    return num.toLocaleString('pt-BR');
   }
-  return Number(num).toFixed(2);
+  return Number(num).toLocaleString('pt-BR', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 2,
+  });
 };
 
 // Função para determinar se critério deve usar soma ou média
@@ -145,59 +147,51 @@ const CompactCell = ({
     );
   }
 
-  // Cálculo correto do percentual
   const percentage = (dados.percentualAtingimento || 0) * 100;
   const colorClass = getPontuacaoColor(dados.pontos || 0);
   const status = getStatusByPoints(dados.pontos || 0);
 
-  // VERIFICAÇÃO CORRIGIDA - Verificar se é um critério especial (PEÇAS, PNEUS, COMBUSTÍVEL)
-  const normalizedName = criterio.nome.toUpperCase().trim();
-  const isSpecialCriterion =
-    normalizedName.includes('COMBUSTIVEL') ||
-    normalizedName.includes('PNEUS') ||
-    normalizedName.includes('PEÇAS') ||
-    normalizedName.includes('COMBUSTÍVEL');
-
   return (
     <TooltipProvider>
-      <Tooltip>
+      <Tooltip delayDuration={100}>
         <TooltipTrigger asChild>
-          <div className='text-center p-1 cursor-help hover:bg-gray-50 rounded transition-colors'>
-            <div className='text-xs mb-1'>
-              <div className='font-semibold'>
-                {isSpecialCriterion ? (
-                  formatNumberByCriterion(dados.valorRealizado, criterio.nome)
-                ) : (
-                  <>
-                    <span className='text-gray-600'>realizado:</span>{' '}
-                    {formatNumberByCriterion(
-                      dados.valorRealizado,
-                      criterio.nome
-                    )}
-                  </>
-                )}
+          <div className='text-center cursor-help hover:bg-gray-50/50 dark:hover:bg-gray-800/50 rounded transition-colors'>
+            {/* Bloco Realizado */}
+            <div>
+              <div className='font-bold text-gray-700 dark:text-gray-100 leading-tight text-base'>
+                {formatNumberByCriterion(dados.valorRealizado, criterio.nome)}
               </div>
-              <div className='text-gray-500 text-[10px]'>
-                {isSpecialCriterion ? (
-                  formatNumberByCriterion(dados.valorMeta, criterio.nome)
-                ) : (
-                  <>
-                    <span className='text-gray-400'>Meta:</span>{' '}
-                    {formatNumberByCriterion(dados.valorMeta, criterio.nome)}
-                  </>
-                )}
+              <div className='text-[10px] text-gray-500 dark:text-gray-400 '>
+                Realizado
               </div>
             </div>
-            <div className='w-full bg-gray-200 rounded-full h-1.5 mb-1'>
-              <div
-                className={`h-1.5 rounded-full ${colorClass}`}
-                style={{ width: `${Math.min(percentage, 100)}%` }}
-              />
+
+            {/* Bloco Meta */}
+            <div className='mb-1 mt-2'>
+              <div className='font-bold text-gray-700 dark:text-gray-100 leading-tight text-base'>
+                {formatNumberByCriterion(dados.valorMeta, criterio.nome)}
+              </div>
+              <div className='text-[10px] text-gray-500 dark:text-gray-400 '>
+                Meta
+              </div>
             </div>
-            <div className='text-xs font-medium'>{percentage.toFixed(1)}%</div>
+
+            {/* Barra de Progresso e Porcentagem */}
+            <div className='space-y-1 w-full'>
+              <div className='w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5'>
+                <div
+                  className={`h-1.5 rounded-full ${colorClass}`}
+                  style={{ width: `${Math.min(percentage, 100)}%` }}
+                />
+              </div>
+              <div className='text-xs font-semibold text-gray-700 dark:text-gray-300'>
+                {percentage.toFixed(1)}%
+              </div>
+            </div>
           </div>
         </TooltipTrigger>
         <TooltipContent side='top' className='max-w-xs'>
+          {/* O Tooltip continua o mesmo, com os dados completos */}
           <div className='space-y-1 text-xs'>
             <div className='font-semibold text-center border-b pb-1 mb-2'>
               {criterio.nome}
@@ -415,17 +409,30 @@ export default function PerformanceTable({
                     Setor
                   </th>
 
-                  {/* Colunas de Critérios */}
-                  {uniqueCriteria.map((criterio) => (
-                    <th
-                      key={criterio.id}
-                      className='px-2 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider border-r max-w-[95px]'
-                    >
-                      <span className='whitespace-normal break-words'>
-                        {criterio.nome}
-                      </span>
-                    </th>
-                  ))}
+                  {uniqueCriteria.map((criterio) => {
+                    const normalizedName = criterio.nome.toUpperCase().trim();
+                    const isCurrency =
+                      normalizedName.includes('PNEUS') ||
+                      normalizedName.includes('PEÇAS');
+
+                    return (
+                      <th
+                        key={criterio.id}
+                        className='px-2 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider border-r max-w-[95px]'
+                      >
+                        <div className='flex flex-col items-center justify-center'>
+                          <span className='whitespace-normal break-words'>
+                            {criterio.nome}
+                          </span>
+                          {isCurrency && (
+                            <span className='mt-1 font-normal normal-case text-green-700'>
+                              (R$)
+                            </span>
+                          )}
+                        </div>
+                      </th>
+                    );
+                  })}
                   <th className='px-3 py-2 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider bg-gray-100'>
                     Total
                   </th>

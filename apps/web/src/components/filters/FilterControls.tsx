@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Period } from '@/hooks/useParametersData';
 
 interface FilterControlsProps {
@@ -29,6 +30,8 @@ export function FilterControls({
   activePeriod,
   onPeriodChange,
 }: FilterControlsProps) {
+  const isLoading = !activePeriod || periods.length === 0;
+
   return (
     <div className='flex flex-wrap gap-4 justify-center items-end'>
       <div>
@@ -38,41 +41,26 @@ export function FilterControls({
         >
           Período:
         </label>
-        <Select
-          value={activePeriod ?? ''}
-          onValueChange={onPeriodChange}
-          disabled={!activePeriod || periods.length === 0}
-        >
-          <SelectTrigger id='period-select' className='w-[180px]'>
-            <SelectValue placeholder='Carregando...' />
-          </SelectTrigger>
-          <SelectContent>
-            {periods.map((period) => (
-              <SelectItem key={period.id} value={period.mesAno}>
-                <span className='capitalize'>
-                  {formatMesAno(period.mesAno)}
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {isLoading ? (
+          <Skeleton className='h-10 w-[180px]' />
+        ) : (
+          <Select value={activePeriod ?? ''} onValueChange={onPeriodChange}>
+            <SelectTrigger id='period-select' className='w-[180px]'>
+              <SelectValue placeholder='Selecione...' />
+            </SelectTrigger>
+            <SelectContent>
+              {periods.map((period) => (
+                <SelectItem key={period.id} value={period.mesAno}>
+                  <span className='capitalize'>
+                    {formatMesAno(period.mesAno)}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
-      <div>
-        <label
-          htmlFor='sector-select'
-          className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1'
-        >
-          Filial:
-        </label>
-        <Select defaultValue='todas' disabled>
-          <SelectTrigger id='sector-select' className='w-[180px]'>
-            <SelectValue placeholder='Todas as Filiais' />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value='todas'>Todas as Filiais</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      {/* O filtro "Filial" foi removido conforme solicitado */}
     </div>
   );
 }

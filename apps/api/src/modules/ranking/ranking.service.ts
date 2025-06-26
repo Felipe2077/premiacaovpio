@@ -563,53 +563,85 @@ export class RankingService {
   ): number | null {
     if (valorRealizado === null) return null;
 
-    if (valorRealizado === 0 && valorMeta === 0) return 1;
-
-    if (valorMeta === null || valorMeta === 0) {
-      if (valorRealizado === 0) return 1;
-      return sentidoMelhor === 'MAIOR'
-        ? Infinity
-        : valorRealizado > 0
-          ? Infinity
-          : -Infinity;
+    // CASO ESPECIAL: Meta zero + Realizado zero = performance perfeita
+    if (valorRealizado === 0 && valorMeta === 0) {
+      return 1.0; // 100% da meta
     }
 
-    return valorRealizado / valorMeta;
+    // CASO NORMAL: Meta válida
+    if (valorMeta !== null && valorMeta !== 0) {
+      // PRECISÃO MELHORADA: usar mais casas decimais para detectar empates reais
+      const razao = valorRealizado / valorMeta;
+      return Number(razao.toFixed(6)); // 6 casas decimais para precisão
+    }
+
+    // CASO META ZERO + REALIZADO > 0: penalização alta
+    if (valorMeta === 0 && valorRealizado > 0) {
+      return 100.0; // Valor alto para ficar em último lugar
+    }
+
+    // CASO META NULL
+    if (valorMeta === null) {
+      return null;
+    }
+
+    return null;
   }
 
   private assignRanksAndPoints(
     results: ResultadoPorCriterio[],
     criterion: CriterionEntity
   ): void {
-    // Atribuir ranks
-    let currentRank = 0;
-    let lastRazaoValue: number | null | undefined = undefined;
-    let tieCount = 0;
+    console.log(
+      `[RankingService] === ATRIBUINDO RANKS PARA ${criterion.nome} ===`
+    );
 
-    results.forEach((result, index) => {
+    // ========== ATRIBUIR RANKS (EMPATES EXATOS APENAS) ==========
+    let currentRank = 1;
+
+    for (let i = 0; i < results.length; i++) {
+      const current = results[i];
+
       if (
-        result.razaoCalculada === null ||
-        result.razaoCalculada === undefined ||
-        !isFinite(result.razaoCalculada)
+        current?.razaoCalculada === null ||
+        current?.razaoCalculada === undefined
       ) {
-        result.rank = undefined;
-      } else {
-        if (result.razaoCalculada !== lastRazaoValue) {
-          currentRank = index + 1 - tieCount;
-          tieCount = 0;
-        } else {
-          tieCount++;
-        }
-        result.rank = currentRank;
-        lastRazaoValue = result.razaoCalculada;
+        current!.rank = undefined;
+        console.log(
+          `[RankingService] ${current!.setorNome}: sem razão, sem rank`
+        );
+        continue;
       }
+
+      // Contar quantos setores têm EXATAMENTE o mesmo valor
+      let empatados = 1;
+      for (let j = i + 1; j < results.length; j++) {
+        if (results[j]?.razaoCalculada === current.razaoCalculada) {
+          empatados++;
+        } else {
+          break; // Parar no primeiro valor diferente
+        }
+      }
+
+      // Atribuir mesmo rank para todos os empatados
+      for (let k = 0; k < empatados; k++) {
+        results[i + k]!.rank = currentRank;
+        console.log(
+          `[RankingService] ${results[i + k]!.setorNome}: razão=${results[i + k]!.razaoCalculada}, rank=${currentRank}`
+        );
+      }
+
+      // Avançar índice e rank
+      i += empatados - 1; // -1 porque o loop já vai incrementar
+      currentRank += empatados; // Próximo rank disponível
+    }
+
+    // ========== ATRIBUIR PONTOS ==========
+    results.forEach((result) => {
+      result.pontos = this.calculatePontos(result, criterion, false);
     });
 
-    // Atribuir pontos
-    const useInvertedScale = criterion.index === 0;
-    results.forEach((result) => {
-      result.pontos = this.calculatePontos(result, criterion, useInvertedScale);
-    });
+    console.log(`[RankingService] === FIM RANKS PARA ${criterion.nome} ===`);
   }
 
   private calculatePontos(
@@ -617,26 +649,86 @@ export class RankingService {
     criterion: CriterionEntity,
     useInvertedScale: boolean
   ): number | null {
-    // Regra especial para FALTA FUNC
+    // REGRA ESPECIAL: FALTA FUNC <= 10
     if (
       criterion.id === CRITERIO_FALTA_FUNC_ID &&
       result.valorRealizado !== null &&
       result.valorRealizado <= FALTA_FUNC_LIMITE
     ) {
+      console.log(
+        `[RankingService] ${result.setorNome}: FALTA FUNC <= 10, pontos = 1.0`
+      );
       return 1.0;
     }
 
-    // Verificar se todos têm mesma razão
-    if (result.razaoCalculada === 1) {
-      return 1.0; // Considerar contexto se necessário
+    // Casos sem rank válido
+    if (result.rank === undefined || result.rank === null) {
+      console.log(
+        `[RankingService] ${result.setorNome}: sem rank, pontos = 2.5`
+      );
+      return 2.5;
     }
 
-    if (result.rank === undefined) return 2.5;
+    // ========== REGRAS ESPECIAIS POR CRITÉRIO ==========
 
-    const regras = useInvertedScale
-      ? PONTUACAO_REGRAS.INVERTIDA
-      : PONTUACAO_REGRAS.NORMAL;
-    return regras[result.rank as keyof typeof regras] || regras.default;
+    // FURO POR VIAGEM: Meta zero - realizado 0 = 1.0, realizado > 0 empata em 1.5
+    if (criterion.nome === 'FURO POR VIAGEM') {
+      if (result.valorRealizado === 0 && result.valorMeta === 0) {
+        console.log(
+          `[RankingService] ${result.setorNome}: FURO POR VIAGEM 0/0 = 1.0 pontos`
+        );
+        return 1.0;
+      } else if (
+        result.valorRealizado !== null &&
+        result.valorRealizado > 0 &&
+        result.valorMeta === 0
+      ) {
+        console.log(
+          `[RankingService] ${result.setorNome}: FURO POR VIAGEM ${result.valorRealizado}/0 = 1.5 pontos`
+        );
+        return 1.5;
+      }
+    }
+
+    // MÉDIA KM/L: Empate em 1º = 1.5, depois escala normal 2.0, 2.5
+    if (criterion.nome === 'MEDIA KM/L') {
+      if (result.rank === 1) {
+        console.log(
+          `[RankingService] ${result.setorNome}: MÉDIA KM/L rank 1 = 1.5 pontos (regra especial)`
+        );
+        return 1.5;
+      } else if (result.rank === 2) {
+        console.log(
+          `[RankingService] ${result.setorNome}: MÉDIA KM/L rank 2 = 1.5 pontos (regra especial)`
+        );
+        return 1.5;
+      } else if (result.rank === 3) {
+        console.log(
+          `[RankingService] ${result.setorNome}: MÉDIA KM/L rank 3 = 2.0 pontos`
+        );
+        return 2.0;
+      } else {
+        console.log(
+          `[RankingService] ${result.setorNome}: MÉDIA KM/L rank ${result.rank} = 2.5 pontos`
+        );
+        return 2.5;
+      }
+    }
+
+    // ========== PONTUAÇÃO PADRÃO PARA OUTROS CRITÉRIOS ==========
+    const pontuacao = {
+      1: 1.0, // 1º lugar
+      2: 1.5, // 2º lugar
+      3: 2.0, // 3º lugar
+      4: 2.5, // 4º lugar e demais
+    };
+
+    const pontos = pontuacao[result.rank as keyof typeof pontuacao] || 2.5;
+
+    console.log(
+      `[RankingService] ${result.setorNome}: ${criterion.nome} rank=${result.rank} → ${pontos} pontos (padrão)`
+    );
+    return pontos;
   }
 
   // ========== RANKING FINAL ==========
@@ -797,13 +889,33 @@ export class RankingService {
     results: ResultadoPorCriterio[],
     sentidoMelhor: string
   ): ResultadoPorCriterio[] {
+    console.log(
+      `[RankingService] Ordenando ${results.length} resultados para sentido: ${sentidoMelhor}`
+    );
+
+    // Log antes da ordenação
+    results.forEach((r, i) => {
+      console.log(
+        `[RankingService] Antes ordenação [${i}]: ${r.setorNome} = ${r.razaoCalculada}`
+      );
+    });
+
     return results.sort((a, b) => {
+      const valA = a.razaoCalculada;
+      const valB = b.razaoCalculada;
+
+      // Valores nulos vão para o final
+      if (valA === null && valB === null) return 0;
+      if (valA === null) return 1;
+      if (valB === null) return -1;
+
+      // Ordenação baseada no sentido
       if (sentidoMelhor === 'MENOR') {
-        return (a.razaoCalculada ?? Infinity) - (b.razaoCalculada ?? Infinity);
+        // MENOR é melhor: valores menores primeiro
+        return valA - valB;
       } else {
-        return (
-          (b.razaoCalculada ?? -Infinity) - (a.razaoCalculada ?? -Infinity)
-        );
+        // MAIOR é melhor: valores maiores primeiro
+        return valB - valA;
       }
     });
   }
