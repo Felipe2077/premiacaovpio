@@ -1,5 +1,6 @@
-// apps/web/src/components/filters/FilterControls.tsx
-'use client'; // Provavelmente será client por causa dos Selects interativos
+// Arquivo: src/components/filters/FilterControls.tsx
+
+'use client';
 
 import {
   Select,
@@ -7,12 +8,27 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'; // Importa componentes Select
+} from '@/components/ui/select';
+import { Period } from '@/hooks/useParametersData';
 
-export function FilterControls() {
-  // TODO No futuro, aqui entrarão useState e handlers onValueChange
-  // Por enquanto, apenas renderiza os placeholders
+interface FilterControlsProps {
+  periods: Period[];
+  activePeriod: string | null;
+  onPeriodChange: (newPeriod: string) => void;
+}
 
+const formatMesAno = (mesAno: string) => {
+  if (!mesAno || !mesAno.includes('-')) return 'Data inválida';
+  const [ano, mes] = mesAno.split('-');
+  const date = new Date(Number(ano), Number(mes) - 1);
+  return date.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+};
+
+export function FilterControls({
+  periods,
+  activePeriod,
+  onPeriodChange,
+}: FilterControlsProps) {
   return (
     <div className='flex flex-wrap gap-4 justify-center items-end'>
       <div>
@@ -22,14 +38,22 @@ export function FilterControls() {
         >
           Período:
         </label>
-        <Select defaultValue='2025-04'>
+        <Select
+          value={activePeriod ?? ''}
+          onValueChange={onPeriodChange}
+          disabled={!activePeriod || periods.length === 0}
+        >
           <SelectTrigger id='period-select' className='w-[180px]'>
-            <SelectValue placeholder='Selecione o Período' />
+            <SelectValue placeholder='Carregando...' />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value='2025-04'>Maio / 2025</SelectItem>
-            <SelectItem value='2025-03'>Março / 2025</SelectItem>
-            <SelectItem value='2025-02'>Fevereiro / 2025</SelectItem>
+            {periods.map((period) => (
+              <SelectItem key={period.id} value={period.mesAno}>
+                <span className='capitalize'>
+                  {formatMesAno(period.mesAno)}
+                </span>
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -40,20 +64,15 @@ export function FilterControls() {
         >
           Filial:
         </label>
-        <Select defaultValue='todas'>
+        <Select defaultValue='todas' disabled>
           <SelectTrigger id='sector-select' className='w-[180px]'>
-            <SelectValue placeholder='Selecione a Filial' />
+            <SelectValue placeholder='Todas as Filiais' />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value='todas'>Todas as Filiais</SelectItem>
-            <SelectItem value='1'>GAMA</SelectItem>
-            <SelectItem value='2'>PARANOÁ</SelectItem>
-            <SelectItem value='3'>SANTA MARIA</SelectItem>
-            <SelectItem value='4'>SÃO SEBASTIÃO</SelectItem>
           </SelectContent>
         </Select>
       </div>
-      {/* Poderia ter um botão "Aplicar Filtros" aqui no futuro */}
     </div>
   );
 }

@@ -1,59 +1,61 @@
-// apps/web/src/hooks/useCompetitionData.ts
-import { useParametersData } from '@/hooks/useParametersData';
+// Arquivo: src/hooks/useCompetitionData.ts (VERSÃO ATUALIZADA)
+
+import { useDashboardData } from '@/hooks/useDashboardData'; // ALTERADO
+import { EntradaRanking } from '@sistema-premiacao/shared-types';
 import { useMemo } from 'react';
 
-// Interfaces para os dados transformados
-interface EntradaRanking {
-  RANK: number;
-  SETOR: string;
-  PONTUACAO: number;
-}
-
 export function useCompetitionData() {
-  // Usar o hook existente useParametersData
   const {
     periods,
+    activePeriod,
+    setActivePeriod,
     uniqueCriteria: originalCriteria,
     resultsBySector: originalResultsBySector,
     isLoading,
     error,
-    activePeriod,
-  } = useParametersData();
+  } = useDashboardData(); // ALTERADO
 
-  // Transformar os critérios para o formato esperado pelos componentes
   const uniqueCriteria = useMemo(() => {
-    if (!originalCriteria || originalCriteria.length === 0) {
-      // Se não temos critérios do hook, vamos extrair dos resultados
-      if (
-        originalResultsBySector &&
-        Object.keys(originalResultsBySector).length > 0
-      ) {
-        const firstSector =
-          originalResultsBySector[Object.keys(originalResultsBySector)[0]];
-        if (firstSector && firstSector.criterios) {
-          // Extrair critérios do primeiro setor
-          return Object.values(firstSector.criterios).map((criterio) => ({
-            id: criterio.criterioId,
-            nome: criterio.criterioNome,
-            name: criterio.criterioNome,
-            index: criterio.criterioId, // Usando ID como índice
-            sentido_melhor: 'MENOR', // Assumindo MENOR como padrão
-          }));
-        }
-      }
-      return [];
+    if (originalCriteria && originalCriteria.length > 0) {
+      return originalCriteria.map((criterion) => ({
+        id: criterion.id,
+        nome: criterion.nome || (criterion as any).name,
+        name: criterion.nome || (criterion as any).name,
+        index: criterion.index || criterion.id,
+        sentido_melhor: (criterion as any).sentido_melhor || 'MENOR',
+      }));
     }
 
-    return originalCriteria.map((criterion) => ({
-      id: criterion.id,
-      nome: criterion.nome || criterion.name,
-      name: criterion.nome || criterion.name,
-      index: criterion.index || criterion.id,
-      sentido_melhor: criterion.sentido_melhor || 'MENOR',
-    }));
+    if (
+      originalResultsBySector &&
+      Object.keys(originalResultsBySector).length > 0
+    ) {
+      const firstSectorKey = Object.keys(originalResultsBySector)[0];
+      const firstSector = originalResultsBySector[firstSectorKey];
+
+      if (firstSector && firstSector.criterios) {
+        const criteriaSet = new Map();
+        Object.values(originalResultsBySector).forEach((sector: any) => {
+          if (sector && sector.criterios) {
+            Object.values(sector.criterios).forEach((criterio: any) => {
+              if (!criteriaSet.has(criterio.criterioId)) {
+                criteriaSet.set(criterio.criterioId, {
+                  id: criterio.criterioId,
+                  nome: criterio.criterioNome,
+                  name: criterio.criterioNome,
+                  index: criterio.criterioId,
+                  sentido_melhor: 'MENOR',
+                });
+              }
+            });
+          }
+        });
+        return Array.from(criteriaSet.values());
+      }
+    }
+    return [];
   }, [originalCriteria, originalResultsBySector]);
 
-  // Transformar os resultados para o formato esperado pelos componentes
   const resultsBySector = useMemo(() => {
     if (
       !originalResultsBySector ||
@@ -62,18 +64,16 @@ export function useCompetitionData() {
       return {};
     }
 
-    // Mapear a estrutura original para a estrutura esperada
-    const transformedResults = {};
+    const transformedResults: Record<string, any> = {};
 
     Object.entries(originalResultsBySector).forEach(
-      ([sectorId, sectorData]) => {
+      ([sectorId, sectorData]: [string, any]) => {
         if (!sectorData || !sectorData.criterios) return;
 
-        // Mapear criterios para criteriaResults
-        const criteriaResults = {};
+        const criteriaResults: Record<string, any> = {};
 
         Object.entries(sectorData.criterios).forEach(
-          ([criterioId, criterioData]) => {
+          ([criterioId, criterioData]: [string, any]) => {
             criteriaResults[criterioId] = {
               valorRealizado: criterioData.valorRealizado,
               valorMeta: criterioData.valorMeta,
@@ -93,7 +93,6 @@ export function useCompetitionData() {
     return transformedResults;
   }, [originalResultsBySector]);
 
-  // Calcular ranking baseado na soma dos pontos
   const rankingData = useMemo(() => {
     if (
       !originalResultsBySector ||
@@ -101,24 +100,22 @@ export function useCompetitionData() {
     ) {
       return [];
     }
-
-    const rankingEntries = Object.entries(originalResultsBySector)
-      .map(([sectorId, sectorData]) => {
-        // Calcular pontuação total somando os pontos de todos os critérios
+    const rankingEntries: EntradaRanking[] = Object.values(
+      originalResultsBySector as any
+    )
+      .map((sectorData: any) => {
         const totalPoints = Object.values(sectorData.criterios || {}).reduce(
-          (sum, criterio) => sum + (criterio.pontos || 0),
+          (sum: number, criterio: any) => sum + (criterio.pontos || 0),
           0
         );
-
         return {
           SETOR: sectorData.setorNome,
           PONTUACAO: totalPoints,
-          RANK: 0, // Será preenchido após a ordenação
+          RANK: 0,
         };
       })
-      .sort((a, b) => a.PONTUACAO - b.PONTUACAO); // Ordenar por pontuação (menor é melhor)
+      .sort((a, b) => a.PONTUACAO - b.PONTUACAO);
 
-    // Atribuir posições (RANK)
     rankingEntries.forEach((entry, index) => {
       entry.RANK = index + 1;
     });
@@ -126,7 +123,6 @@ export function useCompetitionData() {
     return rankingEntries;
   }, [originalResultsBySector]);
 
-  // Usar os mesmos critérios como critérios ativos
   const activeCriteria = uniqueCriteria;
 
   return {
@@ -136,6 +132,8 @@ export function useCompetitionData() {
     activeCriteria,
     isLoading,
     error,
+    periods,
     activePeriod,
+    setActivePeriod,
   };
 }

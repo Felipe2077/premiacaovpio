@@ -1,4 +1,4 @@
-// Arquivo: src/hooks/useParametersData.ts (VERSÃO ORIGINAL)
+// Arquivo: src/hooks/useDashboardData.ts (NOVO ARQUIVO)
 
 import {
   Criterio as Criterion,
@@ -41,11 +41,12 @@ export interface ResultData {
 
 const API_BASE_URL = 'http://localhost:3001';
 
-export function useParametersData() {
+export function useDashboardData() {
   const [periods, setPeriods] = useState<Period[]>([]);
   const [criteria, setCriteria] = useState<Criterion[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [results, setResults] = useState<ResultData[]>([]);
+  const [activePeriod, setActivePeriod] = useState<string | null>(null);
   const [isLoadingInitial, setIsLoadingInitial] = useState(true);
   const [isLoadingResults, setIsLoadingResults] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -74,7 +75,6 @@ export function useParametersData() {
       });
       if (!response.ok) throw new Error('Falha ao buscar critérios');
       const data = await response.json();
-
       setCriteria(data);
       return data;
     } catch (error) {
@@ -136,7 +136,7 @@ export function useParametersData() {
     []
   );
 
-  const fetchInitialData = useCallback(async (): Promise<Period[]> => {
+  const fetchInitialData = useCallback(async () => {
     setIsLoadingInitial(true);
     setError(null);
     try {
@@ -146,27 +146,32 @@ export function useParametersData() {
         fetchSectors(),
       ]);
 
-      return periodsData;
+      const active = periodsData.find((p) => p.status === 'ATIVA');
+      const defaultPeriod = active
+        ? active.mesAno
+        : periodsData[0]?.mesAno || null;
+
+      if (defaultPeriod) {
+        setActivePeriod(defaultPeriod);
+      }
     } catch (error: any) {
       const errorMessage = 'Falha ao carregar dados iniciais';
       setError(errorMessage);
       toast.error(errorMessage);
-      return [];
     } finally {
       setIsLoadingInitial(false);
     }
   }, [fetchPeriods, fetchCriteria, fetchSectors]);
 
-  const getPeriodById = useCallback(
-    (id: number): Period | undefined => periods.find((p) => p.id === id),
-    [periods]
-  );
+  useEffect(() => {
+    if (activePeriod) {
+      fetchResults(activePeriod);
+    }
+  }, [activePeriod, fetchResults]);
 
-  const getPeriodByMesAno = useCallback(
-    (mesAno: string): Period | undefined =>
-      periods.find((p) => p.mesAno === mesAno),
-    [periods]
-  );
+  useEffect(() => {
+    fetchInitialData();
+  }, [fetchInitialData]);
 
   const resultsBySector = useMemo(() => {
     if (!results.length) return {};
@@ -200,87 +205,6 @@ export function useParametersData() {
       });
   }, [criteria]);
 
-  useEffect(() => {
-    fetchInitialData();
-  }, [fetchInitialData]);
-
-  const fetchParameterByCriteriaSector = useCallback(
-    async (criterionId: number, sectorId: number, periodId: number) => {
-      try {
-        const period = getPeriodById(periodId);
-        if (!period) return null;
-        const response = await fetch(
-          `${API_BASE_URL}/api/parameters?period=${period.mesAno}&criterionId=${criterionId}&sectorId=${sectorId}`,
-          {
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-          }
-        );
-        if (!response.ok) return null;
-        const data = await response.json();
-        return Array.isArray(data) && data.length > 0 ? data[0] : null;
-      } catch (error) {
-        console.error('Erro ao buscar parâmetro específico:', error);
-        return null;
-      }
-    },
-    [getPeriodById]
-  );
-
-  const fetchCriterionCalculationSettings = useCallback(
-    async (criterionId: number) => {
-      try {
-        const response = await fetch(
-          `${API_BASE_URL}/api/criteria/${criterionId}/calculation-settings`,
-          {
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-          }
-        );
-        if (response.status === 404) {
-          return {
-            criterionId,
-            calculationMethod: 'media3',
-            adjustmentPercentage: 0,
-            requiresRounding: true,
-            roundingMethod: 'nearest',
-            roundingDecimalPlaces: 0,
-          };
-        }
-        if (!response.ok) throw new Error(`Erro ${response.status}`);
-        const data = await response.json();
-        return data.defaultSettings || data;
-      } catch (error) {
-        console.error('Erro ao buscar configurações:', error);
-        return {
-          criterionId,
-          calculationMethod: 'media3',
-          adjustmentPercentage: 0,
-          requiresRounding: true,
-          roundingMethod: 'nearest',
-          roundingDecimalPlaces: 0,
-        };
-      }
-    },
-    []
-  );
-
-  const refetchResults = useCallback(
-    async (period: string) => {
-      return await fetchResults(period);
-    },
-    [fetchResults]
-  );
-
-  const fetchAllData = useCallback(
-    async (period?: string) => {
-      if (period) {
-        await fetchResults(period);
-      }
-    },
-    [fetchResults]
-  );
-
   return {
     periods,
     criteria,
@@ -288,15 +212,12 @@ export function useParametersData() {
     results,
     resultsBySector,
     uniqueCriteria,
-    isLoading: isLoadingInitial,
+    activePeriod,
+    setActivePeriod,
+    isLoading: isLoadingInitial || isLoadingResults,
+    isLoadingInitial,
     isLoadingResults,
     error,
     fetchResults,
-    fetchAllData,
-    refetchResults,
-    getPeriodById,
-    getPeriodByMesAno,
-    fetchParameterByCriteriaSector,
-    fetchCriterionCalculationSettings,
   };
 }
