@@ -279,7 +279,7 @@ export class AutomationService {
       totalDeleted += deletedIpkCalculado.affected || 0;
 
       console.log(
-        `[AutomationService] 🧹 ✅ Limpeza concluída. Total: ${totalDeleted} registros removidos da vigência ${mesAno}`
+        `[AutomationService] 🧹 ✅ Limpeza concluída. Total: ${totalDeleted} registros removidos da vigência ${mesAno} (até ${endDate})`
       );
       return totalDeleted;
     } catch (error) {
@@ -308,6 +308,24 @@ export class AutomationService {
     try {
       // 1. Validar vigência ativa e obter dados
       const vigenciaAtiva = await this.validateAndGetActivePeriod();
+      const startDate = vigenciaAtiva.dataInicio;
+      const endDate = (() => {
+        try {
+          const today = new Date();
+          const dateStr = today.toISOString().split('T')[0];
+          if (!dateStr) {
+            throw new Error('Data inválida');
+          }
+          return dateStr;
+        } catch (error) {
+          // Fallback para data atual formatada manualmente
+          const today = new Date();
+          const year = today.getFullYear();
+          const month = String(today.getMonth() + 1).padStart(2, '0');
+          const day = String(today.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        }
+      })();
 
       // 2. Registrar início
       await this.createAuditLog({
@@ -316,6 +334,8 @@ export class AutomationService {
           periodId: vigenciaAtiva.id,
           periodMesAno: vigenciaAtiva.mesAno,
           triggeredBy: options.triggeredBy,
+          startDate: startDate,
+          endDate: endDate,
         },
         userId: options.userId,
         competitionPeriodId: vigenciaAtiva.id,
@@ -326,17 +346,14 @@ export class AutomationService {
         `[AutomationService] ETAPA 0/3: Limpando dados RAW da vigência...`
       );
       const deletedRecords = await this.clearRawDataForPeriod(
-        vigenciaAtiva.dataInicio,
-        vigenciaAtiva.dataFim,
+        startDate,
+        endDate,
         vigenciaAtiva.mesAno
       );
 
       // 4. ETAPA 1: ETL Raw Data (equivale ao run-full-raw-etl)
       console.log(`[AutomationService] ETAPA 1/3: Executando ETL Raw Data...`);
-      totalRawRecords = await this.runRawETLForPeriod(
-        vigenciaAtiva.dataInicio,
-        vigenciaAtiva.dataFim
-      );
+      totalRawRecords = await this.runRawETLForPeriod(startDate, endDate);
 
       // 5. ETAPA 2: Processar Performance Data (equivale ao etl-orchestrator)
       console.log(
@@ -362,7 +379,9 @@ export class AutomationService {
           periodMesAno: vigenciaAtiva.mesAno,
           executionTimeMs: executionTime,
           rawRecords: totalRawRecords,
-          deletedRecords, // ✅ NOVO: Registra quantos foram limpos
+          deletedRecords,
+          startDate: startDate,
+          endDate: endDate,
         },
         userId: options.userId,
         competitionPeriodId: vigenciaAtiva.id,

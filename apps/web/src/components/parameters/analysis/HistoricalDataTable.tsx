@@ -59,13 +59,16 @@ export const HistoricalDataTable = ({
         <Table>
           <TableHeader className='bg-amber-300/80 dark:bg-amber-950/20'>
             <TableRow>
-              <TableHead className='font-bold'>Filial</TableHead>
+              <TableHead className='font-bold text-base'>Filial</TableHead>
               {periods.map((period) => (
-                <TableHead key={period} className='text-right font-bold'>
+                <TableHead
+                  key={period}
+                  className='text-center text-base font-bold'
+                >
                   {period}
                 </TableHead>
               ))}
-              <TableHead className='text-right font-bold bg-amber-300/80'>
+              <TableHead className='text-center text-base font-bold bg-amber-300/80'>
                 Média
               </TableHead>
             </TableRow>
@@ -75,14 +78,14 @@ export const HistoricalDataTable = ({
               <TableRow key={row.sectorName}>
                 <TableCell>{row.sectorName}</TableCell>
                 {periods.map((period) => (
-                  <TableCell key={period} className='text-right'>
+                  <TableCell key={period} className='text-center text-base'>
                     {row.monthlyData[period]?.toLocaleString(
                       'pt-BR',
                       numberFormatOptions
                     ) ?? '-'}
                   </TableCell>
                 ))}
-                <TableCell className='text-right font-semibold bg-amber-100/80'>
+                <TableCell className='text-center font-semibold bg-amber-100/80 text-base'>
                   {row.average?.toLocaleString('pt-BR', numberFormatOptions) ??
                     '-'}
                 </TableCell>

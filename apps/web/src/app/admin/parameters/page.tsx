@@ -35,7 +35,7 @@ import {
 } from '@sistema-premiacao/shared-types';
 
 type EditPayload = {
-  id: number;
+  id: number | null;
   valor: string;
   justificativa: string;
   nomeParametro: string;
@@ -289,29 +289,55 @@ export default function ParametersPage() {
 
   const handleEditSubmit = useCallback(
     async (payload: EditPayload) => {
-      if (!payload.id) {
-        toast.error('Dados de edição não encontrados.');
-        return;
-      }
-      try {
-        await updateMutation.mutateAsync({
-          id: payload.id,
-          valor: parseFloat(payload.valor),
-          justificativa: payload.justificativa,
-          nomeParametro: payload.nomeParametro,
-          dataInicioEfetivo: payload.dataInicioEfetivo,
-        });
-        closeModal('edit');
-        if (selectedPeriod?.mesAno) {
-          await fetchResults(selectedPeriod.mesAno);
+      // Se o payload tem um ID, é uma atualização (PUT)
+      if (payload.id) {
+        try {
+          await updateMutation.mutateAsync({
+            id: payload.id,
+            valor: parseFloat(payload.valor),
+            justificativa: payload.justificativa,
+            nomeParametro: payload.nomeParametro,
+            dataInicioEfetivo: payload.dataInicioEfetivo,
+          });
+          toast.success('Meta atualizada com sucesso!');
+        } catch (error) {
+          console.error('Erro ao atualizar meta:', error);
+          toast.error('Erro ao atualizar meta.');
+          return; // Para não continuar
         }
-        toast.success('Meta atualizada com sucesso!');
-      } catch (error) {
-        console.error('Erro ao atualizar meta:', error);
-        toast.error('Erro ao atualizar meta.');
+      } else {
+        // Se o payload NÃO tem um ID, é uma criação (POST)
+        if (!modalData.editing) return;
+        try {
+          await createMutation.mutateAsync({
+            criterionId: modalData.editing.criterionId,
+            sectorId: modalData.editing.sectorId,
+            competitionPeriodId: modalData.editing.competitionPeriodId,
+            valor: parseFloat(payload.valor),
+            justificativa: payload.justificativa,
+            nomeParametro: payload.nomeParametro,
+            dataInicioEfetivo: payload.dataInicioEfetivo,
+          } as any);
+          toast.success('Meta definida com sucesso!');
+        } catch {
+          toast.error('Erro ao definir a meta.');
+          return; // Para não continuar
+        }
+      }
+
+      closeModal('edit');
+      if (selectedPeriod?.mesAno) {
+        await fetchResults(selectedPeriod.mesAno);
       }
     },
-    [updateMutation, closeModal, selectedPeriod?.mesAno, fetchResults]
+    [
+      updateMutation,
+      createMutation,
+      closeModal,
+      selectedPeriod?.mesAno,
+      fetchResults,
+      modalData.editing,
+    ]
   );
 
   const handleApplyCalculation = useCallback(

@@ -637,19 +637,39 @@ ORDER BY
     }
   }
 
+  private getYesterday(dateStr: string): string {
+    const date = new Date(dateStr);
+    date.setDate(date.getDate() - 1);
+    const result = date.toISOString().split('T')[0];
+
+    if (!result) {
+      throw new Error(`Erro ao calcular data anterior para: ${dateStr}`);
+    }
+
+    return result;
+  }
+
   async extractAndLoadKmOciosa(
     startDate: string,
     endDate: string
   ): Promise<number> {
     const functionName = 'KM Ociosa (Componentes - Suas Queries Separadas)';
+
+    // 🚨 MUDANÇA PRINCIPAL: Ajustar endDate para ontem
+    const adjustedEndDate = this.getYesterday(endDate);
+
     console.log(
-      `[Oracle ETL] Iniciando extração/carga de ${functionName} para ${startDate} a ${endDate}`
+      `[Oracle ETL] Iniciando extração/carga de ${functionName} para ${startDate} a ${adjustedEndDate}`
     );
+    console.log(
+      `[Oracle ETL] 📅 KM OCIOSA: Usando data ajustada (ontem) devido aos lançamentos do ERP`
+    );
+
     const oracleDataSource = await this.ensureOracleConnection();
     await this.ensurePostgresConnection();
 
     try {
-      const parameters = [startDate, endDate]; // :1 = startDate, :2 = endDate
+      const parameters = [startDate, adjustedEndDate];
 
       // ----- SUA "CONSULTA DO HODOMETRO (KM_HOD)" (Adaptada para Data Mensal) -----
       const queryKmHod = `
@@ -666,7 +686,10 @@ ORDER BY
                 AND V.CODIGOEMPRESA = 4 AND V.CONDICAOVEIC = 'A' AND V.CODIGOGA IN (31, 124, 239, 240)
             GROUP BY V.CODIGOGA, TRUNC(C.DATAVELOC, 'mm')
             ORDER BY V.CODIGOGA, TRUNC(C.DATAVELOC, 'mm')`;
-      console.log(`[Oracle ETL] Executando query KM_HOD...`);
+      console.log(
+        `[Oracle ETL] Executando query KM_HOD (até ${adjustedEndDate})...`
+      );
+
       const kmHodResults: KmComponentRaw[] = await oracleDataSource.query(
         queryKmHod,
         parameters
