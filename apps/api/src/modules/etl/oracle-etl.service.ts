@@ -10,6 +10,12 @@ import { RawOracleKmOciosaComponentsEntity } from '@/entity/raw-data/raw-oracle-
 import 'reflect-metadata';
 import { DataSource, DeepPartial, Repository } from 'typeorm';
 
+interface CombinedKmOciosaDataNew {
+  CODIGOGA: string;
+  DATA_MES_ANO: Date;
+  kmOper?: number; // Nova fonte (escalas)
+  kmHod?: number; // Hodômetro bruto (sem abatimentos)
+}
 // Interfaces Raw From Query (Tipagem interna para clareza)
 interface AusenciaRawFromQuery {
   SETOR: string;
@@ -156,9 +162,11 @@ FROM FLP_HISTORICO H,
      VW_FUNCIONARIOS F
 WHERE H.CODINTFUNC = F.CODINTFUNC AND
       H.CODOCORR IN ('81') AND
-      H.DTHIST BETWEEN TO_DATE(:1, 'YYYY-MM-DD') AND TO_DATE(:2, 'YYYY-MM-DD') AND
+      H.DTHIST >= TO_DATE(:1, 'YYYY-MM-DD') AND
+      H.DTHIST < TO_DATE(:2, 'YYYY-MM-DD') + 1 AND
       F.DESCFUNCAO NOT LIKE '%JOVEM%' AND
       (F.CODAREA IN (1131, 1132, 1148) OR F.CODAREA BETWEEN 1141 AND 1144)) A
+WHERE A.SETOR IS NOT NULL
 GROUP BY A.SETOR,
          A.OCORRENCIA,
          A.DATA
@@ -181,13 +189,16 @@ FROM FLP_HISTORICO H,
      VW_FUNCIONARIOS F
 WHERE H.CODINTFUNC = F.CODINTFUNC AND
       H.CODOCORR IN ('82', '125') AND
-      H.DTHIST BETWEEN TO_DATE(:1, 'YYYY-MM-DD') AND TO_DATE(:2, 'YYYY-MM-DD') AND
+      H.DTHIST >= TO_DATE(:1, 'YYYY-MM-DD') AND
+      H.DTHIST < TO_DATE(:2, 'YYYY-MM-DD') + 1 AND
       F.DESCFUNCAO NOT LIKE '%JOVEM%' AND
       (F.CODAREA IN (1131, 1132, 1148) OR F.CODAREA BETWEEN 1141 AND 1144)) A
+WHERE A.SETOR IS NOT NULL
 GROUP BY A.SETOR,
          A.OCORRENCIA,
          A.DATA
 
+ORDER BY SETOR, OCORRENCIA
             `;
       const parameters = [startDate, todayFinalDate];
       const results: AusenciaRawFromQuery[] = await oracleDataSource.query(
@@ -649,173 +660,208 @@ ORDER BY
     return result;
   }
 
+  // Função extractAndLoadKmOciosa atualizada para nova regra de negócio
+  // Quebra a consulta única em 2 queries: KM Operacional + KM Hodômetro
+
   async extractAndLoadKmOciosa(
     startDate: string,
     endDate: string
   ): Promise<number> {
-    const functionName = 'KM Ociosa (Componentes - Suas Queries Separadas)';
-
-    // 🚨 MUDANÇA PRINCIPAL: Ajustar endDate para ontem
-    const adjustedEndDate = this.getYesterday(endDate);
+    const functionName = 'KM Ociosa (Nova Regra - 2 Queries)';
 
     console.log(
-      `[Oracle ETL] Iniciando extração/carga de ${functionName} para ${startDate} a ${adjustedEndDate}`
+      `[Oracle ETL] Iniciando extração/carga de ${functionName} para ${startDate} a ${endDate}`
     );
     console.log(
-      `[Oracle ETL] 📅 KM OCIOSA: Usando data ajustada (ontem) devido aos lançamentos do ERP`
+      `[Oracle ETL] 📅 Nova regra: KM Operacional (escalas) + KM Hodômetro (bruto)`
     );
 
     const oracleDataSource = await this.ensureOracleConnection();
     await this.ensurePostgresConnection();
 
     try {
-      const parameters = [startDate, adjustedEndDate];
+      // Preparar parâmetros para as queries
+      // Para escalas: usar endDate - 1 (mesmo período do Oracle direto)
+      const prevDay = new Date(endDate);
+      prevDay.setDate(prevDay.getDate() - 1);
+      const endDateMinus1 = prevDay.toISOString().split('T')[0];
+      const normalParameters = [startDate, endDateMinus1];
 
-      // ----- SUA "CONSULTA DO HODOMETRO (KM_HOD)" (Adaptada para Data Mensal) -----
-      const queryKmHod = `
-            SELECT
-                V.CODIGOGA,
-                TRUNC(C.DATAVELOC, 'mm') AS DATA_MES_ANO,
-                SUM(C.KMPERCORRIDOVELOC) AS VALOR
-            FROM VWABA_CONFKMCARRO C
-                JOIN FRT_CADVEICULOS V ON V.CODIGOVEIC = C.CODIGOVEIC
-                JOIN FRT_TIPODEFROTA F ON V.CODIGOTPFROTA = F.CODIGOTPFROTA
-            WHERE C.DATAVELOC >= TO_DATE(:1, 'YYYY-MM-DD')
-                AND C.DATAVELOC < TO_DATE(:2, 'YYYY-MM-DD') + 1
-                AND TO_TIMESTAMP(TO_CHAR(C.DATAVELOC, 'DD-MON-YYYY') || ' ' || C.HORAVELOC, 'DD-MON-YYYY HH24:MI') >= TO_TIMESTAMP(TO_CHAR(TO_DATE(:1, 'YYYY-MM-DD'), 'DD-MON-YYYY') || ' 04:00', 'DD-MON-YYYY HH24:MI')
-                AND V.CODIGOEMPRESA = 4 AND V.CONDICAOVEIC = 'A' AND V.CODIGOGA IN (31, 124, 239, 240)
-            GROUP BY V.CODIGOGA, TRUNC(C.DATAVELOC, 'mm')
-            ORDER BY V.CODIGOGA, TRUNC(C.DATAVELOC, 'mm')`;
-      console.log(
-        `[Oracle ETL] Executando query KM_HOD (até ${adjustedEndDate})...`
-      );
+      // Para query hodômetro: endDate já vem como "ontem", usar ele + 03:59
+      // DIA_OPERACIONAL usa endDate - 1 (mesmo que escalas)
+      const endDatePlus03h59 = `${endDate} 03:59`;
+      const hodometroParameters = [
+        startDate,
+        endDatePlus03h59,
+        startDate,
+        endDateMinus1,
+      ];
 
-      const kmHodResults: KmComponentRaw[] = await oracleDataSource.query(
-        queryKmHod,
-        parameters
-      );
-      console.log(
-        `[Oracle ETL] Query KM_HOD retornou ${kmHodResults.length} registros.`
-      );
+      // ----- QUERY 1: KM OPERACIONAL (Nova Fonte - Escalas + Linhas) -----
+      const queryKmOperacional = `
+      SELECT 
+          L.CODIGOGA,
+          TRUNC(EV.DAT_ESCALA, 'MM') AS DATA_MES_ANO,
+          SUM(
+              CASE WHEN EV.FLG_SENTIDO IN ('I', 'C') THEN 
+                   (EV.QTD_VIAGENS * NVL(KV.QTD_KMPROD_IDA, 0))
+                   ELSE (EV.QTD_VIAGENS * NVL(KV.QTD_KMPROD_VOLTA, 0))
+              END
+          ) AS VALOR
+      FROM (
+          SELECT 
+              CASE WHEN H.CODINTLINHA IS NOT NULL THEN H.CODINTLINHA
+                   ELSE D.COD_INTLINHA 
+              END AS CODINTLINHA,
+              H.FLG_SENTIDO,
+              H.DAT_ESCALA,
+              COUNT(*) AS QTD_VIAGENS
+          FROM T_ESC_ESCALADIARIA D
+          JOIN T_ESC_HORARIODIARIA H ON D.COD_INTESCALA = H.COD_INTESCALA 
+                                     AND D.DAT_ESCALA = H.DAT_ESCALA
+          JOIN T_ESC_SERVICODIARIA S ON D.COD_INTESCALA = S.COD_INTESCALA 
+                                     AND D.DAT_ESCALA = S.DAT_ESCALA
+                                     AND H.COD_INTSERVDIARIA = S.COD_SERVDIARIA
+          JOIN T_ESC_ESCALAPADRAO P ON D.COD_INTESCALA = P.COD_INTESCALA
+          WHERE H.COD_ATIVIDADE = 2
+            AND P.FLG_ATIVA = 'S'
+            AND H.DAT_ESCALA BETWEEN TO_DATE(:1, 'YYYY-MM-DD') 
+                                 AND TO_DATE(:2, 'YYYY-MM-DD')
+          GROUP BY 
+              CASE WHEN H.CODINTLINHA IS NOT NULL THEN H.CODINTLINHA
+                   ELSE D.COD_INTLINHA 
+              END,
+              H.FLG_SENTIDO,
+              H.DAT_ESCALA
+      ) EV
+      JOIN BGM_CADLINHAS L ON EV.CODINTLINHA = L.CODINTLINHA
+      LEFT JOIN (
+          SELECT 
+              V.CODINTLINHA,
+              V.QTD_KMPROD_IDA,
+              V.QTD_KMPROD_VOLTA
+          FROM (
+              SELECT 
+                  K.CODINTLINHA,
+                  K.QTD_KMPROD_IDA,
+                  K.QTD_KMPROD_VOLTA,
+                  ROW_NUMBER() OVER (
+                      PARTITION BY K.CODINTLINHA 
+                      ORDER BY K.DAT_VIGENCIA DESC
+                  ) as rn
+              FROM T_TRF_LINHA_KM_VIGENCIA K
+          ) V
+          JOIN T_TRF_PARAMETROS_LINHA P ON V.CODINTLINHA = P.CODINTLINHA
+          WHERE V.rn = 1
+            AND P.FLG_LINHA_DISPONIVEL = 'S'
+      ) KV ON EV.CODINTLINHA = KV.CODINTLINHA
+      WHERE L.CODIGOEMPRESA = 4
+        AND L.CODIGOGA IN (31, 124, 239, 240)
+      GROUP BY L.CODIGOGA, TRUNC(EV.DAT_ESCALA, 'MM')
+      ORDER BY L.CODIGOGA, TRUNC(EV.DAT_ESCALA, 'MM')`;
 
-      // ----- SUA "CONSULTA KM_ESP" (Adaptada para Data Mensal) -----
-      const queryKmEsp = `
-            SELECT
-                V.CODIGOGA,
-                TRUNC(M.DTSAIDA, 'mm') AS DATA_MES_ANO,
-                SUM(M.ODOMETROFIN - M.ODOMETROINIC) AS VALOR
-            FROM PLT_SAIDARECOLHIDA M
-                JOIN PLT_OCORRENCIAS O ON M.CODOCORRPLTSAIDA = O.CODOCORRPLT
-                JOIN FRT_CADVEICULOS V ON M.CODIGOVEIC = V.CODIGOVEIC
-                JOIN FRT_TIPODEFROTA F ON V.CODIGOTPFROTA = F.CODIGOTPFROTA
-            WHERE M.DTSAIDA >= TO_DATE(:1, 'YYYY-MM-DD')
-                AND M.DTSAIDA < TO_DATE(:2, 'YYYY-MM-DD') + 1
-                AND M.CODOCORRPLTSAIDA BETWEEN 17 AND 26
-                AND V.CODIGOEMPRESA = 4 AND V.CONDICAOVEIC = 'A' AND V.CODIGOGA IN (31, 124, 239, 240)
-            GROUP BY V.CODIGOGA, TRUNC(M.DTSAIDA, 'mm')
-            ORDER BY V.CODIGOGA, TRUNC(M.DTSAIDA, 'mm')`;
-      console.log(`[Oracle ETL] Executando query KM_ESP...`);
-      const kmEspResults: KmComponentRaw[] = await oracleDataSource.query(
-        queryKmEsp,
-        parameters
-      );
-      console.log(
-        `[Oracle ETL] Query KM_ESP retornou ${kmEspResults.length} registros.`
-      );
-
-      // ----- SUA "CONSULTA KMTOTALINT" (Adaptada para Data Mensal - usando startDate) -----
-      const queryKmTotalInt = `
-            SELECT
-                V.CODIGOGA,
-                TRUNC(TO_DATE(:1, 'YYYY-MM-DD'), 'mm') AS DATA_MES_ANO, -- Usa startDate para o mês
-                SUM( CASE WHEN V.CODIGOGA IN (31, 239) THEN 0.60 WHEN V.CODIGOTPFROTA IN (11, 9) AND V.CODIGOGA = 240 THEN 0.21 WHEN V.CODIGOTPFROTA IN (3, 12) AND V.CODIGOGA = 240 THEN 0.60 WHEN V.CODIGOTPFROTA = 9 AND V.CODIGOGA = 124 THEN 0.60 WHEN V.CODIGOTPFROTA NOT IN (9) AND V.CODIGOGA = 124 THEN 0.80 ELSE 0 END /* * COUNT(V.PREFIXOVEIC) ??? */ ) AS VALOR
-                -- O COUNT(V.PREFIXOVEIC) foi removido da sua query original para KMTOTALINT, se precisar, adicione de volta
-            FROM FRT_CADVEICULOS V
-                JOIN FRT_TIPODEFROTA F ON V.CODIGOTPFROTA = F.CODIGOTPFROTA
-            WHERE V.CODIGOEMPRESA = 4 AND LENGTH(TO_NUMBER(V.PREFIXOVEIC)) > 5 AND V.CONDICAOVEIC = 'A'
-                AND V.CODIGOGA NOT IN (4) AND V.CODIGOGA IN (31, 124, 239, 240)
-            GROUP BY V.CODIGOGA, TRUNC(TO_DATE(:1, 'YYYY-MM-DD'), 'mm')
-            ORDER BY V.CODIGOGA`;
-      console.log(`[Oracle ETL] Executando query KMTOTALINT...`);
-      const kmTotalIntResults: KmComponentRaw[] = await oracleDataSource.query(
-        queryKmTotalInt,
-        parameters
-      ); // Parâmetros ainda necessários para :1
-      console.log(
-        `[Oracle ETL] Query KMTOTALINT retornou ${kmTotalIntResults.length} registros.`
-      );
-
-      // ----- SUA "CONSULTA KM_OPER" (Adaptada para Data Mensal) -----
-      const queryKmOper = `
-            SELECT
-                GA.CODIGOGA,
-                TRUNC(KO_SUB.DATA_BASE_OPER, 'mm') AS DATA_MES_ANO,
-                ROUND(SUM(KO_SUB.KM_OPER_DIA), 2) AS VALOR
-            FROM
-                ( SELECT DISTINCT CODIGOGA FROM FRT_CADVEICULOS WHERE CODIGOGA IN (31, 124, 239, 240) AND CODIGOEMPRESA = 4 ) GA
-                LEFT JOIN (
-                    SELECT V.CODIGOGA, TRUNC(A.DATABCO) AS DATA_BASE_OPER, SUM(NVL(GLOBUS.FC_ARR_KMBCO(A.IDBCO, 0), 0)) AS KM_OPER_DIA
-                    FROM T_ARR_BCO A JOIN T_ARR_BCO_VIAGENS B ON A.IDBCO = B.IDBCO JOIN FRT_CADVEICULOS V ON B.CODIGOVEIC = V.CODIGOVEIC JOIN FRT_TIPODEFROTA F ON V.CODIGOTPFROTA = F.CODIGOTPFROTA
-                    WHERE A.DATABCO >= TO_DATE(:1, 'YYYY-MM-DD') AND A.DATABCO < TO_DATE(:2, 'YYYY-MM-DD') + 1
-                      AND B.IDBCOVIAGENS = 1 AND A.CODIGOEMPRESA = 4 AND V.CODIGOEMPRESA = 4
-                      AND V.CODIGOGA IN (31, 124, 239, 240) AND V.CONDICAOVEIC = 'A'
-                    GROUP BY V.CODIGOGA, TRUNC(A.DATABCO)
-                ) KO_SUB ON GA.CODIGOGA = KO_SUB.CODIGOGA
-            WHERE KO_SUB.DATA_BASE_OPER IS NOT NULL
-            GROUP BY GA.CODIGOGA, TRUNC(KO_SUB.DATA_BASE_OPER, 'mm')
-            ORDER BY GA.CODIGOGA, TRUNC(KO_SUB.DATA_BASE_OPER, 'mm')`;
-      console.log(`[Oracle ETL] Executando query KM_OPER...`);
+      console.log(`[Oracle ETL] Executando query KM_OPERACIONAL (escalas)...`);
       const kmOperResults: KmComponentRaw[] = await oracleDataSource.query(
-        queryKmOper,
-        parameters
+        queryKmOperacional,
+        normalParameters
       );
       console.log(
-        `[Oracle ETL] Query KM_OPER retornou ${kmOperResults.length} registros.`
+        `[Oracle ETL] Query KM_OPERACIONAL retornou ${kmOperResults.length} registros.`
       );
 
-      // --- Juntar os Resultados ---
-      const kmDataMap = new Map<string, Partial<CombinedKmOciosaData>>(); // Chave: CODIGOGA-YYYY-MM
+      // ----- QUERY 2: KM HODÔMETRO (Bruto - Sem Abatimentos) -----
+      const queryKmHodometro = `
+      SELECT 
+          A.CODIGOGA,
+          TRUNC(A.DIA_OPERACIONAL, 'MM') AS DATA_MES_ANO,
+          SUM(A.KMPERCORRIDOVELOC) AS VALOR
+      FROM (
+          SELECT 
+              C.KMPERCORRIDOVELOC,
+              V.CODIGOGA,
+              C.DATAVELOC,
+              C.HORAVELOC,
+              CASE 
+                  WHEN TO_DATE(C.HORAVELOC, 'HH24:MI') < TO_DATE('04:00', 'HH24:MI') 
+                  THEN C.DATAVELOC - 1
+                  ELSE C.DATAVELOC
+              END AS DIA_OPERACIONAL
+          FROM VWABA_CONFKMCARRO C
+          JOIN FRT_CADVEICULOS V ON V.CODIGOVEIC = C.CODIGOVEIC
+          JOIN FRT_TIPODEFROTA F ON V.CODIGOTPFROTA = F.CODIGOTPFROTA
+          WHERE C.DATAVELOC BETWEEN TO_DATE(:1, 'YYYY-MM-DD') 
+                                AND TO_DATE(:2, 'YYYY-MM-DD HH24:MI')
+            AND V.CODIGOEMPRESA = 4
+            AND V.CODIGOTPFROTA = F.CODIGOTPFROTA
+            AND V.CODIGOGA IN (31, 124, 239, 240)
+            AND V.CONDICAOVEIC = 'A'
+      ) A
+      WHERE A.DIA_OPERACIONAL BETWEEN TO_DATE(:3, 'YYYY-MM-DD') 
+                                  AND TO_DATE(:4, 'YYYY-MM-DD')
+      GROUP BY A.CODIGOGA, TRUNC(A.DIA_OPERACIONAL, 'MM')
+      ORDER BY A.CODIGOGA, TRUNC(A.DIA_OPERACIONAL, 'MM')`;
 
-      const processResults = (
-        resultsArray: KmComponentRaw[],
-        valueField: keyof CombinedKmOciosaData
-      ) => {
-        resultsArray.forEach((r) => {
-          const metricMonthISO = r.DATA_MES_ANO.toISOString().substring(0, 7);
-          const key = `${r.CODIGOGA}-${metricMonthISO}`;
-          const existing = kmDataMap.get(key) || {
-            CODIGOGA: String(r.CODIGOGA),
-            DATA_MES_ANO: r.DATA_MES_ANO,
-          };
-          (existing as any)[valueField] = Number(r.VALOR) || 0;
-          kmDataMap.set(key, existing);
-        });
-      };
+      console.log(
+        `[Oracle ETL] Executando query KM_HODÔMETRO (até ${endDatePlus03h59})...`
+      );
+      console.log(`[Oracle ETL] Parâmetros hodômetro:`, hodometroParameters);
+      const kmHodResults: KmComponentRaw[] = await oracleDataSource.query(
+        queryKmHodometro,
+        hodometroParameters
+      );
+      console.log(
+        `[Oracle ETL] Query KM_HODÔMETRO retornou ${kmHodResults.length} registros.`
+      );
 
-      processResults(kmHodResults, 'kmHod');
-      processResults(kmEspResults, 'kmEsp');
-      // KMTOTALINT é por CODIGOGA, vamos aplicar a todos os meses daquele CODIGOGA
-      kmTotalIntResults.forEach((ki_r) => {
-        for (const key of kmDataMap.keys()) {
-          if (key.startsWith(String(ki_r.CODIGOGA) + '-')) {
-            const entry = kmDataMap.get(key);
-            if (entry) {
-              entry.kmTotalInt = Number(ki_r.VALOR) || 0;
-            }
-          }
-        }
+      // ----- COMBINAR RESULTADOS NO MAP -----
+      const kmDataMap = new Map<string, Partial<CombinedKmOciosaDataNew>>();
+
+      // Processar resultados KM Operacional
+      kmOperResults.forEach((r) => {
+        const metricMonthISO = r.DATA_MES_ANO.toISOString().substring(0, 7);
+        const key = `${r.CODIGOGA}-${metricMonthISO}`;
+        const existing = kmDataMap.get(key) || {
+          CODIGOGA: String(r.CODIGOGA),
+          DATA_MES_ANO: r.DATA_MES_ANO,
+        };
+        existing.kmOper = Number(r.VALOR) || 0;
+        kmDataMap.set(key, existing);
       });
-      processResults(kmOperResults, 'kmOper');
 
+      // Processar resultados KM Hodômetro
+      kmHodResults.forEach((r) => {
+        const metricMonthISO = r.DATA_MES_ANO.toISOString().substring(0, 7);
+        const key = `${r.CODIGOGA}-${metricMonthISO}`;
+        const existing = kmDataMap.get(key) || {
+          CODIGOGA: String(r.CODIGOGA),
+          DATA_MES_ANO: r.DATA_MES_ANO,
+        };
+        existing.kmHod = Number(r.VALOR) || 0;
+        kmDataMap.set(key, existing);
+      });
+
+      console.log(`[Oracle ETL] 🔍 DEBUG: Primeiras 3 entradas do Map:`);
+      Array.from(kmDataMap.entries())
+        .slice(0, 3)
+        .forEach(([key, value]) => {
+          console.log(
+            `  ${key}: KM_OPER=${value.kmOper}, KM_HOD=${value.kmHod}`
+          );
+        });
+
+      // ----- CRIAR ENTIDADES PARA SALVAR -----
       const entitiesToSave: DeepPartial<RawOracleKmOciosaComponentsEntity>[] =
         [];
+
       for (const item of kmDataMap.values()) {
         if (item.CODIGOGA && item.DATA_MES_ANO) {
+          // Mapeamento CODIGOGA → Nome do Setor
           let sectorName = 'OUTRAS';
           if (item.CODIGOGA == '31') sectorName = 'PARANOÁ';
           else if (item.CODIGOGA == '124') sectorName = 'SANTA MARIA';
           else if (item.CODIGOGA == '239') sectorName = 'SÃO SEBASTIÃO';
           else if (item.CODIGOGA == '240') sectorName = 'GAMA';
+
           const metricMonth = item.DATA_MES_ANO.toISOString().substring(0, 7);
 
           if (sectorName === 'OUTRAS') {
@@ -825,16 +871,16 @@ ORDER BY
             continue;
           }
 
-          // Calcula KM_HOD2 aqui
-          const kmHodometroAjustado =
-            (item.kmHod || 0) - (item.kmEsp || 0) - (item.kmTotalInt || 0);
+          // Nova regra: KM Hodômetro é BRUTO (sem abatimentos)
+          const kmHodometroBruto = item.kmHod || 0;
+          const kmOperacionalNovo = item.kmOper || 0;
 
           entitiesToSave.push(
             this.rawKmOciosaComponentsRepo.create({
               metricMonth: metricMonth,
               sectorName: sectorName,
-              kmOperacional: item.kmOper || 0,
-              kmHodometroAjustado: Number(kmHodometroAjustado.toFixed(2)) || 0, // Arredonda e garante número
+              kmOperacional: kmOperacionalNovo,
+              kmHodometroAjustado: Number(kmHodometroBruto.toFixed(2)) || 0, // Agora é bruto
             })
           );
         } else {
@@ -842,12 +888,14 @@ ORDER BY
         }
       }
 
+      // ----- SALVAR NO POSTGRES -----
       if (entitiesToSave.length === 0) {
         console.log(
           `[Oracle ETL] Nenhum registro válido de ${functionName} para salvar.`
         );
         return 0;
       }
+
       console.log(
         `[Oracle ETL] Salvando ${entitiesToSave.length} registros em raw_oracle_km_ociosa_components...`
       );
@@ -855,6 +903,7 @@ ORDER BY
       console.log(
         `[Oracle ETL] Registros de ${functionName} salvos no Postgres.`
       );
+
       return entitiesToSave.length;
     } catch (error) {
       console.error(
@@ -867,6 +916,7 @@ ORDER BY
       return 0;
     }
   }
+
   // MÉTODO  PARA IPK, SALVANDO VALOR CALCULADO
   async extractAndLoadIpkCalculado(
     startDate: string,

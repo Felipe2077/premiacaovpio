@@ -29,7 +29,7 @@ interface MySqlEtlResult {
     | 'DEFEITO'
     | 'ATRASO'
     | 'FURO POR ATRASO'
-    | 'FURO DE VIAGEM';
+    | 'FURO POR VIAGEM';
   DATA: Date;
   TOTAL: number;
 }
@@ -88,14 +88,13 @@ export class MySqlEtlService {
 
     try {
       const query = `
-                SELECT S.SETOR, A.OCORRENCIA, COUNT(A.OCORRENCIA) AS TOTAL, DATE(A.DATA) as DIA
-                FROM negocioperfeito.quebrasedefeitos A
-                INNER JOIN negocioperfeito.setores AS S ON S.CODSETOR = A.SETORLINHA
-                WHERE A.EXCLUIR = 'NÃO'
-                  AND A.CODOCORRENCIA IN (1, 2) /* 1=Quebra, 2=Defeito */
-                  AND A.DATA BETWEEN ? AND ?
-                GROUP BY S.SETOR, A.OCORRENCIA, DATE(A.DATA)
-                ORDER BY S.SETOR, DIA, A.OCORRENCIA;
+                 SELECT S.SETOR, A.OCORRENCIA, COUNT(A.OCORRENCIA) AS TOTAL, DATE(A.DATA) as DIA
+  FROM negocioperfeito.quebrasedefeitos A
+  INNER JOIN negocioperfeito.setores AS S ON S.CODSETOR = A.SETORLINHA
+  WHERE A.CODOCORRENCIA IN (1, 2)           
+    AND A.DATA BETWEEN ? AND ?
+  GROUP BY S.SETOR, A.OCORRENCIA, DATE(A.DATA)
+  ORDER BY S.SETOR, DIA, A.OCORRENCIA;
             `;
       const parameters = [startDate, endDate];
       const results: QuebraDefeitoRawFromQuery[] = await mysqlDataSource.query(
@@ -144,7 +143,7 @@ export class MySqlEtlService {
     startDate: string,
     endDate: string,
     codOcorrencia: number,
-    criterionName: 'ATRASO' | 'FURO POR ATRASO' | 'FURO DE VIAGEM'
+    criterionName: 'ATRASO' | 'FURO POR ATRASO' | 'FURO POR VIAGEM'
   ): Promise<number> {
     console.log(
       `[MySQL ETL] Iniciando extração/carga de ${criterionName} (cod ${codOcorrencia}) para ${startDate} a ${endDate}`
@@ -269,7 +268,7 @@ export class MySqlEtlService {
       startDate,
       endDate,
       4,
-      'FURO DE VIAGEM'
+      'FURO POR VIAGEM'
     );
   }
 

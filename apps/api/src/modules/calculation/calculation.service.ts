@@ -48,6 +48,59 @@ export class CalculationService {
   }
 
   /**
+   * Função utilitária para calcular percentual vs meta de forma segura
+   * Evita valores infinitos e overflow no banco de dados
+   */
+  private calculateSafePercentVsTarget(
+    realizedValue: number,
+    targetValue: number,
+    criterionName: string,
+    sectorName: string
+  ): number | null {
+    // Limite máximo para evitar overflow no NUMERIC(10,4)
+    const MAX_SAFE_PERCENTAGE = 999999.9999;
+
+    // Caso especial: Meta zero e realizado zero = 100% (meta atingida)
+    if (targetValue === 0 && realizedValue === 0) {
+      console.log(
+        `  -> Setor ${sectorName}, Critério ${criterionName}: Meta 0 e Realizado 0 = 100%`
+      );
+      return 100;
+    }
+
+    // Caso especial: Meta zero mas tem valor realizado
+    if (targetValue === 0) {
+      console.warn(
+        `  -> Setor ${sectorName}, Critério ${criterionName}: Meta é 0 mas realizado é ${realizedValue}. Aplicando lógica especial.`
+      );
+
+      // Para meta zero, se há valor realizado, significa que ultrapassou
+      // Vamos usar um percentual alto mas limitado para não causar overflow
+      return realizedValue > 0 ? MAX_SAFE_PERCENTAGE : 0;
+    }
+
+    // Cálculo normal
+    const percentage = (realizedValue / targetValue) * 100;
+
+    // Verificar se o resultado é finito
+    if (!Number.isFinite(percentage)) {
+      console.error(
+        `  -> Setor ${sectorName}, Critério ${criterionName}: Resultado não finito - ${realizedValue}/${targetValue} = ${percentage}`
+      );
+      return null;
+    }
+
+    // Limitar o valor para evitar overflow
+    if (Math.abs(percentage) > MAX_SAFE_PERCENTAGE) {
+      console.warn(
+        `  -> Setor ${sectorName}, Critério ${criterionName}: Percentual muito alto (${percentage.toFixed(2)}%), limitando a ${MAX_SAFE_PERCENTAGE}%`
+      );
+      return percentage > 0 ? MAX_SAFE_PERCENTAGE : -MAX_SAFE_PERCENTAGE;
+    }
+
+    return Number(percentage.toFixed(4));
+  }
+  /**
    * Calcula o ranking e a pontuação para um determinado período e salva os resultados.
    * @param periodMesAno Mês/Ano no formato 'YYYY-MM'
    */
@@ -66,11 +119,7 @@ export class CalculationService {
         );
         throw new Error(`Período ${periodMesAno} não encontrado para cálculo.`);
       }
-      // Futuramente, só calcular se o status for 'ATIVA' e estiver após dataFim, ou se for um recálculo
-      // if (competitionPeriod.status !== 'ATIVA' && /* ... outras condições ... */ ) {
-      //     console.warn(`[CalculationService] Período ${periodMesAno} não está em status 'ATIVA' ou apto para cálculo.`);
-      //     return;
-      // }
+
       console.log(
         `[CalculationService] Calculando para periodId: ${competitionPeriod.id} (${competitionPeriod.mesAno})`
       );
@@ -102,7 +151,7 @@ export class CalculationService {
         `[CalculationService] ${performanceEntries.length} registros de performance encontrados para o período.`
       );
 
-      // 3. Buscar todos os critérios ativos e setores ativos (para iterar e garantir que todos são considerados)
+      // 3. Buscar todos os critérios ativos e setores ativos
       const activeCriteria = await this.criterionRepo.find({
         where: { ativo: true },
         order: { id: 'ASC' },
@@ -145,19 +194,17 @@ export class CalculationService {
               `  -> Setor ${sector.nome} (FALTA FUNC): Realizado ${realizedValue} <= 10. % para ranking definido como 0.`
             );
           }
-          // --- FIM LÓGICA ESPECIAL FALTA FUNC ---
+          // --- CÁLCULO SEGURO DO PERCENTUAL ---
           else if (targetValueFromPerf !== null && realizedValue !== null) {
-            // Cálculo padrão do %
-            if (targetValueFromPerf === 0) {
-              // Regra Meta Zero
-              percentVsTarget = realizedValue === 0 ? 0 : realizedValue * 100;
-            } else {
-              percentVsTarget = (realizedValue / targetValueFromPerf) * 100;
-            }
-            percentVsTarget = Number(percentVsTarget.toFixed(4));
+            percentVsTarget = this.calculateSafePercentVsTarget(
+              realizedValue,
+              targetValueFromPerf,
+              criterion.nome,
+              sector.nome
+            );
           } else if (realizedValue !== null && targetValueFromPerf === null) {
             console.warn(
-              `  -> Setor ${sector.nome}, Critério <span class="math-inline">\{criterion\.nome\}\: Realizado\=</span>{realizedValue}, Meta=NULA. % não calculado.`
+              `  -> Setor ${sector.nome}, Critério ${criterion.nome}: Realizado=${realizedValue}, Meta=NULA. % não calculado.`
             );
           }
 
@@ -173,7 +220,6 @@ export class CalculationService {
             realizedValue: realizedValue,
             targetValue: targetValueFromPerf,
             percentVsTarget: percentVsTarget,
-            // Rank e Score serão preenchidos depois
           });
         }
 
@@ -193,35 +239,32 @@ export class CalculationService {
           console.warn(
             `[CalculationService] Critério ${criterion.nome} sem 'sentido_melhor' definido. Não será rankeado.`
           );
-          // Pula para o próximo critério ou atribui pontuação padrão?
-          // Por agora, vamos pular o cálculo de pontos para este critério.
-          performancesForCriterion.forEach((p) => (p.scoreInCriterion = 2.5)); // Ou uma pontuação neutra/padrão
+          performancesForCriterion.forEach((p) => (p.scoreInCriterion = 2.5));
         }
 
-        // Atribuir rank e pontos (Lógica de desempate simples: mesma pontuação)
+        // Atribuir rank e pontos
         const pointsScale = [1.0, 1.5, 2.0, 2.5];
         let currentRank = 0;
         let lastPercent: number | null = null;
         let TiedCount = 1;
 
         performancesForCriterion.forEach((p, index) => {
-          if (p.percentVsTarget !== null) {
+          if (p.percentVsTarget !== null && p.percentVsTarget !== undefined) {
             // Só rankeia se tiver percentual
             if (p.percentVsTarget !== lastPercent) {
               currentRank = index + 1;
               TiedCount = 1;
             } else {
-              TiedCount++; // Houve empate com o anterior
+              TiedCount++;
             }
             p.rankInCriterion = currentRank;
-            // Se escala invertida fosse necessária, a lógica de pointsScale mudaria aqui
             p.scoreInCriterion =
               pointsScale[currentRank - 1] ||
-              pointsScale[pointsScale.length - 1]; // Pega ponto ou último se rank > 4
+              pointsScale[pointsScale.length - 1];
             lastPercent = p.percentVsTarget!;
           } else {
-            p.rankInCriterion = null!; // Não pode rankear sem percentual
-            p.scoreInCriterion = 2.5; // Pontuação Padrão/Pior para quem não tem meta/valor? (A DEFINIR)
+            p.rankInCriterion = null!;
+            p.scoreInCriterion = 2.5;
             console.warn(
               `  -> Setor ${p.sectorName}, Critério ${p.criterionName}: Sem % vs Meta, pontuação padrão aplicada.`
             );
@@ -234,7 +277,23 @@ export class CalculationService {
               totalScore: 0,
             };
           }
-          sectorTotalScores[p.sectorId]!.totalScore += p.scoreInCriterion || 0; // Garante que soma número
+          sectorTotalScores[p.sectorId]!.totalScore += p.scoreInCriterion || 0;
+
+          // *** VALIDAÇÃO FINAL ANTES DE ADICIONAR AO ARRAY ***
+          const finalPercentVsTarget =
+            p.percentVsTarget !== undefined ? p.percentVsTarget : null;
+
+          // Última verificação de segurança
+          if (
+            finalPercentVsTarget !== null &&
+            !Number.isFinite(finalPercentVsTarget)
+          ) {
+            console.error(
+              `[CalculationService] ERRO CRÍTICO: percentVsTarget não finito detectado antes de salvar! Setor: ${p.sectorName}, Critério: ${p.criterionName}, Valor: ${finalPercentVsTarget}`
+            );
+            // Força para null para evitar erro no banco
+            p.percentVsTarget = null;
+          }
 
           allCriterionScores.push({
             competitionPeriodId: competitionPeriod.id,
@@ -242,16 +301,15 @@ export class CalculationService {
             criterionId: p.criterionId,
             realizedValue: p.realizedValue,
             targetValue: p.targetValue,
-            percentVsTarget: p.percentVsTarget,
+            percentVsTarget: finalPercentVsTarget,
             rankInCriterion: p.rankInCriterion,
             scoreInCriterion: p.scoreInCriterion,
           });
+
           console.log(
-            `  -> Setor ${p.sectorName}: Real.=${p.realizedValue}, Meta=${p.targetValue}, %=${p.percentVsTarget}, Rank=${p.rankInCriterion}, Pts=${p.scoreInCriterion}`
+            `  -> Setor ${p.sectorName}: Real.=${p.realizedValue}, Meta=${p.targetValue}, %=${finalPercentVsTarget}, Rank=${p.rankInCriterion}, Pts=${p.scoreInCriterion}`
           );
         });
-        // TODO: Implementar regra "Falta Func <= 10" (ajustaria o scoreInCriterion aqui)
-        // TODO: Implementar regra "Escala Invertida" (ajustaria o pointsScale ou o scoreInCriterion)
       }
 
       // 5. Salvar Scores por Critério
@@ -259,6 +317,27 @@ export class CalculationService {
         console.log(
           `[CalculationService] Salvando ${allCriterionScores.length} registros em criterion_scores...`
         );
+
+        // Log de auditoria antes de salvar
+        const problematicRecords = allCriterionScores.filter(
+          (score) =>
+            score.percentVsTarget !== null &&
+            score.percentVsTarget !== undefined &&
+            (!Number.isFinite(score.percentVsTarget) ||
+              Math.abs(score.percentVsTarget) > 999999.9999)
+        );
+
+        if (problematicRecords.length > 0) {
+          console.error(
+            `[CalculationService] ATENÇÃO: ${problematicRecords.length} registros com percentVsTarget problemático detectados!`
+          );
+          problematicRecords.forEach((record, index) => {
+            console.error(
+              `  Problema ${index + 1}: Setor ${record.sectorId}, Critério ${record.criterionId}, %=${record.percentVsTarget}`
+            );
+          });
+        }
+
         await this.criterionScoreRepo.save(allCriterionScores, { chunk: 200 });
         console.log(
           `[CalculationService] Registros salvos em criterion_scores.`
@@ -268,7 +347,7 @@ export class CalculationService {
       // 6. Calcular e Salvar Ranking Final
       const finalRankingArray = Object.values(sectorTotalScores).sort(
         (a, b) => a.totalScore - b.totalScore
-      ); // Menor pontuação total é melhor
+      );
 
       const finalRankingsToSave: DeepPartial<FinalRankingEntity>[] = [];
       let currentGeneralRank = 0;
@@ -301,14 +380,15 @@ export class CalculationService {
       }
 
       console.log(
-        `\n[CalculationService] Cálculo do ranking para ${periodMesAno} concluído.`
+        `\n[CalculationService] Cálculo do ranking para ${periodMesAno} concluído com sucesso.`
       );
     } catch (error: unknown) {
       let errorMessage = `[CalculationService] ERRO INESPERADO durante cálculo para ${periodMesAno}:`;
       if (error instanceof Error) {
-        errorMessage = `[CalculationService] ERRO para <span class="math-inline">\{periodMesAno\} \(</span>{error.name}): ${error.message}`;
+        errorMessage = `[CalculationService] ERRO para ${periodMesAno} (${error.name}): ${error.message}`;
       }
       console.error(errorMessage, error);
+      throw error; // Re-lança o erro para que o chamador possa tratá-lo
     }
   }
 }

@@ -35,7 +35,7 @@ import {
 } from '@sistema-premiacao/shared-types';
 
 type EditPayload = {
-  id: number | null;
+  id: number;
   valor: string;
   justificativa: string;
   nomeParametro: string;
@@ -289,55 +289,62 @@ export default function ParametersPage() {
 
   const handleEditSubmit = useCallback(
     async (payload: EditPayload) => {
-      // Se o payload tem um ID, é uma atualização (PUT)
-      if (payload.id) {
-        try {
-          await updateMutation.mutateAsync({
-            id: payload.id,
-            valor: parseFloat(payload.valor),
-            justificativa: payload.justificativa,
-            nomeParametro: payload.nomeParametro,
-            dataInicioEfetivo: payload.dataInicioEfetivo,
-          });
-          toast.success('Meta atualizada com sucesso!');
-        } catch (error) {
-          console.error('Erro ao atualizar meta:', error);
-          toast.error('Erro ao atualizar meta.');
-          return; // Para não continuar
-        }
-      } else {
-        // Se o payload NÃO tem um ID, é uma criação (POST)
-        if (!modalData.editing) return;
-        try {
-          await createMutation.mutateAsync({
-            criterionId: modalData.editing.criterionId,
-            sectorId: modalData.editing.sectorId,
-            competitionPeriodId: modalData.editing.competitionPeriodId,
-            valor: parseFloat(payload.valor),
-            justificativa: payload.justificativa,
-            nomeParametro: payload.nomeParametro,
-            dataInicioEfetivo: payload.dataInicioEfetivo,
-          } as any);
-          toast.success('Meta definida com sucesso!');
-        } catch {
-          toast.error('Erro ao definir a meta.');
-          return; // Para não continuar
-        }
+      // 1. Validação inicial para garantir que temos o contexto do modal
+      if (!modalData.editing || !selectedPeriod) {
+        toast.error('Erro: Dados de contexto ausentes para salvar a meta.');
+        return;
       }
 
-      closeModal('edit');
-      if (selectedPeriod?.mesAno) {
+      // 2. Monta o corpo da requisição no formato EXATO que o backend espera na rota de cálculo
+      const apiPayload = {
+        // Dados de contexto do modal
+        criterionId: modalData.editing.criterionId,
+        sectorId: modalData.editing.sectorId,
+        competitionPeriodId: selectedPeriod.id,
+        // Dados do formulário
+        justificativa: `Meta definida manualmente: ${payload.justificativa}`,
+        // ✅ A MUDANÇA CRÍTICA: O valor vai no campo "finalValue"
+        finalValue: parseFloat(payload.valor),
+        // Campos adicionais para compatibilidade com a rota de cálculo
+        calculationMethod: 'manual',
+        adjustmentPercentage: 0,
+        wasRounded: false,
+        roundingMethod: 'none',
+        roundingDecimalPlaces: 0,
+        saveAsDefault: false,
+        previewOnly: false,
+      };
+
+      try {
+        // 3. Faz a chamada diretamente para a API de cálculo, resolvendo o erro de API_BASE_URL
+        const response = await fetch(
+          'http://localhost:3001/api/parameters/calculate',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(apiPayload),
+            credentials: 'include',
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          // Fornece uma mensagem de erro mais clara vinda da API
+          throw new Error(
+            errorData.message ||
+              `Falha ao salvar meta. Status: ${response.status}`
+          );
+        }
+
+        toast.success('Meta salva e ranking atualizado com sucesso!');
+        closeModal('edit');
         await fetchResults(selectedPeriod.mesAno);
+      } catch (error: any) {
+        console.error('Erro ao salvar meta manualmente:', error);
+        toast.error(error.message);
       }
     },
-    [
-      updateMutation,
-      createMutation,
-      closeModal,
-      selectedPeriod?.mesAno,
-      fetchResults,
-      modalData.editing,
-    ]
+    [modalData.editing, selectedPeriod, fetchResults, closeModal]
   );
 
   const handleApplyCalculation = useCallback(
