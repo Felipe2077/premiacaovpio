@@ -62,7 +62,7 @@ export default function Header() {
             </Tooltip>
 
             {/* Botão de Acesso Administrativo */}
-            <Link href='/admin/login'>
+            <Link href='/login'>
               <Button className='bg-yellow-400 text-black hover:bg-yellow-500'>
                 <UserCog className='mr-2 h-4 w-4' />
                 Admin

@@ -2,6 +2,8 @@
 'use client';
 
 import { Skeleton } from '@/components/ui/skeleton';
+import { ArrowDown, ArrowUp } from 'lucide-react';
+
 import {
   Table,
   TableBody,
@@ -28,6 +30,22 @@ interface PointsTableProps {
   isLoading: boolean;
   error: Error | null;
 }
+
+const getPosicaoIcon = (posicao: number) => {
+  if (posicao === 1) return '🏆';
+  if (posicao === 2)
+    return <span className='w-4 h-4 text-gray-400 font-bold'>2°</span>;
+  if (posicao === 3)
+    return <span className='w-4 h-4 text-amber-600 font-bold'>3°</span>;
+  return <span className='w-4 h-4 text-gray-600 font-bold'>{posicao}°</span>;
+};
+
+const getPointsColorByRank = (rank: number): string => {
+  if (rank === 1) return 'text-green-600';
+  if (rank === 2) return 'text-yellow-600';
+  if (rank === 3) return 'text-orange-500';
+  return 'text-red-600';
+};
 
 export default function PointsTable({
   resultsBySector,
@@ -66,7 +84,7 @@ export default function PointsTable({
     const criterionIndex =
       activeCriteria.find((c) => c.id === criterionId)?.index ?? null;
     const useInvertedScale = criterionIndex === 0;
-    const baseStyle = 'font-semibold px-2 py-1 rounded text-xs sm:text-sm ';
+    const baseStyle = 'font-semibold px-2 py-1 rounded text-xs sm:text-lg ';
 
     const isBestPoints = useInvertedScale ? points === 2.5 : points === 1.0;
     const isGoodPoints = useInvertedScale ? points === 2.0 : points === 1.5;
@@ -99,6 +117,42 @@ export default function PointsTable({
     return 'text-foreground'; // Fallback
   };
   // --------------------------------------
+
+  // --- ORDENANDO OS SETORES POR PONTUAÇÃO ---
+  const sortedSectors = useMemo(() => {
+    if (!resultsBySector || Object.keys(resultsBySector).length === 0) {
+      return [];
+    }
+
+    const sectorsWithPoints = Object.entries(resultsBySector).map(
+      ([sectorId, sectorData]) => {
+        if (!sectorData) {
+          return {
+            sectorId,
+            setorNome: 'Desconhecido',
+            totalPontos: 0,
+            criteriaResults: {},
+          };
+        }
+
+        const criteriaResults = sectorData.criteriaResults || {};
+        const totalPontos = Object.values(criteriaResults).reduce(
+          (sum: number, criterio: any) => sum + (criterio.pontos || 0),
+          0
+        );
+
+        return {
+          sectorId,
+          setorNome: sectorData.setorNome || 'Desconhecido',
+          totalPontos,
+          criteriaResults,
+        };
+      }
+    );
+
+    // Ordenar por pontuação (menor é melhor)
+    return sectorsWithPoints.sort((a, b) => a.totalPontos - b.totalPontos);
+  }, [resultsBySector]);
 
   if (isLoading) {
     // Simula algumas linhas e colunas genéricas
@@ -175,60 +229,94 @@ export default function PointsTable({
           </TableCaption>
           <TableHeader>
             <TableRow>
-              <TableHead className='sticky left-0 bg-background z-10 font-semibold min-w-[100px] px-2 sm:px-4'>
+              <TableHead className='sticky left-0 bg-background z-10 font-semibold min-w-[200px] px-4'>
                 Setor
               </TableHead>
-              {uniqueCriteria.map((criterion) => (
-                <TableHead
-                  key={criterion.id}
-                  className='text-center font-semibold min-w-[90px] px-1 py-2 text-xs whitespace-normal align-top'
-                >
-                  {criterion.nome}
-                </TableHead>
-              ))}
+              {uniqueCriteria.map((criterion) => {
+                const normalizedName = criterion.nome.toUpperCase().trim();
+
+                let displayName = criterion.nome;
+                if (normalizedName === 'ATESTADO FUNC') {
+                  displayName = 'ATESTADO';
+                }
+
+                const isBiggerBetter =
+                  normalizedName === 'IPK' || normalizedName === 'MEDIA KM/L';
+                const ArrowIcon = isBiggerBetter ? ArrowUp : ArrowDown;
+                const arrowColor = isBiggerBetter
+                  ? 'text-blue-600'
+                  : 'text-blue-600';
+
+                return (
+                  <TableHead
+                    key={criterion.id}
+                    className='text-center font-semibold min-w-[90px] px-1 py-2 text-xs whitespace-normal align-top'
+                  >
+                    <div className='flex items-center justify-center gap-1'>
+                      <span>{displayName}</span>
+                      <ArrowIcon className={`h-3 w-3 shrink-0 ${arrowColor}`} />
+                    </div>
+                  </TableHead>
+                );
+              })}
             </TableRow>
           </TableHeader>
           <TableBody>
-            {Object.entries(resultsBySector).map(([sectorId, sectorData]) => {
-              // Verificar se sectorData e criteriaResults existem
-              if (!sectorData || !sectorData.criteriaResults) {
-                return null; // Pular este setor
-              }
-
-              // Calcular pontuação total
-              const totalPoints = Object.values(
-                sectorData.criteriaResults || {}
-              ).reduce((sum, result) => sum + (result?.pontos || 0), 0);
+            {sortedSectors.map((sector, index) => {
+              const posicao = index + 1;
+              const isFirstPlace = posicao === 1;
 
               return (
-                <TableRow key={sectorId}>
-                  <TableCell className='font-semibold sticky left-0 bg-background z-10'>
-                    {sectorData.setorNome}
-                  </TableCell>
-                  {uniqueCriteria.map((criterion) => {
-                    // Verificar se o critério existe nos resultados do setor
-                    const result = sectorData.criteriaResults[criterion.id] || {
-                      valorRealizado: 0,
-                      valorMeta: 0,
-                      percentualAtingimento: 0,
-                      pontos: 0,
-                    };
+                <TableRow key={sector.sectorId}>
+                  {/* --- MODIFICAÇÃO 5: NOVA CÉLULA DE SETOR COM PONTUAÇÃO --- */}
+                  <TableCell
+                    className={`font-semibold sticky left-0 z-10 px-4 py-3 border-r ${isFirstPlace ? 'bg-green-50' : 'bg-background'}`}
+                  >
+                    <div className='flex items-center justify-between gap-3'>
+                      {/* Lado Esquerdo: Posição e Nome */}
+                      <div className='flex items-center gap-3'>
+                        <span className='text-lg'>
+                          {getPosicaoIcon(posicao)}
+                        </span>
+                        <div>
+                          <div className='font-semibold text-base text-gray-800 dark:text-gray-100'>
+                            {sector.setorNome}
+                          </div>
+                          <div className='text-xs text-gray-500 dark:text-gray-400'>
+                            {posicao}° lugar
+                          </div>
+                        </div>
+                      </div>
 
+                      {/* Lado Direito: Pontuação Total */}
+                      <div className='text-right'>
+                        <div
+                          className={`font-bold text-xl ${getPointsColorByRank(posicao)}`}
+                        >
+                          {sector.totalPontos.toFixed(2)}
+                        </div>
+                        <div className='text-xs font-medium text-gray-600 dark:text-gray-300 -mt-1'>
+                          pontos
+                        </div>
+                      </div>
+                    </div>
+                  </TableCell>
+
+                  {uniqueCriteria.map((criterion) => {
+                    const result = sector.criteriaResults[criterion.id] || null;
                     const pontos = result?.pontos;
-                    // Chama a função getPointsCellStyle COMPLETA
                     const cellStyle = getPointsCellStyle(pontos, criterion.id);
 
                     return (
                       <TableCell
-                        key={`${sectorId}-${criterion.id}`}
+                        key={`${sector.sectorId}-${criterion.id}`}
                         className='text-center p-1 align-middle'
                       >
                         {result ? (
                           <Tooltip delayDuration={200}>
                             <TooltipTrigger asChild>
-                              {/* Aplica o estilo CORRETO */}
                               <span
-                                className={`cursor-default inline-block ${cellStyle}`}
+                                className={`cursor-default w-full inline-block ${cellStyle}`}
                               >
                                 {formatNumber(pontos)}
                               </span>

@@ -1,9 +1,11 @@
 // apps/api/src/server.ts (VERSÃO CORRIGIDA)
+
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
 import * as dotenv from 'dotenv';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { ServerConfig } from './config/server';
+import { PeriodTransitionScheduler } from './modules/scheduling';
 import authPlugin from './plugins/auth.plugin';
 import multipartPlugin from './plugins/multipart.plugin';
 import servicesPlugin from './plugins/services';
@@ -19,6 +21,7 @@ import healthRoutes from './routes/health.routes';
 import historicalResultsRoutes from './routes/historical-results.routes';
 import metadataRoutes from './routes/metadata.routes';
 import parametersRoutes from './routes/parameters.routes';
+import periodOfficializationRoutes from './routes/period-officialization.routes';
 import periodsRoutes from './routes/periods.routes';
 import resultsRoutes from './routes/results.routes';
 import schedulingRoutes from './routes/scheduling.routes';
@@ -31,6 +34,35 @@ const start = async () => {
     console.log('🚀 Iniciando servidor...');
     const serverConfig = new ServerConfig();
     const fastify = await serverConfig.configure();
+
+    // 🆕 ADICIONAR: Instanciar o scheduler
+    console.log('🤖 Inicializando scheduler de transição de vigências...');
+    const periodTransitionScheduler = new PeriodTransitionScheduler();
+
+    // Iniciar o scheduler automático
+    periodTransitionScheduler.start();
+    console.log('✅ Scheduler de vigências ativo');
+
+    // Adicionar endpoint para status do scheduler (opcional)
+    fastify.get('/api/system/scheduler/status', async () => {
+      return {
+        success: true,
+        scheduler: periodTransitionScheduler.getStatus(),
+        timestamp: new Date().toISOString(),
+      };
+    });
+
+    // Adicionar endpoint para execução manual (opcional - útil para testes)
+    fastify.post('/api/system/scheduler/execute', async () => {
+      console.log('🧪 Execução manual do scheduler solicitada...');
+      const result = await periodTransitionScheduler.executeManually();
+      return {
+        success: result.success,
+        summary: result.summary,
+        executionTimeMs: result.executionTimeMs,
+        timestamp: new Date().toISOString(),
+      };
+    });
 
     // 📚 CORREÇÃO: Remover o tipo genérico explícito e definir o modo.
     // O erro "No overload matches" ocorre por um conflito de tipos.
@@ -143,6 +175,7 @@ const start = async () => {
     await fastify.register(automationTriggersRoutes);
     await fastify.register(automationRoutes);
     await fastify.register(schedulingRoutes);
+    await fastify.register(periodOfficializationRoutes);
 
     console.log('✅ Todas as rotas foram registradas (incluindo automação).');
 

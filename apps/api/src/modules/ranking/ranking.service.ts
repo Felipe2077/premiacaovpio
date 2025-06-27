@@ -776,7 +776,7 @@ export class RankingService {
     }
   }
 
-  // ========== MÉTODOS AUXILIARES (MANTIDOS) ==========
+  // ========== MÉTODOS AUXILIARES  ==========
   private async getValidCompetitionPeriod(
     periodMesAno?: string
   ): Promise<CompetitionPeriodEntity> {
@@ -966,6 +966,364 @@ export class RankingService {
       metaDefinidaValor: null,
       isMetaDefinida: false,
     };
+  }
+  // ===== NOVOS MÉTODOS PARA DETECÇÃO E RESOLUÇÃO DE EMPATES GLOBAIS =====
+
+  /**
+   * 🆕 DETECTA empates no ranking global (pontuação total)
+   * Analisa se há setores com a mesma pontuação final e retorna grupos de empate.
+   * @param rankingData Array do ranking final ordenado
+   * @returns Informações sobre empates detectados
+   */
+  detectGlobalTies(rankingData: EntradaRanking[]): {
+    hasGlobalTies: boolean;
+    tiedGroups: Array<{
+      pontuacao: number;
+      sectors: Array<{ rank: number; nome: string; pontuacao: number }>;
+      affectedPositions: number[];
+    }>;
+    winnerTieGroup?: {
+      pontuacao: number;
+      sectors: Array<{ rank: number; nome: string; pontuacao: number }>;
+    };
+  } {
+    console.log('[RankingService] 🔍 Analisando empates no ranking global...');
+
+    if (!rankingData || rankingData.length === 0) {
+      return {
+        hasGlobalTies: false,
+        tiedGroups: [],
+      };
+    }
+
+    // Agrupar por pontuação
+    const scoreGroups = new Map<number, EntradaRanking[]>();
+
+    for (const entry of rankingData) {
+      const score = entry.PONTUACAO;
+      if (!scoreGroups.has(score)) {
+        scoreGroups.set(score, []);
+      }
+      scoreGroups.get(score)!.push(entry);
+    }
+
+    // Identificar grupos com empate (mais de 1 setor com mesma pontuação)
+    const tiedGroups = [];
+    let winnerTieGroup = undefined;
+
+    for (const [pontuacao, sectors] of scoreGroups) {
+      if (sectors.length > 1) {
+        const group = {
+          pontuacao,
+          sectors: sectors.map((s) => ({
+            rank: s.RANK,
+            nome: s.SETOR,
+            pontuacao: s.PONTUACAO,
+          })),
+          affectedPositions: sectors.map((s) => s.RANK).sort((a, b) => a - b),
+        };
+
+        tiedGroups.push(group);
+
+        // Verificar se é empate na primeira posição (vencedor)
+        if (sectors.some((s) => s.RANK === 1)) {
+          winnerTieGroup = group;
+        }
+      }
+    }
+
+    const hasGlobalTies = tiedGroups.length > 0;
+
+    if (hasGlobalTies) {
+      console.log(
+        `[RankingService] ⚠️ Empates detectados em ${tiedGroups.length} grupo(s):`,
+        tiedGroups.map(
+          (g) => `Pontuação ${g.pontuacao}: ${g.sectors.length} setores`
+        )
+      );
+
+      if (winnerTieGroup) {
+        console.log(
+          `[RankingService] 🏆 EMPATE NA PRIMEIRA POSIÇÃO: ${winnerTieGroup.sectors.length} setores empatados com ${winnerTieGroup.pontuacao} pontos`
+        );
+      }
+    } else {
+      console.log(
+        '[RankingService] ✅ Nenhum empate detectado no ranking global.'
+      );
+    }
+
+    return {
+      hasGlobalTies,
+      tiedGroups,
+      winnerTieGroup,
+    };
+  }
+
+  /**
+   * 🆕 RESOLVE empate global definindo um vencedor específico
+   * Ajusta o ranking para que o setor escolhido fique em 1º lugar.
+   * @param rankingData Array do ranking atual
+   * @param winnerSectorName Nome do setor escolhido como vencedor
+   * @returns Ranking ajustado com empate resolvido
+   */
+  resolveGlobalTie(
+    rankingData: EntradaRanking[],
+    winnerSectorName: string
+  ): {
+    success: boolean;
+    adjustedRanking: EntradaRanking[];
+    message: string;
+    tieResolved: boolean;
+  } {
+    console.log(
+      `[RankingService] 🎯 Resolvendo empate global: ${winnerSectorName} escolhido como vencedor`
+    );
+
+    if (!rankingData || rankingData.length === 0) {
+      return {
+        success: false,
+        adjustedRanking: [],
+        message: 'Ranking vazio',
+        tieResolved: false,
+      };
+    }
+
+    // Verificar se o setor existe no ranking
+    const winnerEntry = rankingData.find(
+      (entry) => entry.SETOR === winnerSectorName
+    );
+    if (!winnerEntry) {
+      return {
+        success: false,
+        adjustedRanking: rankingData,
+        message: `Setor '${winnerSectorName}' não encontrado no ranking`,
+        tieResolved: false,
+      };
+    }
+
+    // Detectar empates primeiro
+    const tieAnalysis = this.detectGlobalTies(rankingData);
+
+    if (!tieAnalysis.hasGlobalTies) {
+      return {
+        success: true,
+        adjustedRanking: rankingData,
+        message: 'Nenhum empate para resolver',
+        tieResolved: false,
+      };
+    }
+
+    // Verificar se o vencedor escolhido está realmente empatado na primeira posição
+    const winnerTieGroup = tieAnalysis.winnerTieGroup;
+    if (
+      !winnerTieGroup ||
+      !winnerTieGroup.sectors.some((s) => s.nome === winnerSectorName)
+    ) {
+      return {
+        success: false,
+        adjustedRanking: rankingData,
+        message: `Setor '${winnerSectorName}' não está empatado na primeira posição`,
+        tieResolved: false,
+      };
+    }
+
+    // Criar ranking ajustado
+    const adjustedRanking = [...rankingData];
+
+    // 1. Colocar o vencedor escolhido em 1º lugar
+    const winnerIndex = adjustedRanking.findIndex(
+      (entry) => entry.SETOR === winnerSectorName
+    );
+    if (winnerIndex !== -1) {
+      adjustedRanking[winnerIndex]!.RANK = 1;
+    }
+
+    // 2. Ajustar ranks dos outros setores empatados
+    let nextRank = 2;
+    for (const sector of winnerTieGroup.sectors) {
+      if (sector.nome !== winnerSectorName) {
+        const sectorIndex = adjustedRanking.findIndex(
+          (entry) => entry.SETOR === sector.nome
+        );
+        if (sectorIndex !== -1) {
+          adjustedRanking[sectorIndex]!.RANK = nextRank;
+          nextRank++;
+        }
+      }
+    }
+
+    // 3. Reordenar array por rank
+    adjustedRanking.sort((a, b) => a.RANK - b.RANK);
+
+    console.log(
+      `[RankingService] ✅ Empate resolvido: ${winnerSectorName} definido como 1º lugar`
+    );
+
+    return {
+      success: true,
+      adjustedRanking,
+      message: `Empate resolvido: ${winnerSectorName} definido como vencedor oficial`,
+      tieResolved: true,
+    };
+  }
+
+  /**
+   * 🆕 GERA ranking com informações de empate para análise do diretor
+   * Retorna o ranking atual junto com análise detalhada de empates.
+   * @param period Período para análise (opcional)
+   * @returns Ranking com análise de empates completa
+   */
+  async getRankingWithTieAnalysis(period?: string): Promise<{
+    ranking: EntradaRanking[];
+    tieAnalysis: {
+      hasGlobalTies: boolean;
+      tiedGroups: Array<{
+        pontuacao: number;
+        sectors: Array<{ rank: number; nome: string; pontuacao: number }>;
+        affectedPositions: number[];
+      }>;
+      winnerTieGroup?: {
+        pontuacao: number;
+        sectors: Array<{ rank: number; nome: string; pontuacao: number }>;
+      };
+    };
+    metadata: {
+      period: string;
+      periodStatus: string;
+      generatedAt: Date;
+      requiresDirectorDecision: boolean;
+    };
+  }> {
+    console.log(
+      `[RankingService] 📊 Gerando ranking com análise de empates para período: ${period || 'atual'}`
+    );
+
+    // Obter ranking atual
+    const { ranking } = await this.calculate(period);
+
+    // Analisar empates
+    const tieAnalysis = this.detectGlobalTies(ranking);
+
+    // Obter informações do período
+    const competitionPeriod = await this.getValidCompetitionPeriod(period);
+
+    // Determinar se requer decisão do diretor
+    const requiresDirectorDecision =
+      tieAnalysis.hasGlobalTies &&
+      !!tieAnalysis.winnerTieGroup &&
+      competitionPeriod.status === 'PRE_FECHADA';
+
+    const result = {
+      ranking,
+      tieAnalysis,
+      metadata: {
+        period: competitionPeriod.mesAno,
+        periodStatus: competitionPeriod.status,
+        generatedAt: new Date(),
+        requiresDirectorDecision,
+      },
+    };
+
+    if (requiresDirectorDecision) {
+      console.log(
+        `[RankingService] ⚠️ ATENÇÃO: Período ${competitionPeriod.mesAno} em PRE_FECHADA com empate na primeira posição. Decisão do diretor necessária.`
+      );
+    }
+
+    return result;
+  }
+
+  /**
+   * 🆕 VALIDA se um setor pode ser escolhido como vencedor em caso de empate
+   * @param sectorName Nome do setor
+   * @param period Período para validação
+   * @returns Informações sobre a eligibilidade
+   */
+  async validateSectorForTieResolution(
+    sectorName: string,
+    period?: string
+  ): Promise<{
+    isEligible: boolean;
+    reason: string;
+    sectorInfo?: {
+      id: number;
+      nome: string;
+      pontuacao: number;
+      rank: number;
+    };
+  }> {
+    console.log(
+      `[RankingService] ✅ Validando elegibilidade do setor '${sectorName}' para resolução de empate`
+    );
+
+    try {
+      // Obter ranking com análise de empates
+      const { ranking, tieAnalysis } =
+        await this.getRankingWithTieAnalysis(period);
+
+      // Verificar se setor existe no ranking
+      const sectorEntry = ranking.find((entry) => entry.SETOR === sectorName);
+      if (!sectorEntry) {
+        return {
+          isEligible: false,
+          reason: `Setor '${sectorName}' não encontrado no ranking atual`,
+        };
+      }
+
+      // Verificar se há empates
+      if (!tieAnalysis.hasGlobalTies) {
+        return {
+          isEligible: false,
+          reason: 'Não há empates para resolver no ranking atual',
+          sectorInfo: {
+            id: 0, // TODO: Buscar ID real do setor
+            nome: sectorEntry.SETOR,
+            pontuacao: sectorEntry.PONTUACAO,
+            rank: sectorEntry.RANK,
+          },
+        };
+      }
+
+      // Verificar se setor está empatado na primeira posição
+      const winnerTieGroup = tieAnalysis.winnerTieGroup;
+      if (
+        !winnerTieGroup ||
+        !winnerTieGroup.sectors.some((s) => s.nome === sectorName)
+      ) {
+        return {
+          isEligible: false,
+          reason: `Setor '${sectorName}' não está empatado na primeira posição`,
+          sectorInfo: {
+            id: 0,
+            nome: sectorEntry.SETOR,
+            pontuacao: sectorEntry.PONTUACAO,
+            rank: sectorEntry.RANK,
+          },
+        };
+      }
+
+      return {
+        isEligible: true,
+        reason: `Setor '${sectorName}' elegível para resolução de empate na primeira posição`,
+        sectorInfo: {
+          id: 0, // TODO: Buscar ID real do setor
+          nome: sectorEntry.SETOR,
+          pontuacao: sectorEntry.PONTUACAO,
+          rank: sectorEntry.RANK,
+        },
+      };
+    } catch (error) {
+      console.error(
+        `[RankingService] ❌ Erro na validação de elegibilidade:`,
+        error
+      );
+
+      return {
+        isEligible: false,
+        reason: `Erro na validação: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
+      };
+    }
   }
 
   // ========== MÉTODOS DE COMPATIBILIDADE (REMOVIDOS) ==========

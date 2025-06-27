@@ -1,9 +1,10 @@
 // apps/api/src/modules/periods/period.service.ts (VERSÃO INICIAL COMPLETA)
 import { AppDataSource } from '@/database/data-source';
 import { CompetitionPeriodEntity } from '@/entity/competition-period.entity';
+import { SectorEntity } from '@/entity/sector.entity';
 import { UserEntity } from '@/entity/user.entity';
 import 'reflect-metadata';
-import { Repository } from 'typeorm'; // Importar operadores
+import { LessThan, Repository } from 'typeorm'; // Importar operadores
 import { AuditLogService } from '../audit/audit.service';
 import { CalculationService } from '../calculation/calculation.service';
 import { ExpurgoAutomationHook } from '../expurgos/expurgo-automation.hook';
@@ -13,12 +14,14 @@ export class CompetitionPeriodService {
   private calculationService: CalculationService; // Já estava declarado
   private auditLogService: AuditLogService; // Já estava declarado
   private automationHook: ExpurgoAutomationHook;
+  private sectorRepo: Repository<SectorEntity>;
 
   constructor() {
     this.periodRepo = AppDataSource.getRepository(CompetitionPeriodEntity);
     this.calculationService = new CalculationService();
     this.auditLogService = new AuditLogService();
     this.automationHook = new ExpurgoAutomationHook();
+    this.sectorRepo = AppDataSource.getRepository(SectorEntity);
 
     console.log(
       '[CompetitionPeriodService] Instanciado e repositório configurado.'
@@ -280,15 +283,21 @@ export class CompetitionPeriodService {
         );
       });
 
-    // TODO: Registrar no AuditLog
-    // await this.auditLogService.registerLog({
-    //   actionType: 'PERIODO_INICIADO',
-    //   entityType: 'CompetitionPeriodEntity',
-    //   entityId: updatedPeriod.id,
-    //   details: { mesAno: updatedPeriod.mesAno, novoStatus: 'ATIVA' },
-    //   userId: actingUser.id,
-    //   userName: actingUser.nome,
-    // });
+    await this.auditLogService.createLog({
+      actionType: 'PERIODO_INICIADO',
+      entityType: 'CompetitionPeriodEntity',
+      entityId: updatedPeriod.id.toString(),
+      details: {
+        mesAno: updatedPeriod.mesAno,
+        novoStatus: 'ATIVA',
+        dataInicio: updatedPeriod.dataInicio,
+        dataFim: updatedPeriod.dataFim,
+      },
+      userId: actingUser.id,
+      userName: actingUser.nome,
+      justification: 'Período iniciado manualmente - todas as metas definidas',
+      competitionPeriodId: updatedPeriod.id,
+    });
 
     return updatedPeriod;
   }
@@ -376,15 +385,21 @@ export class CompetitionPeriodService {
         );
       });
 
-    // TODO: Registrar no AuditLog
-    // await this.auditLogService.registerLog({
-    //   actionType: 'PERIODO_FECHADO',
-    //   entityType: 'CompetitionPeriodEntity',
-    //   entityId: updatedPeriod.id,
-    //   details: { mesAno: updatedPeriod.mesAno, novoStatus: 'FECHADA' },
-    //   userId: actingUser.id,
-    //   userName: actingUser.nome,
-    // });
+    await this.auditLogService.createLog({
+      actionType: 'PERIODO_FECHADO',
+      entityType: 'CompetitionPeriodEntity',
+      entityId: updatedPeriod.id.toString(),
+      details: {
+        mesAno: updatedPeriod.mesAno,
+        novoStatus: 'FECHADA',
+        fechadoPorUsuario: actingUser.nome,
+        dataFechamento: updatedPeriod.fechadaEm,
+      },
+      userId: actingUser.id,
+      userName: actingUser.nome,
+      justification: 'Período fechado manualmente - cálculo final disparado',
+      competitionPeriodId: updatedPeriod.id,
+    });
 
     return updatedPeriod;
   }
@@ -397,6 +412,390 @@ export class CompetitionPeriodService {
         error
       );
       return false;
+    }
+  }
+
+  /**
+   * 🆕 PRÉ-FECHA um período automaticamente (ATIVA → PRE_FECHADA)
+   * Este método é chamado automaticamente pelo scheduler quando a data de fim do período chega.
+   * @param periodId ID do período a ser pré-fechado
+   * @param triggeredBy Origem do trigger ('automatic' | 'manual')
+   * @returns Promise<CompetitionPeriodEntity> O período atualizado
+   * @throws Error se o período não puder ser pré-fechado
+   */
+  async preClosePeriod(
+    periodId: number,
+    triggeredBy: 'automatic' | 'manual' = 'automatic'
+  ): Promise<CompetitionPeriodEntity> {
+    console.log(
+      `[PeriodService] Iniciando pré-fechamento do período ID: ${periodId} (${triggeredBy})`
+    );
+
+    const period = await this.periodRepo.findOneBy({ id: periodId });
+
+    if (!period) {
+      throw new Error(`Período com ID ${periodId} não encontrado.`);
+    }
+
+    // Validar se pode ser pré-fechado
+    if (!period.canBePreClosed()) {
+      throw new Error(
+        `Período ${period.mesAno} (ID: ${periodId}) não pode ser pré-fechado. Status atual: ${period.status}.`
+      );
+    }
+
+    // Validação da Data: Só pré-fecha se a data de fim já passou
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const periodEndDate = new Date(period.dataFim + 'T00:00:00');
+
+    if (today <= periodEndDate) {
+      throw new Error(
+        `Período ${period.mesAno} só pode ser pré-fechado após ${period.dataFim}. Data atual: ${today.toISOString().split('T')[0]}`
+      );
+    }
+
+    // Executar pré-fechamento
+    period.status = 'PRE_FECHADA';
+    const preClosedPeriod = await this.periodRepo.save(period);
+
+    console.log(
+      `[PeriodService] Período ${preClosedPeriod.mesAno} (ID: ${preClosedPeriod.id}) pré-fechado com sucesso.`
+    );
+
+    // Disparar cálculo pré-final
+    console.log(
+      `[PeriodService] Disparando cálculo pré-final para o período ${preClosedPeriod.mesAno}...`
+    );
+
+    try {
+      await this.calculationService.calculateAndSavePeriodRanking(
+        preClosedPeriod.mesAno
+      );
+      console.log(
+        `[PeriodService] Cálculo pré-final para ${preClosedPeriod.mesAno} concluído.`
+      );
+    } catch (error) {
+      console.error(
+        `[PeriodService] Erro no cálculo pré-final para ${preClosedPeriod.mesAno}:`,
+        error
+      );
+      // Não falhamos o pré-fechamento por causa do cálculo
+    }
+
+    // Hook de automação para pré-fechamento
+    console.log(
+      `[PeriodService] 🚀 Disparando hook de automação para período pré-fechado...`
+    );
+
+    this.automationHook
+      .onPeriodStatusChanged(
+        preClosedPeriod.id,
+        'ATIVA',
+        'PRE_FECHADA',
+        0 // Sistema automático
+      )
+      .then((result) => {
+        console.log(
+          `[PeriodService] ✅ Hook de pré-fechamento: ${result.message}`
+        );
+      })
+      .catch((error) => {
+        console.error(
+          `[PeriodService] ❌ Erro no hook de pré-fechamento:`,
+          error
+        );
+      });
+
+    await this.auditLogService.createLog({
+      actionType: 'PERIODO_PRE_FECHADO',
+      entityType: 'CompetitionPeriodEntity',
+      entityId: preClosedPeriod.id.toString(),
+      details: {
+        mesAno: preClosedPeriod.mesAno,
+        novoStatus: 'PRE_FECHADA',
+        triggeredBy,
+        dataPreFechamento: new Date(),
+      },
+      userId: triggeredBy === 'automatic' ? null : 1,
+      userName: triggeredBy === 'automatic' ? 'SISTEMA_AUTOMATICO' : 'Admin',
+      justification: `Período pré-fechado ${triggeredBy === 'automatic' ? 'automaticamente pelo scheduler' : 'manualmente'}`,
+      competitionPeriodId: preClosedPeriod.id,
+    });
+
+    return preClosedPeriod;
+  }
+
+  /**
+   * 🆕 OFICIALIZA um período (PRE_FECHADA → FECHADA) com definição de vencedor
+   * Este método só pode ser executado por um usuário com role DIRETOR.
+   * @param periodId ID do período a ser oficializado
+   * @param winnerSectorId ID do setor vencedor oficial
+   * @param directorUser Usuário diretor que está oficializando
+   * @param tieResolvedBy ID do diretor que resolveu empate (opcional)
+   * @returns Promise<CompetitionPeriodEntity> O período oficializado
+   * @throws Error se não puder ser oficializado ou usuário não for diretor
+   */
+  async officializePeriod(
+    periodId: number,
+    winnerSectorId: number,
+    directorUser: UserEntity,
+    tieResolvedBy?: number
+  ): Promise<CompetitionPeriodEntity> {
+    console.log(
+      `[PeriodService] Tentando oficializar período ID: ${periodId} por Diretor ID: ${directorUser.id}`
+    );
+
+    const period = await this.periodRepo.findOneBy({ id: periodId });
+
+    if (!period) {
+      throw new Error(`Período com ID ${periodId} não encontrado.`);
+    }
+
+    // Validar se pode ser oficializado
+    if (!period.canBeOfficialized()) {
+      throw new Error(
+        `Período ${period.mesAno} (ID: ${periodId}) não pode ser oficializado. Status atual: ${period.status}.`
+      );
+    }
+
+    // TODO: Validar role DIRETOR quando RBAC estiver implementado
+    // if (!directorUser.hasRole('DIRETOR')) {
+    //   throw new Error('Apenas usuários com role DIRETOR podem oficializar períodos.');
+    // }
+
+    // Validar se setor vencedor existe
+    const winnerSector = await this.sectorRepo.findOneBy({
+      id: winnerSectorId,
+      ativo: true,
+    });
+
+    if (!winnerSector) {
+      throw new Error(
+        `Setor vencedor com ID ${winnerSectorId} não encontrado ou não está ativo.`
+      );
+    }
+
+    // Executar oficialização
+    period.status = 'FECHADA';
+    period.setorVencedorId = winnerSectorId;
+    period.oficializadaPorUserId = directorUser.id;
+    period.oficializadaEm = new Date();
+
+    if (tieResolvedBy) {
+      period.vencedorEmpateDefinidoPor = tieResolvedBy;
+    }
+
+    const officializedPeriod = await this.periodRepo.save(period);
+
+    console.log(
+      `[PeriodService] Período ${officializedPeriod.mesAno} (ID: ${officializedPeriod.id}) oficializado com sucesso. Vencedor: ${winnerSector.nome}`
+    );
+
+    // Hook de automação para oficialização
+    console.log(
+      `[PeriodService] 🚀 Disparando hook de automação para período oficializado...`
+    );
+
+    this.automationHook
+      .onPeriodStatusChanged(
+        officializedPeriod.id,
+        'PRE_FECHADA',
+        'FECHADA',
+        directorUser.id
+      )
+      .then((result) => {
+        console.log(
+          `[PeriodService] ✅ Hook de oficialização: ${result.message}`
+        );
+      })
+      .catch((error) => {
+        console.error(
+          `[PeriodService] ❌ Erro no hook de oficialização:`,
+          error
+        );
+      });
+
+    await this.auditLogService.createLog({
+      actionType: 'PERIODO_OFICIALIZADO',
+      entityType: 'CompetitionPeriodEntity',
+      entityId: officializedPeriod.id.toString(),
+      details: {
+        mesAno: officializedPeriod.mesAno,
+        vencedorSetor: winnerSector.nome,
+        vencedorSetorId: winnerSectorId,
+        empateResolvido: !!tieResolvedBy,
+        oficializadoPorUsuario: directorUser.nome,
+        dataOficializacao: officializedPeriod.oficializadaEm,
+      },
+      userId: directorUser.id,
+      userName: directorUser.nome,
+      justification: `Período oficializado - vencedor definido: ${winnerSector.nome}${tieResolvedBy ? ' (empate resolvido)' : ''}`,
+      competitionPeriodId: officializedPeriod.id,
+    });
+
+    return officializedPeriod;
+  }
+
+  /**
+   * 🆕 BUSCA períodos que precisam ser pré-fechados automaticamente
+   * Usado pelo scheduler para identificar períodos ATIVA que já passaram da data de fim.
+   * @returns Promise<CompetitionPeriodEntity[]> Lista de períodos elegíveis para pré-fechamento
+   */
+  async findPeriodsReadyForPreClosure(): Promise<CompetitionPeriodEntity[]> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().split('T')[0];
+
+    console.log(
+      `[PeriodService] Buscando períodos elegíveis para pré-fechamento (data fim < ${todayStr})...`
+    );
+
+    const eligiblePeriods = await this.periodRepo.find({
+      where: {
+        status: 'ATIVA',
+        dataFim: LessThan(todayStr!),
+      },
+      order: { dataFim: 'ASC' },
+    });
+
+    console.log(
+      `[PeriodService] Encontrados ${eligiblePeriods.length} períodos elegíveis para pré-fechamento.`
+    );
+
+    return eligiblePeriods;
+  }
+
+  /**
+   * 🆕 BUSCA períodos que estão aguardando oficialização
+   * @returns Promise<CompetitionPeriodEntity[]> Lista de períodos em PRE_FECHADA
+   */
+  async findPeriodsAwaitingOfficialization(): Promise<
+    CompetitionPeriodEntity[]
+  > {
+    console.log(
+      '[PeriodService] Buscando períodos aguardando oficialização...'
+    );
+
+    const awaitingPeriods = await this.periodRepo.find({
+      where: { status: 'PRE_FECHADA' },
+      relations: ['setorVencedor'],
+      order: { dataFim: 'DESC' },
+    });
+
+    console.log(
+      `[PeriodService] Encontrados ${awaitingPeriods.length} períodos aguardando oficialização.`
+    );
+
+    return awaitingPeriods;
+  }
+
+  /**
+   * 🆕 EXECUTA processo automatizado de transição de vigências
+   * Este método é chamado pelo scheduler e executa:
+   * 1. Pré-fecha períodos ATIVA que terminaram
+   * 2. Cria próxima vigência em PLANEJAMENTO se necessário
+   * @returns Promise<{ preClosedPeriods: number, newPeriodsCreated: number }>
+   */
+  async executeAutomaticPeriodTransition(): Promise<{
+    preClosedPeriods: number;
+    newPeriodsCreated: number;
+    errors: string[];
+  }> {
+    console.log(
+      '[PeriodService] 🤖 Iniciando transição automática de vigências...'
+    );
+
+    const result = {
+      preClosedPeriods: 0,
+      newPeriodsCreated: 0,
+      errors: [] as string[],
+    };
+
+    try {
+      // 1. Buscar e pré-fechar períodos elegíveis
+      const eligiblePeriods = await this.findPeriodsReadyForPreClosure();
+
+      for (const period of eligiblePeriods) {
+        try {
+          await this.preClosePeriod(period.id, 'automatic');
+          result.preClosedPeriods++;
+
+          console.log(
+            `[PeriodService] ✅ Período ${period.mesAno} pré-fechado automaticamente.`
+          );
+        } catch (error) {
+          const errorMsg = `Erro ao pré-fechar período ${period.mesAno}: ${error instanceof Error ? error.message : error}`;
+          console.error(`[PeriodService] ❌ ${errorMsg}`);
+          result.errors.push(errorMsg);
+        }
+      }
+
+      // 2. Verificar se precisa criar próxima vigência
+      try {
+        const planningPeriod = await this.findOrCreatePlanningPeriod();
+
+        // Se retornou um período recém-criado, contamos
+        if (planningPeriod && eligiblePeriods.length > 0) {
+          result.newPeriodsCreated = 1;
+          console.log(
+            `[PeriodService] ✅ Nova vigência criada: ${planningPeriod.mesAno}`
+          );
+        }
+      } catch (error) {
+        const errorMsg = `Erro ao criar próxima vigência: ${error instanceof Error ? error.message : error}`;
+        console.error(`[PeriodService] ❌ ${errorMsg}`);
+        result.errors.push(errorMsg);
+      }
+
+      console.log(
+        `[PeriodService] 🏁 Transição automática concluída: ${result.preClosedPeriods} pré-fechados, ${result.newPeriodsCreated} criados, ${result.errors.length} erros.`
+      );
+
+      return result;
+    } catch (error) {
+      const errorMsg = `Erro geral na transição automática: ${error instanceof Error ? error.message : error}`;
+      console.error(`[PeriodService] ❌ ${errorMsg}`);
+      result.errors.push(errorMsg);
+      return result;
+    }
+  }
+
+  /**
+   * 🆕 BUSCA período por ID
+   * @param periodId ID do período
+   * @returns Promise<CompetitionPeriodEntity | null>
+   */
+  async findPeriodById(
+    periodId: number
+  ): Promise<CompetitionPeriodEntity | null> {
+    console.log(`[PeriodService] Buscando período ID: ${periodId}`);
+
+    try {
+      const period = await this.periodRepo.findOne({
+        where: { id: periodId },
+        relations: [
+          'setorVencedor',
+          'oficializadaPor',
+          'vencedorEmpateDefinidoPorUsuario',
+        ],
+      });
+
+      if (period) {
+        console.log(
+          `[PeriodService] Período encontrado: ${period.mesAno} (Status: ${period.status})`
+        );
+      } else {
+        console.log(`[PeriodService] Período ID ${periodId} não encontrado.`);
+      }
+
+      return period;
+    } catch (error) {
+      console.error(
+        `[PeriodService] Erro ao buscar período ID ${periodId}:`,
+        error
+      );
+      throw new Error('Falha ao buscar período.');
     }
   }
 }
