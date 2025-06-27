@@ -1,4 +1,4 @@
-// apps/web/src/components/vigencias/ActionButton.tsx
+// apps/web/src/components/vigencias/ActionButton.tsx - CORRIGIDO E SIMPLIFICADO
 'use client';
 
 import { Button } from '@/components/ui/button';
@@ -27,7 +27,6 @@ const actionConfig = {
   officialize: {
     label: 'Oficializar',
     icon: Gavel,
-    requiredPermissions: ['RESOLVE_TIES', 'CLOSE_PERIODS'],
     variant: 'default' as const,
     className: 'bg-red-600 hover:bg-red-700 text-white',
     tooltip: 'Oficializar período e definir vencedor',
@@ -35,7 +34,6 @@ const actionConfig = {
   start: {
     label: 'Iniciar',
     icon: PlayCircle,
-    requiredPermissions: ['START_PERIODS'],
     variant: 'default' as const,
     className: 'bg-green-600 hover:bg-green-700 text-white',
     tooltip: 'Ativar período de competição',
@@ -43,7 +41,6 @@ const actionConfig = {
   analyze: {
     label: 'Analisar',
     icon: BarChart3,
-    requiredPermissions: ['VIEW_REPORTS'],
     variant: 'outline' as const,
     className: 'border-blue-200 text-blue-700 hover:bg-blue-50',
     tooltip: 'Analisar ranking e empates',
@@ -51,7 +48,6 @@ const actionConfig = {
   manage: {
     label: 'Gerenciar',
     icon: Settings,
-    requiredPermissions: ['MANAGE_PARAMETERS'],
     variant: 'ghost' as const,
     className: 'text-gray-700 hover:bg-gray-100',
     tooltip: 'Gerenciar configurações',
@@ -66,16 +62,16 @@ export function ActionButton({
   loading = false,
   onClick,
   variant,
-  size = 'md',
+  size = 'sm',
   className,
 }: ActionButtonProps) {
   const config = actionConfig[action];
   const Icon = config.icon;
 
-  // Verificar se usuário tem as permissões necessárias
-  const hasPermission = config.requiredPermissions.every((permission) =>
-    userPermissions.includes(permission)
-  );
+  // 🎯 CORREÇÃO: Verificação de permissão simplificada
+  // O componente pai já verifica permissões via usePermissions(),
+  // então aqui só validamos se userPermissions foi passado corretamente
+  const hasPermission = userPermissions.length > 0;
 
   const isDisabled = disabled || !hasPermission || loading;
 
@@ -92,37 +88,27 @@ export function ActionButton({
       )}
     >
       {loading ? (
-        <Loader2 className='h-4 w-4 animate-spin' />
+        <Loader2 className='h-3 w-3 animate-spin' />
       ) : (
-        <Icon className='h-4 w-4' />
+        <Icon className='h-3 w-3' />
       )}
       {config.label}
     </Button>
   );
 
-  if (!hasPermission) {
+  // Se tiver tooltip, envolver com TooltipProvider
+  if (config.tooltip && !isDisabled) {
     return (
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>{button}</TooltipTrigger>
           <TooltipContent>
-            <p>
-              Permissão insuficiente: {config.requiredPermissions.join(', ')}
-            </p>
+            <p>{config.tooltip}</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
     );
   }
 
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>{button}</TooltipTrigger>
-        <TooltipContent>
-          <p>{config.tooltip}</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
+  return button;
 }

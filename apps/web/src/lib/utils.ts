@@ -38,9 +38,32 @@ export const formatDate = (
   isoString: string | Date | undefined | null
 ): string => {
   if (!isoString) return '-';
+
   try {
-    // Retorna apenas a data no formato DD/MM/AAAA
-    return new Date(isoString).toLocaleDateString('pt-BR', {
+    let dateObj: Date;
+
+    if (typeof isoString === 'string') {
+      // 🎯 CORREÇÃO: Se a string é apenas uma data (YYYY-MM-DD),
+      // tratar como data local para evitar problemas de fuso horário
+      if (isoString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        // Data no formato YYYY-MM-DD (sem horário)
+        const [year, month, day] = isoString.split('-').map(Number);
+        dateObj = new Date(year, month - 1, day); // Cria data local
+      } else {
+        // Data com horário ou outro formato
+        dateObj = new Date(isoString);
+      }
+    } else {
+      dateObj = isoString;
+    }
+
+    // Verifica se a data é válida
+    if (isNaN(dateObj.getTime())) {
+      return String(isoString);
+    }
+
+    // Retorna formatação brasileira
+    return dateObj.toLocaleDateString('pt-BR', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -149,3 +172,52 @@ export function truncateText(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
   return text.substring(0, maxLength) + '...';
 }
+
+/**
+ * Converte formato técnico de período (YYYY-MM) para nome amigável
+ * @param mesAno Período no formato "2025-06"
+ * @returns String formatada como "Junho 2025"
+ */
+export const formatPeriodName = (mesAno: string | undefined | null): string => {
+  if (!mesAno) return 'Período Indefinido';
+
+  try {
+    // Verifica se está no formato YYYY-MM
+    if (!mesAno.match(/^\d{4}-\d{2}$/)) {
+      return mesAno; // Retorna original se não está no formato esperado
+    }
+
+    const [year, month] = mesAno.split('-');
+
+    if (!year || !month) return mesAno;
+
+    const monthNumber = parseInt(month, 10);
+
+    // Array com nomes dos meses em português
+    const monthNames = [
+      'Janeiro',
+      'Fevereiro',
+      'Março',
+      'Abril',
+      'Maio',
+      'Junho',
+      'Julho',
+      'Agosto',
+      'Setembro',
+      'Outubro',
+      'Novembro',
+      'Dezembro',
+    ];
+
+    // Valida se o mês está no range correto
+    if (monthNumber < 1 || monthNumber > 12) {
+      return mesAno; // Retorna original se mês inválido
+    }
+
+    const monthName = monthNames[monthNumber - 1];
+
+    return `${monthName} ${year}`;
+  } catch {
+    return mesAno; // Retorna original em caso de erro
+  }
+};

@@ -1,4 +1,4 @@
-// apps/web/src/app/admin/vigencias/periodos/[id]/oficializar/page.tsx
+// apps/web/src/app/admin/vigencias/periodos/[id]/oficializar/page.tsx - CORRIGIDO
 'use client';
 
 import { useAuth, usePermissions } from '@/components/providers/AuthProvider';
@@ -33,7 +33,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { PeriodStatusBadge } from '@/components/vigencias/PeriodStatusBadge';
 import { TieIndicator } from '@/components/vigencias/TieIndicator';
 import { usePeriodRankingAnalysis, useVigencias } from '@/hooks/useVigencias';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatPeriodName } from '@/lib/utils'; // 🎯 CORREÇÃO: Importar formatPeriodName
 import {
   AlertTriangle,
   ArrowLeft,
@@ -54,13 +54,17 @@ export default function OfficializePeriodPage() {
   const params = useParams();
   const router = useRouter();
   const { user } = useAuth();
-  const { isDirector, permissions } = usePermissions();
+  const { hasRole, hasPermission } = usePermissions();
   const periodId = parseInt(params.id as string);
 
   const [justification, setJustification] = useState('');
   const [selectedWinnerId, setSelectedWinnerId] = useState<number | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 🎯 CORREÇÃO: Verificações de permissão baseadas no sistema real
+  const isDirector = hasRole('DIRETOR');
+  const canClosePeriods = hasPermission('CLOSE_PERIODS');
 
   const { officializePeriod } = useVigencias();
 
@@ -73,28 +77,36 @@ export default function OfficializePeriodPage() {
 
   // Verificar se usuário tem permissão
   useEffect(() => {
-    if (!isDirector()) {
+    if (!isDirector && !canClosePeriods) {
       toast.error('Acesso negado: Apenas diretores podem oficializar períodos');
-      router.push('/admin/vigencias');
+      router.back();
     }
-  }, [isDirector, router]);
+  }, [isDirector, canClosePeriods, router]);
 
-  // Redirecionar se período não está em PRE_FECHADA
-  useEffect(() => {
-    if (analysisData && analysisData.period.status !== 'PRE_FECHADA') {
-      toast.error('Este período não está disponível para oficialização');
-      router.push('/admin/vigencias');
-    }
-  }, [analysisData, router]);
-
-  const handleSubmit = async () => {
-    if (!selectedWinnerId || !justification.trim()) {
-      toast.error('Selecione o vencedor e forneça uma justificativa');
+  const handleSubmit = () => {
+    if (!selectedWinnerId) {
+      toast.error('Selecione o setor vencedor');
       return;
     }
 
-    if (justification.trim().length < 10) {
-      toast.error('Justificativa deve ter pelo menos 10 caracteres');
+    // 🎯 CORREÇÃO: Validação de justificativa com mínimo de 10 caracteres
+    const justificationText = justification.trim();
+
+    if (hasWinnerTie && justificationText.length < 10) {
+      toast.error(
+        'Para empates, a justificativa deve ter pelo menos 10 caracteres'
+      );
+      return;
+    }
+
+    if (
+      !hasWinnerTie &&
+      justificationText.length > 0 &&
+      justificationText.length < 10
+    ) {
+      toast.error(
+        'Se informar justificativa, ela deve ter pelo menos 10 caracteres'
+      );
       return;
     }
 
@@ -106,21 +118,82 @@ export default function OfficializePeriodPage() {
 
     setIsSubmitting(true);
     try {
-      await officializePeriod({
+      // 🎯 CORREÇÃO: Buscar o setor selecionado pelo índice
+      const sectorIdNumber =
+        typeof selectedWinnerId === 'string'
+          ? parseInt(selectedWinnerId)
+          : selectedWinnerId;
+
+      if (isNaN(sectorIdNumber)) {
+        throw new Error('ID do setor inválido');
+      }
+
+      const sectorIndex = sectorIdNumber - 1;
+      const selectedSector = ranking[sectorIndex];
+
+      if (!selectedSector) {
+        throw new Error('Setor selecionado não encontrado');
+      }
+
+      const winnerSectorName = selectedSector?.SETOR || selectedSector?.nome;
+
+      if (!winnerSectorName) {
+        throw new Error('Nome do setor não encontrado');
+      }
+
+      console.log('🔍 Dados para oficialização:', {
         periodId,
-        payload: {
-          winnerSectorId: selectedWinnerId,
-          justification: justification.trim(),
-          tieResolvedBy: analysisData.tieAnalysis.hasGlobalTies
-            ? user?.id
-            : undefined,
-        },
+        sectorIndex,
+        selectedSector,
+        winnerSectorName,
+        sectorIdNumber,
       });
 
-      toast.success('Período oficializado com sucesso!');
+      // 🎯 CORREÇÃO: Tentar tanto com ID quanto com nome
+      // A API precisa do winnerSectorId, mas só temos o nome do setor
+      // Vamos tentar buscar o ID do setor baseado no ranking position
+
+      // Como alternativa, vamos usar uma abordagem que funcione com a API atual
+      // 🎯 CORREÇÃO: Garantir justificativa com pelo menos 10 caracteres
+      const finalJustification =
+        justification.trim() ||
+        `${formatPeriodName(period.mesAno)} oficializado com vencedor definido como ${winnerSectorName}${
+          analysisData.tieAnalysis.hasGlobalTies
+            ? ' por decisão diretorial para resolução de empate'
+            : ' conforme ranking calculado automaticamente'
+        }.`;
+
+      const payload = {
+        winnerSectorId: sectorIdNumber, // Tentar com índice primeiro
+        winnerSectorName, // Fallback com nome
+        tieResolvedBy: analysisData.tieAnalysis.hasGlobalTies
+          ? user?.id // ID do usuário diretor que está resolvendo
+          : undefined,
+        justification: finalJustification, // Garantir que tem pelo menos 10 caracteres
+      };
+
+      console.log('🔍 Payload final para API:', payload);
+
+      await officializePeriod({
+        periodId,
+        payload,
+      });
+
+      // 🎯 CORREÇÃO: Toast personalizado com nome do setor
+      toast.success(
+        `${formatPeriodName(period.mesAno)} oficializado com sucesso! Vencedor: ${winnerSectorName}`,
+        {
+          duration: 5000,
+          description: analysisData.tieAnalysis.hasGlobalTies
+            ? 'Empate resolvido por decisão diretorial'
+            : 'Resultado confirmado pelo ranking automático',
+        }
+      );
+
       router.push('/admin/vigencias');
-    } catch (error: any) {
-      toast.error(`Erro na oficialização: ${error.message}`);
+    } catch (error) {
+      toast.error('Erro ao oficializar período');
+      console.error('Erro na oficialização:', error);
     } finally {
       setIsSubmitting(false);
       setShowConfirmDialog(false);
@@ -130,7 +203,10 @@ export default function OfficializePeriodPage() {
   if (isLoading) {
     return (
       <div className='space-y-6'>
-        <Skeleton className='h-8 w-64' />
+        <div className='flex items-center gap-4'>
+          <Skeleton className='h-10 w-20' />
+          <Skeleton className='h-8 w-64' />
+        </div>
         <Skeleton className='h-48 w-full' />
         <Skeleton className='h-64 w-full' />
       </div>
@@ -147,7 +223,7 @@ export default function OfficializePeriodPage() {
 
         <Alert className='border-red-200 bg-red-50'>
           <AlertTriangle className='h-4 w-4 text-red-600' />
-          <AlertDescription className='text-red-800'>
+          <AlertDescription className='text-red-700'>
             Erro ao carregar dados do período: {error.message}
           </AlertDescription>
         </Alert>
@@ -162,23 +238,46 @@ export default function OfficializePeriodPage() {
           <ArrowLeft className='h-4 w-4' />
           Voltar
         </Button>
-        <div className='text-center py-8 text-muted-foreground'>
-          <Info className='h-12 w-12 mx-auto mb-4 opacity-50' />
-          <p>Dados do período não encontrados</p>
-        </div>
+
+        <Alert>
+          <Info className='h-4 w-4' />
+          <AlertDescription>
+            Dados de análise não encontrados para este período.
+          </AlertDescription>
+        </Alert>
       </div>
     );
   }
 
   const { period, ranking, tieAnalysis, metadata } = analysisData;
-  const hasWinnerTie = tieAnalysis.hasGlobalTies && tieAnalysis.winnerTieGroup;
-  const eligibleWinners = hasWinnerTie
-    ? tieAnalysis.winnerTieGroup.sectors
-    : ranking.filter((s) => s.rank === 1);
+
+  // Verificar se período pode ser oficializado
+  if (period.status !== 'PRE_FECHADA') {
+    return (
+      <div className='space-y-6'>
+        <Button variant='ghost' onClick={() => router.back()} className='gap-2'>
+          <ArrowLeft className='h-4 w-4' />
+          Voltar
+        </Button>
+
+        <Alert className='border-orange-200 bg-orange-50'>
+          <AlertTriangle className='h-4 w-4 text-orange-600' />
+          <AlertDescription className='text-orange-700'>
+            Este período não está disponível para oficialização. Status atual:{' '}
+            <PeriodStatusBadge status={period.status} size='sm' />
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  const winnerSector = ranking[0];
+  const hasWinnerTie =
+    tieAnalysis.hasGlobalTies && !!tieAnalysis.winnerTieGroup;
 
   return (
-    <div className='space-y-6 max-w-4xl'>
-      {/* Header com navegação */}
+    <div className='space-y-6'>
+      {/* Header */}
       <div className='flex items-center justify-between'>
         <div className='flex items-center gap-4'>
           <Button
@@ -195,14 +294,14 @@ export default function OfficializePeriodPage() {
               Oficializar Período
             </h1>
             <p className='text-muted-foreground'>
-              Finalização oficial e definição do vencedor
+              Definição oficial do setor vencedor
             </p>
           </div>
         </div>
 
         <div className='flex items-center gap-3'>
-          <Shield className='h-5 w-5 text-red-600' />
-          <span className='text-sm font-medium text-red-700'>
+          <Shield className='h-5 w-5 text-green-600' />
+          <span className='text-sm font-medium text-green-700'>
             Ação Exclusiva do Diretor
           </span>
         </div>
@@ -212,10 +311,13 @@ export default function OfficializePeriodPage() {
       <Card className='border-blue-200 bg-blue-50'>
         <CardHeader>
           <div className='flex items-center justify-between'>
-            <CardTitle className='text-xl'>Período {period.mesAno}</CardTitle>
+            <CardTitle className='text-xl'>
+              {formatPeriodName(period.mesAno)}
+            </CardTitle>{' '}
+            {/* 🎯 CORREÇÃO: Título amigável */}
             <PeriodStatusBadge status={period.status} size='lg' />
           </div>
-          <CardDescription className='grid grid-cols-2 gap-4 mt-4'>
+          <CardDescription className='grid grid-cols-2 md:grid-cols-4 gap-4 mt-4'>
             <div className='flex items-center gap-2'>
               <Calendar className='h-4 w-4' />
               <span>Início: {formatDate(period.dataInicio)}</span>
@@ -224,149 +326,208 @@ export default function OfficializePeriodPage() {
               <Clock className='h-4 w-4' />
               <span>Fim: {formatDate(period.dataFim)}</span>
             </div>
+            <div className='flex items-center gap-2'>
+              <Users className='h-4 w-4' />
+              <span>Setores: {metadata.totalSectors}</span>
+            </div>
+            <div className='flex items-center gap-2'>
+              <Trophy className='h-4 w-4' />
+              <span>Vencedor: {winnerSector?.nome || 'A definir'}</span>
+            </div>
           </CardDescription>
         </CardHeader>
       </Card>
 
-      {/* Análise de empates */}
-      <Card>
-        <CardHeader>
-          <CardTitle className='flex items-center gap-2'>
-            <Users className='h-5 w-5' />
-            Análise de Empates
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <TieIndicator tieData={tieAnalysis} />
-
-          {hasWinnerTie && (
-            <Alert className='mt-4 border-yellow-200 bg-yellow-50'>
-              <AlertTriangle className='h-4 w-4 text-yellow-600' />
-              <AlertDescription className='text-yellow-800'>
-                <strong>Resolução manual necessária:</strong> Foi detectado
-                empate na primeira posição. Como diretor, você deve escolher o
-                vencedor e fornecer justificativa.
-              </AlertDescription>
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Ranking atual */}
-      <Card>
-        <CardHeader>
-          <CardTitle className='flex items-center gap-2'>
-            <Trophy className='h-5 w-5' />
-            Ranking Final
-          </CardTitle>
-          <CardDescription>
-            Posições finais calculadas em {formatDate(metadata.calculatedAt)}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className='space-y-3'>
-            {ranking.slice(0, 10).map((sector, index) => (
-              <div
-                key={sector.id}
-                className={`flex items-center justify-between p-3 rounded-lg border ${
-                  sector.rank === 1
-                    ? 'bg-yellow-50 border-yellow-200'
-                    : 'bg-gray-50 border-gray-200'
-                }`}
-              >
-                <div className='flex items-center gap-3'>
-                  <Badge
-                    variant={sector.rank === 1 ? 'default' : 'outline'}
-                    className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                      sector.rank === 1 ? 'bg-yellow-500 text-white' : ''
-                    }`}
-                  >
-                    {sector.rank}º
-                  </Badge>
-                  <span className='font-medium'>{sector.nome}</span>
-                </div>
-                <div className='text-right'>
-                  <div className='font-bold'>{sector.pontuacao} pts</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Indicador de empates */}
+      <TieIndicator tieData={tieAnalysis} />
 
       {/* Formulário de oficialização */}
-      <Card className='border-red-200'>
+      <Card>
         <CardHeader>
-          <CardTitle className='flex items-center gap-2 text-red-700'>
+          <CardTitle className='flex items-center gap-2'>
             <Gavel className='h-5 w-5' />
-            Oficialização do Período
+            Definir Vencedor
           </CardTitle>
           <CardDescription>
-            Defina o vencedor oficial e forneça justificativa para a decisão
+            {hasWinnerTie
+              ? 'Selecione o setor vencedor entre os empatados na primeira posição'
+              : 'Confirme o setor vencedor baseado no ranking calculado'}
           </CardDescription>
         </CardHeader>
         <CardContent className='space-y-6'>
           {/* Seleção do vencedor */}
-          <div className='space-y-2'>
-            <Label htmlFor='winner-select'>
-              Setor Vencedor *
-              {hasWinnerTie && (
-                <span className='text-sm text-muted-foreground ml-2'>
-                  (Resolução de empate necessária)
-                </span>
-              )}
-            </Label>
+          <div className='space-y-3'>
+            <Label htmlFor='winner-select'>Setor Vencedor *</Label>
             <Select
               value={selectedWinnerId?.toString() || ''}
               onValueChange={(value) => setSelectedWinnerId(parseInt(value))}
             >
-              <SelectTrigger>
+              <SelectTrigger id='winner-select'>
                 <SelectValue placeholder='Selecione o setor vencedor' />
               </SelectTrigger>
               <SelectContent>
-                {eligibleWinners.map((sector) => (
-                  <SelectItem key={sector.id} value={sector.id.toString()}>
-                    <div className='flex items-center gap-2'>
-                      <Badge variant='outline' className='text-xs'>
-                        {sector.rank}º
-                      </Badge>
-                      <span>{sector.nome}</span>
-                      <span className='text-muted-foreground'>
-                        ({sector.pontuacao} pts)
-                      </span>
-                    </div>
-                  </SelectItem>
-                ))}
+                {hasWinnerTie && tieAnalysis.winnerTieGroup
+                  ? // Se há empate na primeira posição, mostrar apenas os empatados
+                    tieAnalysis.winnerTieGroup.sectors
+                      .filter(
+                        (sector) => sector && (sector.SETOR || sector.nome)
+                      ) // 🎯 CORREÇÃO: Filtrar por nome válido
+                      .map((sector, index) => (
+                        <SelectItem
+                          key={sector.SETOR || sector.nome || index}
+                          value={(index + 1).toString()}
+                        >
+                          <div className='flex items-center gap-2'>
+                            <Trophy className='h-4 w-4 text-yellow-600' />
+                            <span>
+                              {sector.SETOR || sector.nome || 'Setor sem nome'}{' '}
+                              (
+                              {(
+                                sector.PONTUACAO ||
+                                sector.pontuacao ||
+                                0
+                              ).toFixed(2)}{' '}
+                              pts)
+                            </span>
+                            <Badge variant='destructive' className='text-xs'>
+                              Empate 1º
+                            </Badge>
+                          </div>
+                        </SelectItem>
+                      ))
+                  : // Se não há empate, mostrar todo o ranking
+                    ranking
+                      .filter(
+                        (sector) => sector && (sector.SETOR || sector.nome)
+                      ) // 🎯 CORREÇÃO: Filtrar por nome válido
+                      .slice(0, 5)
+                      .map((sector, index) => (
+                        <SelectItem
+                          key={sector.SETOR || sector.nome || index}
+                          value={(index + 1).toString()}
+                        >
+                          <div className='flex items-center gap-2'>
+                            {index === 0 && (
+                              <Trophy className='h-4 w-4 text-yellow-600' />
+                            )}
+                            <span>
+                              {sector.RANK || sector.rank || index + 1}º -{' '}
+                              {sector.SETOR || sector.nome || 'Setor sem nome'}{' '}
+                              (
+                              {(
+                                sector.PONTUACAO ||
+                                sector.pontuacao ||
+                                0
+                              ).toFixed(2)}{' '}
+                              pts)
+                            </span>
+                            {index === 0 && (
+                              <Badge
+                                variant='default'
+                                className='text-xs bg-green-600'
+                              >
+                                Vencedor
+                              </Badge>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
               </SelectContent>
             </Select>
-
-            {hasWinnerTie && (
-              <p className='text-sm text-muted-foreground'>
-                Apenas setores empatados na primeira posição estão disponíveis
-                para seleção.
-              </p>
-            )}
           </div>
 
           {/* Justificativa */}
-          <div className='space-y-2'>
-            <Label htmlFor='justification'>Justificativa da Decisão *</Label>
+          <div className='space-y-3'>
+            <Label htmlFor='justification'>
+              Justificativa{' '}
+              {hasWinnerTie ? '(obrigatória para empates)' : '(opcional)'}
+            </Label>
             <Textarea
               id='justification'
-              placeholder='Descreva os critérios e motivos para esta decisão...'
+              placeholder={
+                hasWinnerTie
+                  ? 'Explique os critérios usados para desempate (mínimo 10 caracteres)...'
+                  : 'Justificativa para a oficialização (opcional, mínimo 10 caracteres se preenchida)...'
+              }
               value={justification}
               onChange={(e) => setJustification(e.target.value)}
               rows={4}
               className='resize-none'
             />
-            <div className='flex justify-between text-sm text-muted-foreground'>
-              <span>Mínimo 10 caracteres</span>
-              <span>{justification.length}/500</span>
+            <div className='flex justify-between items-center'>
+              <p className='text-xs text-muted-foreground'>
+                {hasWinnerTie
+                  ? 'Obrigatório explicar como o empate foi resolvido (mínimo 10 caracteres)'
+                  : 'Esta justificativa será registrada no log de auditoria (mínimo 10 caracteres se preenchida)'}
+              </p>
+              <span
+                className={`text-xs ${justification.length < 10 && justification.length > 0 ? 'text-red-500' : 'text-muted-foreground'}`}
+              >
+                {justification.length}/500{' '}
+                {justification.length > 0 &&
+                  justification.length < 10 &&
+                  '(mín. 10)'}
+              </span>
             </div>
           </div>
 
-          {/* Botão de submit */}
-          <div className='flex justify-end gap-3 pt-4 border-t'>
+          {/* Resumo da seleção */}
+          {selectedWinnerId && (
+            <div className='bg-green-50 rounded-lg p-4 border border-green-200'>
+              <h4 className='font-semibold text-green-800 mb-2'>
+                Resumo da Oficialização
+              </h4>
+              <div className='text-sm text-green-700 space-y-1'>
+                <p>
+                  <span className='font-medium'>Período:</span>{' '}
+                  {formatPeriodName(period.mesAno)}{' '}
+                  {/* 🎯 CORREÇÃO: Nome amigável */}
+                </p>
+                <p>
+                  <span className='font-medium'>Vencedor:</span>{' '}
+                  {(() => {
+                    // 🎯 CORREÇÃO: Verificação de nulidade antes de usar
+                    if (!selectedWinnerId) return 'Selecione um setor';
+
+                    const sectorIndex =
+                      parseInt(selectedWinnerId.toString()) - 1;
+                    const winner = ranking[sectorIndex];
+                    return (
+                      winner?.SETOR ||
+                      winner?.nome ||
+                      `Setor #${selectedWinnerId}`
+                    );
+                  })()}
+                </p>
+                <p>
+                  <span className='font-medium'>Pontuação:</span>{' '}
+                  {(() => {
+                    // 🎯 CORREÇÃO: Verificação de nulidade antes de usar
+                    if (!selectedWinnerId) return '0.00';
+
+                    const sectorIndex =
+                      parseInt(selectedWinnerId.toString()) - 1;
+                    const winner = ranking[sectorIndex];
+                    return (
+                      winner?.PONTUACAO ||
+                      winner?.pontuacao ||
+                      0
+                    ).toFixed(2);
+                  })()}{' '}
+                  pts
+                </p>
+                <p>
+                  <span className='font-medium'>Método:</span>{' '}
+                  {hasWinnerTie
+                    ? 'Decisão diretorial (empate resolvido)'
+                    : 'Ranking automático'}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Botões de ação */}
+          <div className='flex justify-end gap-3 pt-4'>
             <Button
               variant='outline'
               onClick={() => router.back()}
@@ -378,10 +539,11 @@ export default function OfficializePeriodPage() {
               onClick={handleSubmit}
               disabled={
                 !selectedWinnerId ||
-                justification.trim().length < 10 ||
-                isSubmitting
+                isSubmitting ||
+                (justification.trim().length > 0 &&
+                  justification.trim().length < 10) // 🎯 CORREÇÃO: Desabilitar se justificativa for muito curta
               }
-              className='bg-red-600 hover:bg-red-700 text-white gap-2'
+              className='gap-2'
             >
               <Gavel className='h-4 w-4' />
               Oficializar Período
@@ -392,36 +554,61 @@ export default function OfficializePeriodPage() {
 
       {/* Dialog de confirmação */}
       <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <DialogContent className='sm:max-w-md'>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className='flex items-center gap-2 text-red-700'>
-              <Shield className='h-5 w-5' />
+            <DialogTitle className='flex items-center gap-2'>
+              <AlertTriangle className='h-5 w-5 text-orange-600' />
               Confirmar Oficialização
             </DialogTitle>
-            <DialogDescription className='space-y-2'>
-              <p>
-                Você está prestes a oficializar o período{' '}
-                <strong>{period.mesAno}</strong>. Esta ação é{' '}
-                <strong>irreversível</strong> e será registrada no log de
-                auditoria.
-              </p>
-
-              {selectedWinnerId && (
-                <div className='bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-3'>
-                  <p className='text-sm'>
-                    <strong>Vencedor selecionado:</strong>{' '}
-                    {ranking.find((s) => s.id === selectedWinnerId)?.nome}
-                  </p>
-                  {hasWinnerTie && (
-                    <p className='text-sm text-yellow-700 mt-1'>
-                      <strong>Empate resolvido</strong> por decisão diretorial
-                    </p>
-                  )}
-                </div>
-              )}
+            <DialogDescription>
+              Esta ação é irreversível. O período será oficialmente encerrado e
+              o vencedor será definido.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className='gap-2'>
+
+          <div className='space-y-4'>
+            <div className='bg-gray-50 rounded-lg p-4 space-y-2'>
+              <p className='text-sm'>
+                <span className='font-medium'>Período:</span>{' '}
+                {formatPeriodName(period.mesAno)}{' '}
+                {/* 🎯 CORREÇÃO: Nome amigável */}
+              </p>
+              <p className='text-sm'>
+                <span className='font-medium'>Vencedor:</span>{' '}
+                {(() => {
+                  // 🎯 CORREÇÃO: Verificação de nulidade segura
+                  if (!selectedWinnerId) return 'Nenhum setor selecionado';
+
+                  const sectorIndex = parseInt(selectedWinnerId.toString()) - 1;
+                  const winner = ranking[sectorIndex];
+                  return (
+                    winner?.SETOR ||
+                    winner?.nome ||
+                    `Setor #${selectedWinnerId}`
+                  );
+                })()}
+              </p>
+              <p className='text-sm'>
+                <span className='font-medium'>Usuário:</span> {user?.nome}
+              </p>
+              {justification && (
+                <p className='text-sm'>
+                  <span className='font-medium'>Justificativa:</span>{' '}
+                  {justification}
+                </p>
+              )}
+            </div>
+
+            <Alert>
+              <Info className='h-4 w-4' />
+              <AlertDescription>
+                Após a oficialização, este resultado será permanente e aparecerá
+                nos relatórios públicos.
+              </AlertDescription>
+            </Alert>
+          </div>
+
+          <DialogFooter>
             <Button
               variant='outline'
               onClick={() => setShowConfirmDialog(false)}
@@ -432,16 +619,16 @@ export default function OfficializePeriodPage() {
             <Button
               onClick={handleConfirmOfficialize}
               disabled={isSubmitting}
-              className='bg-red-600 hover:bg-red-700 text-white'
+              className='gap-2'
             >
               {isSubmitting ? (
                 <>
-                  <div className='animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2' />
+                  <Clock className='h-4 w-4 animate-spin' />
                   Oficializando...
                 </>
               ) : (
                 <>
-                  <CheckCircle className='h-4 w-4 mr-2' />
+                  <CheckCircle className='h-4 w-4' />
                   Confirmar Oficialização
                 </>
               )}

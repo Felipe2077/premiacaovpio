@@ -1,4 +1,4 @@
-// apps/web/src/hooks/useVigencias.ts
+// apps/web/src/hooks/useVigencias.ts - CORRIGIDO COM AUTENTICAÇÃO
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -23,6 +23,9 @@ interface SectorForRanking {
   nome: string;
   pontuacao: number;
   rank: number;
+  SETOR: string;
+  PONTUACAO: number;
+  RANK: number;
 }
 
 interface TieAnalysis {
@@ -50,31 +53,25 @@ interface RankingAnalysis {
 
 interface OfficializePayload {
   winnerSectorId: number;
-  tieResolvedBy?: number;
-  justification: string;
+  tieResolvedBy?: 'DIRECTOR_DECISION' | 'RANKING_CRITERIA';
+  justification?: string;
 }
 
-interface SectorValidation {
-  sectorName: string;
-  validation: {
-    isEligible: boolean;
-    reason: string;
-  };
+interface PendingOfficialization {
+  periods: CompetitionPeriod[];
+  count: number;
 }
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-// Serviços de API
+// 🎯 CORREÇÃO: APIs que integram com o sistema de autenticação existente
 const vigenciasAPI = {
-  // Buscar períodos pendentes de oficialização (Diretores + Gerentes)
-  fetchPendingOfficialization: async (): Promise<{
-    periods: CompetitionPeriod[];
-    count: number;
-  }> => {
+  // Buscar períodos pendentes de oficialização
+  fetchPendingOfficialization: async (): Promise<PendingOfficialization> => {
     const response = await fetch(
       `${API_BASE_URL}/api/periods/pending-officialization`,
       {
-        credentials: 'include',
+        credentials: 'include', // Para cookies httpOnly
         headers: { 'Content-Type': 'application/json' },
       }
     );
@@ -83,47 +80,17 @@ const vigenciasAPI = {
       throw new Error(`Erro ${response.status}: ${response.statusText}`);
     }
 
-    return response.json();
-  },
+    const result = await response.json();
 
-  // Análise detalhada de ranking para um período (Diretores + Gerentes)
-  fetchRankingAnalysis: async (periodId: number): Promise<RankingAnalysis> => {
-    const response = await fetch(
-      `${API_BASE_URL}/api/periods/${periodId}/ranking-analysis`,
-      {
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`Erro ${response.status}: ${response.statusText}`);
+    // 🎯 CORREÇÃO: API retorna wrapper {success, data, message, timestamp}
+    if (!result.success) {
+      throw new Error(result.message || 'Erro na resposta da API');
     }
 
-    return response.json();
+    return result.data; // Retorna apenas os dados
   },
 
-  // Validar elegibilidade de setor para empate (Diretores + Gerentes)
-  validateSectorForTie: async (
-    periodId: number,
-    sectorName: string
-  ): Promise<SectorValidation> => {
-    const response = await fetch(
-      `${API_BASE_URL}/api/periods/${periodId}/tie-validation/${encodeURIComponent(sectorName)}`,
-      {
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`Erro ${response.status}: ${response.statusText}`);
-    }
-
-    return response.json();
-  },
-
-  // Oficializar período (APENAS DIRETOR)
+  // Oficializar período
   officializePeriod: async (
     periodId: number,
     payload: OfficializePayload
@@ -132,7 +99,7 @@ const vigenciasAPI = {
       `${API_BASE_URL}/api/periods/${periodId}/officialize`,
       {
         method: 'POST',
-        credentials: 'include',
+        credentials: 'include', // Para cookies httpOnly
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       }
@@ -145,10 +112,17 @@ const vigenciasAPI = {
       );
     }
 
-    return response.json();
+    const result = await response.json();
+
+    // 🎯 CORREÇÃO: API retorna wrapper
+    if (!result.success) {
+      throw new Error(result.message || 'Erro ao oficializar período');
+    }
+
+    return result.data;
   },
 
-  // Buscar todos os períodos com filtros (para dashboard)
+  // Buscar todos os períodos
   fetchPeriods: async (params?: {
     status?: string;
     limit?: number;
@@ -160,7 +134,7 @@ const vigenciasAPI = {
     const response = await fetch(
       `${API_BASE_URL}/api/periods?${queryParams.toString()}`,
       {
-        credentials: 'include',
+        credentials: 'include', // Para cookies httpOnly
         headers: { 'Content-Type': 'application/json' },
       }
     );
@@ -169,7 +143,44 @@ const vigenciasAPI = {
       throw new Error(`Erro ${response.status}: ${response.statusText}`);
     }
 
-    return response.json();
+    const result = await response.json();
+
+    // 🎯 CORREÇÃO: Verificar se API retorna wrapper ou dados diretos
+    // Para listagem de períodos, pode ser que retorne direto
+    if (Array.isArray(result)) {
+      return result; // Retorno direto
+    } else if (result.success && result.data) {
+      return result.data; // Retorno com wrapper
+    } else {
+      return result; // Fallback para compatibilidade
+    }
+  },
+
+  // Iniciar período
+  startPeriod: async (periodId: number): Promise<CompetitionPeriod> => {
+    const response = await fetch(
+      `${API_BASE_URL}/api/periods/${periodId}/start`,
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        errorData.message || `Erro ${response.status}: ${response.statusText}`
+      );
+    }
+
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.message || 'Erro ao iniciar período');
+    }
+
+    return result.data;
   },
 };
 
@@ -179,7 +190,7 @@ export function useVigencias() {
 
   // Query: Períodos pendentes de oficialização
   const {
-    data: pendingPeriods,
+    data: pendingData,
     isLoading: isLoadingPending,
     error: pendingError,
     refetch: refetchPending,
@@ -224,64 +235,83 @@ export function useVigencias() {
     },
   });
 
+  // Mutation: Iniciar período
+  const startMutation = useMutation({
+    mutationFn: (periodId: number) => vigenciasAPI.startPeriod(periodId),
+    onSuccess: (data) => {
+      toast.success(`Período ${data.mesAno} iniciado com sucesso!`);
+
+      // Invalidar queries relacionadas
+      queryClient.invalidateQueries({ queryKey: ['periods'] });
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao iniciar período: ${error.message}`);
+    },
+  });
+
   return {
-    // Dados
-    pendingPeriods: pendingPeriods?.periods || [],
-    pendingCount: pendingPeriods?.count || 0,
+    // Dados corrigidos
+    pendingPeriods: pendingData?.periods || [],
+    pendingCount: pendingData?.count || 0,
     allPeriods: allPeriods || [],
 
     // Estados de loading
     isLoadingPending,
     isLoadingAll,
     isOfficializing: officializeMutation.isPending,
+    isStarting: startMutation.isPending,
 
     // Erros
     pendingError,
     allPeriodsError,
-    officializeError: officializeMutation.error,
 
     // Ações
     refetchPending,
     officializePeriod: officializeMutation.mutate,
+    startPeriod: startMutation.mutate,
 
-    // Queries condicionais (para usar em componentes específicos)
-    fetchRankingAnalysis: (periodId: number) =>
-      queryClient.fetchQuery({
-        queryKey: ['periods', periodId, 'ranking-analysis'],
-        queryFn: () => vigenciasAPI.fetchRankingAnalysis(periodId),
-        staleTime: 1 * 60 * 1000, // 1 minuto para dados críticos
-      }),
-
-    validateSectorForTie: (periodId: number, sectorName: string) =>
-      queryClient.fetchQuery({
-        queryKey: ['periods', periodId, 'tie-validation', sectorName],
-        queryFn: () => vigenciasAPI.validateSectorForTie(periodId, sectorName),
-        staleTime: 30 * 1000, // 30 segundos
-      }),
+    // Status de mutations
+    officializeError: officializeMutation.error,
+    startError: startMutation.error,
   };
 }
 
-// Hook específico para análise de ranking de um período
-export function usePeriodRankingAnalysis(periodId: number | null) {
+// Hook para análise de ranking de um período específico
+export function usePeriodRankingAnalysis(periodId: number) {
   return useQuery({
-    queryKey: ['periods', periodId, 'ranking-analysis'],
-    queryFn: () => vigenciasAPI.fetchRankingAnalysis(periodId!),
-    enabled: !!periodId,
+    queryKey: ['period', periodId, 'ranking-analysis'],
+    queryFn: async (): Promise<RankingAnalysis> => {
+      const response = await fetch(
+        `${API_BASE_URL}/api/periods/${periodId}/ranking-analysis`,
+        {
+          credentials: 'include', // Para cookies httpOnly
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Erro ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      // 🔍 DEBUG: Log da resposta da API
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 API Response for ranking-analysis:', result);
+        console.log('🔍 Result.data:', result.data);
+        if (result.data?.ranking) {
+          console.log('🔍 First ranking item:', result.data.ranking[0]);
+        }
+      }
+
+      // 🎯 CORREÇÃO: API retorna wrapper
+      if (!result.success) {
+        throw new Error(result.message || 'Erro ao analisar ranking');
+      }
+
+      return result.data;
+    },
+    enabled: !!periodId && periodId > 0,
     staleTime: 1 * 60 * 1000, // 1 minuto
     retry: 2,
-  });
-}
-
-// Hook para validação de setor em caso de empate
-export function useSectorTieValidation(
-  periodId: number | null,
-  sectorName: string | null
-) {
-  return useQuery({
-    queryKey: ['periods', periodId, 'tie-validation', sectorName],
-    queryFn: () => vigenciasAPI.validateSectorForTie(periodId!, sectorName!),
-    enabled: !!periodId && !!sectorName,
-    staleTime: 30 * 1000, // 30 segundos
-    retry: 1,
   });
 }

@@ -3,7 +3,13 @@
 
 import { usePermissions } from '@/components/providers/AuthProvider';
 import { useQuery } from '@tanstack/react-query';
-
+// apps/web/src/components/vigencias/index.ts
+export { ActionButton } from './ActionButton';
+export { PeriodCard } from './PeriodCard';
+export { PeriodsByYearView } from './PeriodsByYearView';
+export { PeriodStatusBadge } from './PeriodStatusBadge';
+export { TieIndicator } from './TieIndicator';
+export { VigenciasBadge } from './VigenciasBadge';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 // Função para buscar contagem de pendentes (versão otimizada)

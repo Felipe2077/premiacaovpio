@@ -1,4 +1,3 @@
-// apps/web/src/app/admin/vigencias/pendentes/page.tsx - PÁGINA DE PENDENTES
 'use client';
 
 import { usePermissions } from '@/components/providers/AuthProvider';
@@ -14,21 +13,20 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { PeriodCard } from '@/components/vigencias/PeriodCard';
 import { useVigencias } from '@/hooks/useVigencias';
-import {
-  AlertTriangle,
-  ArrowLeft,
-  Clock,
-  Gavel,
-  RefreshCw,
-} from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Clock, RefreshCw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
 export default function PendingPeriodsPage() {
   const router = useRouter();
-  const { isDirector, isManager } = usePermissions();
+  const { hasRole, hasPermission } = usePermissions();
   const [refreshing, setRefreshing] = useState(false);
+
+  // 🎯 CORREÇÃO: Usar como valores booleanos diretos
+  const isDirector = hasRole('DIRETOR');
+  const isManager = hasRole('GERENTE');
+  const canViewReports = hasPermission('VIEW_REPORTS');
 
   const {
     pendingPeriods,
@@ -77,7 +75,7 @@ export default function PendingPeriodsPage() {
               Períodos Pendentes
             </h1>
             <p className='text-muted-foreground'>
-              {isDirector()
+              {isDirector
                 ? 'Períodos aguardando sua oficialização'
                 : 'Períodos em processo de finalização'}
             </p>
@@ -99,105 +97,62 @@ export default function PendingPeriodsPage() {
         </div>
       </div>
 
-      {/* Estatística */}
+      {/* Contador */}
       <Card className='border-orange-200 bg-orange-50'>
         <CardHeader>
-          <CardTitle className='flex items-center gap-2 text-orange-700'>
-            <AlertTriangle className='h-5 w-5' />
-            Status Atual
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className='text-3xl font-bold text-orange-700 mb-2'>
-            {pendingCount} período(s)
-          </div>
-          <p className='text-orange-600'>
-            aguardando oficialização{' '}
-            {isDirector() ? 'por você' : 'pelo diretor'}
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* Lista de períodos pendentes */}
-      <Card>
-        <CardHeader>
           <CardTitle className='flex items-center gap-2'>
-            <Clock className='h-5 w-5' />
-            Períodos Pré-fechados
+            <Clock className='h-5 w-5 text-orange-600' />
+            {pendingCount} período(s) pendente(s)
           </CardTitle>
           <CardDescription>
-            Períodos finalizados aguardando oficialização e definição do
-            vencedor
+            {isDirector
+              ? 'Clique em "Oficializar" para definir o vencedor'
+              : 'Use "Analisar" para visualizar o ranking detalhado'}
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          {isLoadingPending ? (
-            <div className='space-y-4'>
-              {[...Array(3)].map((_, i) => (
-                <Skeleton key={i} className='h-[180px] rounded-lg' />
-              ))}
-            </div>
-          ) : pendingError ? (
-            <Alert className='border-red-200 bg-red-50'>
-              <AlertTriangle className='h-4 w-4 text-red-600' />
-              <AlertDescription className='text-red-800'>
-                Erro ao carregar períodos pendentes: {pendingError.message}
-              </AlertDescription>
-            </Alert>
-          ) : pendingPeriods.length === 0 ? (
-            <div className='text-center py-12 text-muted-foreground'>
-              <Clock className='h-16 w-16 mx-auto mb-4 opacity-30' />
-              <h3 className='text-lg font-medium mb-2'>
-                Nenhum período pendente
-              </h3>
-              <p className='text-sm'>Todos os períodos estão em dia! 🎉</p>
-              <Button
-                variant='outline'
-                onClick={() => router.push('/admin/vigencias')}
-                className='mt-4'
-              >
-                Voltar ao Dashboard
-              </Button>
-            </div>
-          ) : (
-            <div className='space-y-4'>
-              {pendingPeriods.map((period) => (
-                <PeriodCard
-                  key={period.id}
-                  period={period}
-                  onOfficialize={isDirector() ? handleOfficialize : undefined}
-                  onAnalyze={handleAnalyze}
-                  className='border-orange-200 bg-orange-50 hover:shadow-lg transition-all'
-                />
-              ))}
-
-              {/* Instruções baseadas no perfil */}
-              <div className='mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg'>
-                <div className='flex items-start gap-3'>
-                  <Gavel className='h-5 w-5 text-blue-600 mt-1' />
-                  <div className='text-sm text-blue-800'>
-                    {isDirector() ? (
-                      <>
-                        <strong>Como diretor:</strong> Você pode oficializar
-                        estes períodos, definindo o vencedor oficial e
-                        resolvendo empates se necessário. Clique em
-                        "Oficializar" para prosseguir.
-                      </>
-                    ) : (
-                      <>
-                        <strong>Aguardando diretor:</strong> Estes períodos
-                        foram pré-fechados e aguardam a oficialização pelo
-                        diretor. Você pode analisar os rankings e empates, mas
-                        apenas o diretor pode finalizar oficialmente.
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </CardContent>
       </Card>
+
+      {/* Erro */}
+      {pendingError && (
+        <Alert className='border-red-200 bg-red-50'>
+          <AlertTriangle className='h-4 w-4 text-red-600' />
+          <AlertDescription className='text-red-700'>
+            Erro ao carregar períodos pendentes: {pendingError.message}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Lista de períodos */}
+      {isLoadingPending ? (
+        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
+          {[...Array(3)].map((_, i) => (
+            <Skeleton key={i} className='h-48' />
+          ))}
+        </div>
+      ) : pendingPeriods.length === 0 ? (
+        <Card>
+          <CardContent className='flex flex-col items-center justify-center py-12'>
+            <Clock className='h-12 w-12 text-muted-foreground mb-4' />
+            <h3 className='text-lg font-semibold mb-2'>
+              Nenhum período pendente
+            </h3>
+            <p className='text-muted-foreground text-center'>
+              Todos os períodos foram oficializados.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
+          {pendingPeriods.map((period) => (
+            <PeriodCard
+              key={period.id}
+              period={period}
+              onOfficialize={isDirector ? handleOfficialize : undefined}
+              onAnalyze={canViewReports ? handleAnalyze : undefined}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

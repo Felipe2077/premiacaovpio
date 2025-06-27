@@ -1,11 +1,18 @@
-// apps/web/src/components/vigencias/PeriodCard.tsx - CORREÇÃO TAMBÉM NO CARD
+// apps/web/src/components/vigencias/PeriodCard.tsx - CORRIGIDO COM TÍTULO AMIGÁVEL
 'use client';
 
 import { usePermissions } from '@/components/providers/AuthProvider';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { formatDate } from '@/lib/utils';
-import { Calendar, Clock, User } from 'lucide-react';
-import { ActionButton } from './ActionButton';
+import { formatDate, formatPeriodName } from '@/lib/utils'; // 🎯 CORREÇÃO: Importar formatPeriodName
+import {
+  BarChart3,
+  Calendar,
+  Clock,
+  Gavel,
+  PlayCircle,
+  User,
+} from 'lucide-react';
 import { PeriodStatusBadge } from './PeriodStatusBadge';
 
 interface CompetitionPeriod {
@@ -36,18 +43,27 @@ export function PeriodCard({
   loading = false,
   className,
 }: PeriodCardProps) {
-  const { permissions } = usePermissions();
+  // 🎯 CORREÇÃO: Usar hook de permissões do sistema existente
+  const { hasPermission, hasRole } = usePermissions();
 
   const isPreClosed = period.status === 'PRE_FECHADA';
   const isClosed = period.status === 'FECHADA';
   const isPlanning = period.status === 'PLANEJAMENTO';
+  const isActive = period.status === 'ATIVA';
+
+  // 🎯 CORREÇÃO: Verificações de permissão simplificadas e diretas
+  const canOfficialize = hasRole('DIRETOR') || hasPermission('CLOSE_PERIODS');
+  const canStart = hasRole('DIRETOR') || hasPermission('START_PERIODS');
+  const canAnalyze =
+    hasRole('DIRETOR') || hasRole('GERENTE') || hasPermission('VIEW_REPORTS');
 
   return (
     <Card className={`transition-all hover:shadow-md ${className}`}>
       <CardHeader className='pb-3'>
         <div className='flex items-center justify-between'>
           <CardTitle className='text-lg font-semibold'>
-            {period.mesAno}
+            {/* 🎯 CORREÇÃO: Usar formatPeriodName para título amigável */}
+            {formatPeriodName(period.mesAno)}
           </CardTitle>
           <PeriodStatusBadge status={period.status} />
         </div>
@@ -55,7 +71,7 @@ export function PeriodCard({
 
       <CardContent className='space-y-4'>
         {/* Informações do período */}
-        <div className='grid grid-cols-2 gap-4 text-sm'>
+        <div className='grid grid-cols-1 gap-3 text-sm'>
           <div className='flex items-center gap-2'>
             <Calendar className='h-4 w-4 text-muted-foreground' />
             <span>Início: {formatDate(period.dataInicio)}</span>
@@ -73,44 +89,78 @@ export function PeriodCard({
               <User className='h-4 w-4' />
               <span>Oficializado em {formatDate(period.oficializadaEm)}</span>
             </div>
+            {period.setorVencedorId && (
+              <div className='text-xs text-purple-600 mt-1'>
+                Setor vencedor: #{period.setorVencedorId}
+              </div>
+            )}
           </div>
         )}
 
-        {/* Ações */}
-        <div className='flex gap-2 pt-2'>
-          {isPreClosed && onOfficialize && (
-            <ActionButton
-              action='officialize'
-              permissions={['RESOLVE_TIES', 'CLOSE_PERIODS']}
-              userPermissions={permissions}
+        {/* Status específicos */}
+        {isActive && (
+          <div className='bg-green-50 rounded-lg p-3 border border-green-200'>
+            <div className='flex items-center gap-2 text-sm text-green-700'>
+              <Clock className='h-4 w-4' />
+              <span>Período em andamento</span>
+            </div>
+          </div>
+        )}
+
+        {/* 🎯 CORREÇÃO: Botões simplificados usando Button diretamente */}
+        <div className='flex flex-wrap gap-2 pt-2'>
+          {/* Botão Oficializar */}
+          {isPreClosed && onOfficialize && canOfficialize && (
+            <Button
+              size='sm'
               onClick={() => onOfficialize(period.id)}
-              loading={loading}
-              size='sm'
-            />
+              disabled={loading}
+              className='bg-red-600 hover:bg-red-700 text-white gap-2'
+            >
+              <Gavel className='h-3 w-3' />
+              Oficializar
+            </Button>
           )}
 
-          {isPlanning && onStart && (
-            <ActionButton
-              action='start'
-              permissions={['START_PERIODS']}
-              userPermissions={permissions}
+          {/* Botão Iniciar */}
+          {isPlanning && onStart && canStart && (
+            <Button
+              size='sm'
               onClick={() => onStart(period.id)}
-              loading={loading}
-              size='sm'
-            />
+              disabled={loading}
+              className='bg-green-600 hover:bg-green-700 text-white gap-2'
+            >
+              <PlayCircle className='h-3 w-3' />
+              Iniciar
+            </Button>
           )}
 
-          {(isPreClosed || isClosed) && onAnalyze && (
-            <ActionButton
-              action='analyze'
-              permissions={['VIEW_REPORTS']}
-              userPermissions={permissions}
-              onClick={() => onAnalyze(period.id)}
+          {/* Botão Analisar - Disponível para períodos fechados e pré-fechados */}
+          {(isPreClosed || isClosed) && onAnalyze && canAnalyze && (
+            <Button
               size='sm'
               variant='outline'
-            />
+              onClick={() => onAnalyze(period.id)}
+              className='border-blue-200 text-blue-700 hover:bg-blue-50 gap-2'
+            >
+              <BarChart3 className='h-3 w-3' />
+              Analisar
+            </Button>
           )}
         </div>
+
+        {/* Mensagem se não há ações disponíveis */}
+        {isPlanning && !canStart && (
+          <div className='text-xs text-muted-foreground bg-gray-50 rounded p-2'>
+            Aguardando início pelo diretor
+          </div>
+        )}
+
+        {isPreClosed && !canOfficialize && (
+          <div className='text-xs text-muted-foreground bg-gray-50 rounded p-2'>
+            Aguardando oficialização pelo diretor
+          </div>
+        )}
       </CardContent>
     </Card>
   );
