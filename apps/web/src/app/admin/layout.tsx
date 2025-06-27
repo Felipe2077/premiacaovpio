@@ -1,4 +1,4 @@
-// apps/web/src/app/admin/layout.tsx
+// apps/web/src/app/admin/layout.tsx - VERSÃO COMPLETA E CORRIGIDA
 'use client';
 
 import {
@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Toaster } from '@/components/ui/sonner';
+import { VigenciasBadge } from '@/components/vigencias/VigenciasBadge';
 import { Permission } from '@sistema-premiacao/shared-types';
 import {
   AlertTriangle,
@@ -65,7 +66,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   );
 }
 
-// Sidebar administrativa
+// Sidebar administrativa - VERSÃO COMPLETA E CORRIGIDA
 function AdminSidebar() {
   const pathname = usePathname();
   const { user } = useAuth();
@@ -84,12 +85,13 @@ function AdminSidebar() {
       icon: BarChart3,
       show: true,
     },
-    // {
-    //   title: 'Relatórios',
-    //   href: '/admin/reports',
-    //   icon: TrendingUp,
-    //   show: canViewReports(),
-    // },
+    {
+      title: 'Vigências',
+      href: '/admin/vigencias',
+      icon: Clock,
+      show: canViewReports() || isDirector(),
+      hasBadge: true, // Indica que este item tem badge
+    },
     {
       title: 'Gerenciar Metas',
       href: '/admin/parameters',
@@ -102,12 +104,6 @@ function AdminSidebar() {
       icon: AlertTriangle,
       show: canApproveExpurgos() || true, // Gerentes podem pelo menos visualizar/solicitar
     },
-    // {
-    //   title: 'Períodos',
-    //   href: '/admin/periods',
-    //   icon: Calendar,
-    //   show: isDirector(), // Apenas diretores podem gerenciar períodos
-    // },
     {
       title: 'Usuários',
       href: '/admin/users',
@@ -190,83 +186,56 @@ function AdminSidebar() {
                     ${isActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-500'}
                   `}
                 />
-                {item.title}
+                <span className='flex-1'>{item.title}</span>
+                {/* Badge para vigências */}
+                {item.hasBadge && <VigenciasBadge />}
               </Link>
             );
           })}
         </nav>
 
-        {/* Footer da sidebar */}
-        <div className='flex-shrink-0 px-4 py-4 border-t border-gray-200'>
-          <div className='flex items-center justify-between'>
-            <div className='flex items-center text-sm text-gray-500'>
-              <Clock className='h-4 w-4 mr-2' />
-              <span>Última atualização</span>
+        {/* Footer da sidebar (opcional) */}
+        <div className='flex-shrink-0 flex border-t border-gray-200 p-4'>
+          <div className='flex items-center'>
+            <div>
+              <p className='text-xs text-gray-500'>Sistema de Premiação v1.0</p>
             </div>
           </div>
-          <p className='text-xs text-gray-400 mt-1'>
-            {new Date().toLocaleString('pt-BR')}
-          </p>
         </div>
       </div>
     </div>
   );
 }
 
-// Componente para quando o usuário não tem acesso à área administrativa
+// Componente de acesso negado
 function AdminAccessDenied() {
   return (
-    <div className='min-h-screen flex items-center justify-center bg-gray-50 p-4'>
-      <Card className='w-full max-w-lg'>
-        <CardHeader className='text-center'>
-          <div className='flex justify-center mb-4'>
-            <div className='bg-red-100 p-3 rounded-full'>
-              <Shield className='h-8 w-8 text-red-600' />
-            </div>
-          </div>
-          <CardTitle className='text-2xl font-bold text-gray-900'>
-            Acesso à Área Administrativa Negado
+    <div className='min-h-screen bg-gray-50 flex items-center justify-center'>
+      <Card className='w-full max-w-md'>
+        <CardHeader>
+          <CardTitle className='flex items-center gap-2 text-red-600'>
+            <Shield className='h-5 w-5' />
+            Acesso Negado
           </CardTitle>
-          <CardDescription className='text-gray-600'>
-            Você não possui as permissões necessárias para acessar o painel
-            administrativo.
+          <CardDescription>
+            Você não possui permissões suficientes para acessar esta área.
           </CardDescription>
         </CardHeader>
-
-        <CardContent className='space-y-6'>
-          <div className='bg-yellow-50 border border-yellow-200 rounded-lg p-4'>
-            <div className='flex items-start space-x-3'>
-              <AlertTriangle className='h-5 w-5 text-yellow-600 mt-0.5' />
-              <div className='flex-1'>
-                <h4 className='text-sm font-medium text-yellow-800'>
-                  Permissões Necessárias
-                </h4>
-                <div className='text-sm text-yellow-700 mt-2 space-y-1'>
-                  <p>• Visualizar Relatórios</p>
-                  <p>• Gerenciar Usuários</p>
-                  <p>• Gerenciar Parâmetros</p>
-                  <p>• Aprovar Expurgos</p>
-                </div>
-                <p className='text-xs text-yellow-600 mt-2'>
-                  * Você precisa de pelo menos uma dessas permissões
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className='flex flex-col space-y-3'>
-            <Button asChild>
-              <Link href='/'>Voltar para o Ranking</Link>
+        <CardContent>
+          <div className='space-y-3'>
+            <p className='text-sm text-muted-foreground'>
+              Para acessar o painel administrativo, você precisa de uma das
+              seguintes permissões:
+            </p>
+            <ul className='text-xs text-muted-foreground space-y-1 ml-4'>
+              <li>• Visualizar relatórios</li>
+              <li>• Gerenciar usuários</li>
+              <li>• Gerenciar parâmetros</li>
+              <li>• Aprovar expurgos</li>
+            </ul>
+            <Button asChild className='w-full mt-4'>
+              <Link href='/'>Voltar ao Início</Link>
             </Button>
-
-            <Button variant='outline' asChild>
-              <Link href='/profile'>Ver Meu Perfil</Link>
-            </Button>
-          </div>
-
-          <div className='text-center text-sm text-gray-500'>
-            Se você acredita que deveria ter acesso a esta área, entre em
-            contato com o administrador do sistema.
           </div>
         </CardContent>
       </Card>
