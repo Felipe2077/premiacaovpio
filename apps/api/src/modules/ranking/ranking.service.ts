@@ -636,9 +636,24 @@ export class RankingService {
       currentRank += empatados; // Próximo rank disponível
     }
 
+    // Check for a tie at rank 1 specifically for 'MEDIA KM/L'
+    let isRank1TieForMediaKmL = false;
+    if (criterion.nome === 'MEDIA KM/L') {
+      const rank1Results = results.filter((r) => r.rank === 1);
+      if (rank1Results.length > 1) {
+        isRank1TieForMediaKmL = true;
+      }
+    }
+
     // ========== ATRIBUIR PONTOS ==========
     results.forEach((result) => {
-      result.pontos = this.calculatePontos(result, criterion, false);
+      // Pass the tie information to calculatePontos
+      result.pontos = this.calculatePontos(
+        result,
+        criterion,
+        false,
+        isRank1TieForMediaKmL
+      );
     });
 
     console.log(`[RankingService] === FIM RANKS PARA ${criterion.nome} ===`);
@@ -647,7 +662,8 @@ export class RankingService {
   private calculatePontos(
     result: ResultadoPorCriterio,
     criterion: CriterionEntity,
-    useInvertedScale: boolean
+    useInvertedScale: boolean,
+    isRank1TieForMediaKmL: boolean // Novo parâmetro
   ): number | null {
     // REGRA ESPECIAL: FALTA FUNC <= 10
     if (
@@ -692,26 +708,24 @@ export class RankingService {
 
     // MÉDIA KM/L: Empate em 1º = 1.5, depois escala normal 2.0, 2.5
     if (criterion.nome === 'MEDIA KM/L') {
-      if (result.rank === 1) {
+      if (isRank1TieForMediaKmL && result.rank === 1) {
         console.log(
-          `[RankingService] ${result.setorNome}: MÉDIA KM/L rank 1 = 1.5 pontos (regra especial)`
+          `[RankingService] ${result.setorNome}: MÉDIA KM/L rank 1 com empate = 1.5 pontos (regra especial)`
         );
         return 1.5;
-      } else if (result.rank === 2) {
-        console.log(
-          `[RankingService] ${result.setorNome}: MÉDIA KM/L rank 2 = 1.5 pontos (regra especial)`
-        );
-        return 1.5;
-      } else if (result.rank === 3) {
-        console.log(
-          `[RankingService] ${result.setorNome}: MÉDIA KM/L rank 3 = 2.0 pontos`
-        );
-        return 2.0;
       } else {
+        // Aplicar pontuação padrão para 'quanto mais melhor'
+        const pontuacao = {
+          1: 1.0, // 1º lugar
+          2: 1.5, // 2º lugar
+          3: 2.0, // 3º lugar
+          4: 2.5, // 4º lugar e demais
+        };
+        const pontos = pontuacao[result.rank as keyof typeof pontuacao] || 2.5;
         console.log(
-          `[RankingService] ${result.setorNome}: MÉDIA KM/L rank ${result.rank} = 2.5 pontos`
+          `[RankingService] ${result.setorNome}: MÉDIA KM/L rank=${result.rank} → ${pontos} pontos (padrão para 'quanto mais melhor')`
         );
-        return 2.5;
+        return pontos;
       }
     }
 

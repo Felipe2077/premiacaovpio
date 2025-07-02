@@ -165,7 +165,7 @@ export class CompetitionPeriodService {
         }
 
         // Formata mesAno e datas de início/fim
-        const nextMesAno = `<span class="math-inline">\{nextYear\}\-</span>{String(nextMonthIndex + 1).padStart(2, '0')}`;
+        const nextMesAno = `${nextYear}-${String(nextMonthIndex + 1).padStart(2, '0')}`;
         const dataInicio = new Date(nextYear, nextMonthIndex, 1);
         const dataFim = new Date(nextYear, nextMonthIndex + 1, 0); // Pega o último dia do mês
 
