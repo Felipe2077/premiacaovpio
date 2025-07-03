@@ -341,4 +341,48 @@ export class ParametersController {
       });
     }
   }
+
+  /**
+   * GET /api/parameters/projection - Projeta o valor de um critério
+   */
+  async getProjection(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const {
+        criterionId,
+        startDate,
+        endDate,
+        targetMonth,
+      } = request.query as {
+        criterionId: string;
+        startDate: string;
+        endDate: string;
+        targetMonth: string;
+      };
+
+      request.log.info(
+        `GET /api/parameters/projection - Query: ${JSON.stringify(request.query)}`
+      );
+
+      if (!criterionId || !startDate || !endDate || !targetMonth) {
+        return reply.status(400).send({
+          message:
+            'Query params criterionId, startDate, endDate, e targetMonth são obrigatórios.',
+        });
+      }
+
+      const data = await this.services.parameter.getProjectionData({
+        criterionId: parseInt(criterionId, 10),
+        startDate,
+        endDate,
+        targetMonth,
+      });
+
+      reply.send(data);
+    } catch (error: any) {
+      request.log.error(`Erro em getProjection: ${error.message}`);
+      reply.status(500).send({
+        error: error.message || 'Erro interno ao calcular projeção.',
+      });
+    }
+  }
 }

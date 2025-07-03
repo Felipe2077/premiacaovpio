@@ -4,6 +4,14 @@ import { CompetitionPeriodEntity } from '@/entity/competition-period.entity';
 import { CriterionEntity } from '@/entity/criterion.entity';
 import { ParameterValueEntity } from '@/entity/parameter-value.entity';
 import { PerformanceDataEntity } from '@/entity/performance-data.entity';
+import { RawMySqlOcorrenciaHorariaEntity } from '@/entity/raw-data/raw-mysql-ocorrencia-horaria.entity';
+import { RawMySqlQuebraDefeitoEntity } from '@/entity/raw-data/raw-mysql-quebra-defeito.entity';
+import { RawOracleAusenciaEntity } from '@/entity/raw-data/raw-oracle-ausencia.entity';
+import { RawOracleColisaoEntity } from '@/entity/raw-data/raw-oracle-colisao.entity';
+import { RawOracleEstoqueCustoEntity } from '@/entity/raw-data/raw-oracle-estoque-custo.entity';
+import { RawOracleFleetPerformanceEntity } from '@/entity/raw-data/raw-oracle-fleet-performance.entity';
+import { RawOracleIpkCalculadoEntity } from '@/entity/raw-data/raw-oracle-ipk-calculado.entity';
+import { RawOracleKmOciosaComponentsEntity } from '@/entity/raw-data/raw-oracle-km-ociosa.entity';
 import { SectorEntity } from '@/entity/sector.entity';
 import { UserEntity } from '@/entity/user.entity';
 import {
@@ -19,6 +27,16 @@ import { AuditLogService } from '../audit/audit.service';
 import { ExpurgoAutomationHook } from '../expurgos/expurgo-automation.hook';
 import { CriterionCalculationSettingsService } from './criterion-calculation-settings.service';
 
+interface RawDataTableMapping {
+  entity: any; // TypeORM entity class
+  valueColumn: string;
+  dateColumn: string; // Nome da coluna de data/mês na tabela raw
+  sectorColumn: string;
+  dateGranularity: 'day' | 'month'; // Indica se a data é diária (YYYY-MM-DD) ou mensal (YYYY-MM)
+  filterColumn?: string;
+  filterValue?: string;
+}
+
 /**
  * Serviço responsável pela gestão de parâmetros/metas do sistema de premiação
  * Implementa operações CRUD, cálculo automático e versionamento de metas
@@ -32,6 +50,7 @@ export class ParameterService {
   private readonly auditLogService: AuditLogService;
   private readonly criterionCalculationSettingsService: CriterionCalculationSettingsService;
   private automationHook: ExpurgoAutomationHook;
+  private readonly rawDataTableMappings: { [key: string]: RawDataTableMapping };
 
   constructor() {
     this.parameterRepo = AppDataSource.getRepository(ParameterValueEntity);
@@ -45,6 +64,138 @@ export class ParameterService {
     this.automationHook = new ExpurgoAutomationHook();
     this.criterionCalculationSettingsService =
       new CriterionCalculationSettingsService();
+
+    // Inicializa o mapeamento das tabelas raw
+    this.rawDataTableMappings = {
+      ATRASO: {
+        entity: RawMySqlOcorrenciaHorariaEntity,
+        valueColumn: 'totalCount',
+        dateColumn: 'metricDate',
+        sectorColumn: 'sectorName',
+        dateGranularity: 'day',
+        filterColumn: 'criterionName',
+        filterValue: 'ATRASO',
+      },
+
+      'FURO POR VIAGEM': {
+        entity: RawMySqlOcorrenciaHorariaEntity,
+        valueColumn: 'totalCount',
+        dateColumn: 'metricDate',
+        sectorColumn: 'sectorName',
+        dateGranularity: 'day',
+        filterColumn: 'criterionName',
+        filterValue: 'FURO POR VIAGEM',
+      },
+      QUEBRA: {
+        entity: RawMySqlQuebraDefeitoEntity,
+        valueColumn: 'totalCount',
+        dateColumn: 'metricDate',
+        sectorColumn: 'sectorName',
+        dateGranularity: 'day',
+        filterColumn: 'occurrenceType',
+        filterValue: 'QUEBRA',
+      },
+      DEFEITO: {
+        entity: RawMySqlQuebraDefeitoEntity,
+        valueColumn: 'totalCount',
+        dateColumn: 'metricDate',
+        sectorColumn: 'sectorName',
+        dateGranularity: 'day',
+        filterColumn: 'occurrenceType',
+        filterValue: 'DEFEITO',
+      },
+      'FALTA FUNC': {
+        entity: RawOracleAusenciaEntity,
+        valueColumn: 'employeeCount',
+        dateColumn: 'metricDate',
+        sectorColumn: 'sectorName',
+        dateGranularity: 'day',
+        filterColumn: 'occurrenceType',
+        filterValue: 'FALTA FUNC',
+      },
+      'ATESTADO FUNC': {
+        entity: RawOracleAusenciaEntity,
+        valueColumn: 'employeeCount',
+        dateColumn: 'metricDate',
+        sectorColumn: 'sectorName',
+        dateGranularity: 'day',
+        filterColumn: 'occurrenceType',
+        filterValue: 'ATESTADO FUNC',
+      },
+      COLISÃO: {
+        entity: RawOracleColisaoEntity,
+        valueColumn: 'totalCount',
+        dateColumn: 'metricDate',
+        sectorColumn: 'sectorName',
+        dateGranularity: 'day',
+      },
+      'FALTA FROTA': {
+        // Assumindo que FALTA FROTA está em RawMySqlOcorrenciaHorariaEntity
+        // e que o criterionName é 'FALTA FROTA'
+        entity: RawMySqlOcorrenciaHorariaEntity,
+        valueColumn: 'totalCount',
+        dateColumn: 'metricDate',
+        sectorColumn: 'sectorName',
+        dateGranularity: 'day',
+        filterColumn: 'criterionName',
+        filterValue: 'FALTA FROTA',
+      },
+      IPK: {
+        entity: RawOracleIpkCalculadoEntity,
+        valueColumn: 'ipkValue',
+        dateColumn: 'metricMonth',
+        sectorColumn: 'sectorName',
+        dateGranularity: 'month',
+      },
+      'MEDIA KM/L': {
+        entity: RawOracleFleetPerformanceEntity,
+        valueColumn: 'avgKmL',
+        dateColumn: 'metricMonth',
+        sectorColumn: 'sectorName',
+        dateGranularity: 'month',
+      },
+      'KM OCIOSA': {
+        entity: RawOracleKmOciosaComponentsEntity,
+        valueColumn: 'kmOperacional',
+        dateColumn: 'metricMonth',
+        sectorColumn: 'sectorName',
+        dateGranularity: 'month',
+      },
+      PEÇAS: {
+        entity: RawOracleEstoqueCustoEntity,
+        valueColumn: 'totalValue',
+        dateColumn: 'metricDate',
+        sectorColumn: 'sectorName',
+        dateGranularity: 'day',
+        filterColumn: 'criterionName',
+        filterValue: 'PEÇAS',
+      },
+      PNEUS: {
+        entity: RawOracleEstoqueCustoEntity,
+        valueColumn: 'totalValue',
+        dateColumn: 'metricDate',
+        sectorColumn: 'sectorName',
+        dateGranularity: 'day',
+        filterColumn: 'criterionName',
+        filterValue: 'PNEUS',
+      },
+      COMBUSTIVEL: {
+        entity: RawOracleFleetPerformanceEntity,
+        valueColumn: 'totalFuelLiters',
+        dateColumn: 'metricMonth',
+        sectorColumn: 'sectorName',
+        dateGranularity: 'month',
+      },
+      'FURO POR ATRASO': {
+        entity: RawMySqlOcorrenciaHorariaEntity,
+        valueColumn: 'totalCount',
+        dateColumn: 'metricDate',
+        sectorColumn: 'sectorName',
+        dateGranularity: 'day',
+        filterColumn: 'criterionName',
+        filterValue: 'FURO POR ATRASO',
+      },
+    };
 
     console.log('[ParameterService] Instanciado e repositórios configurados.');
   }
@@ -1661,6 +1812,122 @@ export class ParameterService {
     });
 
     return counts;
+  }
+
+  /**
+   * Calcula a projeção de valor para um critério com base em um período de amostra.
+   */
+  async getProjectionData(data: {
+    criterionId: number;
+    startDate: string;
+    endDate: string;
+    targetMonth: string;
+  }): Promise<any[]> {
+    const { criterionId, startDate, endDate, targetMonth } = data;
+
+    console.log(
+      `[ParameterService] Calculando projeção para critério ${criterionId} ` +
+        `de ${startDate} a ${endDate} para o mês ${targetMonth}`
+    );
+
+    // 1. Obter o critério para acessar o nome e mapeamento
+    const criterion = await this.criterionRepo.findOneBy({ id: criterionId });
+    if (!criterion) {
+      console.warn(
+        `[ParameterService] Critério com ID ${criterionId} não encontrado.`
+      );
+      return [];
+    }
+
+    const mapping = this.rawDataTableMappings[criterion.nome.toUpperCase()];
+    if (!mapping) {
+      console.warn(
+        `[ParameterService] Mapeamento de tabela raw não encontrado para o critério: ${criterion.nome}`
+      );
+      return [];
+    }
+
+    const rawRepo = AppDataSource.getRepository(mapping.entity);
+    const alias = 'raw';
+
+    // 2. Calcular o número de dias no período de amostra e no mês alvo
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const sampleDays =
+      (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24) + 1;
+
+    const [year, month] = targetMonth.split('-').map(Number) as [
+      number,
+      number,
+    ];
+    // Date(year, month, 0) retorna o último dia do mês anterior.
+    // Date(year, month, 0).getDate() retorna o número de dias do mês anterior.
+    // Para o mês atual, use new Date(year, month + 1, 0).getDate()
+    const targetMonthDays = new Date(year, month, 0).getDate();
+
+    if (sampleDays <= 0) {
+      console.warn(
+        `[ParameterService] Período de amostra inválido (${sampleDays} dias).`
+      );
+      return [];
+    }
+
+    // 3. Construir a query dinamicamente
+    const queryBuilder = rawRepo
+      .createQueryBuilder(alias)
+      .select(`${alias}.${mapping.sectorColumn}`, 'sectorName')
+      .addSelect(`SUM(${alias}.${mapping.valueColumn})`, 'realizadoNoPeriodo')
+      .groupBy(`${alias}.${mapping.sectorColumn}`);
+
+    // Adicionar filtro de data
+    if (mapping.dateGranularity === 'day') {
+      queryBuilder.andWhere(`${alias}.${mapping.dateColumn} BETWEEN :startDate AND :endDate`, {
+        startDate,
+        endDate,
+      });
+    } else {
+      // Para granularidade mensal, extrair o mês/ano e comparar
+      // Assumindo que metricMonth está no formato YYYY-MM
+      const startMonth = startDate.substring(0, 7); // YYYY-MM
+      const endMonth = endDate.substring(0, 7); // YYYY-MM
+      queryBuilder.andWhere(`${alias}.${mapping.dateColumn} BETWEEN :startMonth AND :endMonth`, {
+        startMonth,
+        endMonth,
+      });
+    }
+
+    // Adicionar filtro específico do critério, se houver
+    if (mapping.filterColumn && mapping.filterValue) {
+      queryBuilder.andWhere(`${alias}.${mapping.filterColumn} = :filterValue`, {
+        filterValue: mapping.filterValue,
+      });
+    }
+
+    const results = await queryBuilder.getRawMany();
+
+    console.log(
+      `[ParameterService] ${results.length} resultados brutos encontrados para projeção.`
+    );
+
+    // 4. Calcular a projeção para cada setor
+    const projection = results.map((result) => {
+      const realizado = parseFloat(result.realizadoNoPeriodo || '0'); // Garante que é um número
+      const dailyAverage = realizado / sampleDays;
+      const projectedValue = dailyAverage * targetMonthDays;
+
+      return {
+        sectorName: result.sectorName || 'Geral', // Nome do setor pode ser null/undefined
+        realizadoNoPeriodo: realizado,
+        valorProjetado: projectedValue,
+      };
+    });
+
+    console.log(
+      `[ParameterService] Projeção calculada:`,
+      JSON.stringify(projection)
+    );
+
+    return projection;
   }
 
   /**

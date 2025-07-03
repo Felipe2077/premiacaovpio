@@ -105,7 +105,7 @@ export class CompetitionPeriodService {
         console.log(
           '[PeriodService] Nenhum período em PLANEJAMENTO. Criando o próximo...'
         );
-        const lastPeriod = await this.periodRepo.findOne({
+        const [lastPeriod] = await this.periodRepo.find({
           order: { dataFim: 'DESC' }, // Pega o último período existente (qualquer status)
         });
 

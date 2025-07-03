@@ -150,8 +150,9 @@ export const AppDataSource = new DataSource({
   password: dbConfig.password,
   database: dbConfig.database,
   synchronize: process.env.NODE_ENV === 'development', // APENAS EM DEV!
-  logging:
-    process.env.NODE_ENV === 'development' ? ['query', 'error'] : ['error'],
+  logging: true,
+  // logging:
+  //   process.env.NODE_ENV === 'development' ? ['query', 'error'] : ['error'],
   entities,
   migrations: ['src/database/migrations/*.ts'],
   subscribers: ['src/database/subscribers/*.ts'],

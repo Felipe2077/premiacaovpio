@@ -112,6 +112,17 @@ const parametersRoutes: FastifyPluginAsync = async (
     controller.getCalculationSettings.bind(controller)
   );
 
+  /**
+   * GET /api/parameters/projection - Projeta o valor de um critério
+   */
+  fastify.get(
+    '/api/parameters/projection',
+    {
+      preHandler: [(fastify as any).authenticate, viewParameters],
+    },
+    controller.getProjection.bind(controller)
+  );
+
   fastify.log.info('✅ Rotas de Parâmetros registradas');
 };
 

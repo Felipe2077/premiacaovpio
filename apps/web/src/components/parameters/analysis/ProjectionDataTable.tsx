@@ -15,50 +15,22 @@ import {
 import { useMemo } from 'react';
 
 interface ProjectionDataTableProps {
-  currentPeriodData: EntradaResultadoDetalhado[];
+  projectionData: {
+    sectorName: string;
+    realizadoNoPeriodo: number | null;
+    valorProjetado: number;
+  }[];
   period: CompetitionPeriod;
-  // ✅ NOVAS PROPS PARA CLAREZA
   criterionName: string;
   formattedPeriod: string;
 }
 
 export const ProjectionDataTable = ({
-  currentPeriodData,
+  projectionData,
   period,
   criterionName,
   formattedPeriod,
 }: ProjectionDataTableProps) => {
-  const projectionData = useMemo(() => {
-    const today = new Date();
-    const startDate = new Date(period.dataInicio);
-
-    const effectiveToday =
-      today > new Date(period.dataFim) ? new Date(period.dataFim) : today;
-
-    if (effectiveToday < startDate) return [];
-
-    const daysElapsed = Math.ceil(
-      (effectiveToday.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
-    );
-    const totalDaysInMonth = new Date(
-      startDate.getFullYear(),
-      startDate.getMonth() + 1,
-      0
-    ).getDate();
-
-    if (daysElapsed <= 0) return [];
-
-    return currentPeriodData.map((item) => {
-      const dailyAverage = (item.valorRealizado ?? 0) / daysElapsed;
-      const projection = dailyAverage * totalDaysInMonth;
-      return {
-        sectorName: item.setorNome,
-        currentValue: item.valorRealizado,
-        projectedValue: projection,
-      };
-    });
-  }, [currentPeriodData, period]);
-
   if (!projectionData.length) return null;
 
   return (
@@ -86,10 +58,10 @@ export const ProjectionDataTable = ({
               <TableRow key={row.sectorName}>
                 <TableCell>{row.sectorName}</TableCell>
                 <TableCell className='text-right'>
-                  {row.currentValue?.toLocaleString('pt-BR') ?? '-'}
+                  {row.realizadoNoPeriodo?.toLocaleString('pt-BR') ?? '-'}
                 </TableCell>
                 <TableCell className='text-right font-semibold'>
-                  {Math.round(row.projectedValue).toLocaleString('pt-BR')}
+                  {Math.round(row.valorProjetado).toLocaleString('pt-BR')}
                 </TableCell>
               </TableRow>
             ))}

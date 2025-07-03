@@ -1,7 +1,9 @@
-// apps/web/src/components/parameters/analysis/AnalysisPanel.tsx - VERSÃO FINAL COMPLETA E CORRIGIDA
+// apps/web/src/components/parameters/analysis/AnalysisPanel.tsx - VERSÃO RESTAURADA
 'use client';
 
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -50,6 +52,10 @@ export const AnalysisPanel = ({
     null
   );
   const [historyMonths, setHistoryMonths] = useState<number>(6);
+  const [projectionStartDate, setProjectionStartDate] = useState<string>('');
+  const [projectionEndDate, setProjectionEndDate] = useState<string>('');
+  const [projectionApiData, setProjectionApiData] = useState<any[]>([]);
+  const [isProjectionLoading, setIsProjectionLoading] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [historicalResults, setHistoricalResults] = useState<
@@ -76,7 +82,6 @@ export const AnalysisPanel = ({
   const formattedCurrentPeriod = formatPeriod(period?.mesAno || null);
   const formattedPreviousPeriod = formatPeriod(previousMonthPeriod);
 
-  // ✅ ESTA É A LINHA QUE ESTAVA FALTANDO NA SUA VERSÃO
   const historyPeriodLabel = useMemo(() => {
     return `Últimos ${historyMonths} meses`;
   }, [historyMonths]);
@@ -97,7 +102,38 @@ export const AnalysisPanel = ({
     return periodsArray.reverse();
   }, [period, historyMonths]);
 
+  const handleCalculateProjection = async () => {
+    if (
+      !selectedCriterionId ||
+      !projectionStartDate ||
+      !projectionEndDate ||
+      !period
+    ) {
+      toast.error(
+        'Por favor, selecione um critério e um intervalo de datas para a projeção.'
+      );
+      return;
+    }
+
+    setIsProjectionLoading(true);
+    try {
+      const apiUrl = `/api/parameters/projection?criterionId=${selectedCriterionId}&startDate=${projectionStartDate}&endDate=${projectionEndDate}&targetMonth=${period.mesAno}`;
+      const response = await fetch(apiUrl);
+      if (!response.ok) {
+        throw new Error('Falha ao buscar dados de projeção');
+      }
+      const data = await response.json();
+      setProjectionApiData(data);
+    } catch (error) {
+      toast.error('Erro ao calcular projeção.');
+      console.error(error);
+    } finally {
+      setIsProjectionLoading(false);
+    }
+  };
+
   useEffect(() => {
+    setProjectionApiData([]); // Limpa os dados da projeção ao mudar o critério
     if (selectedCriterionId && previousMonthPeriod) {
       const fetchData = async () => {
         setIsLoading(true);
@@ -245,12 +281,44 @@ export const AnalysisPanel = ({
             />
 
             {period.status !== 'FECHADA' && (
-              <ProjectionDataTable
-                currentPeriodData={currentPeriodFilteredData}
-                period={period}
-                criterionName={selectedCriterion.nome}
-                formattedPeriod={formattedCurrentPeriod}
-              />
+              <>
+                <div className='flex items-end gap-2'>
+                  <div className='flex-1'>
+                    <label className='text-sm font-medium'>
+                      Data de Início da Amostra para Projeção
+                    </label>
+                    <Input
+                      type='date'
+                      value={projectionStartDate}
+                      onChange={(e) => setProjectionStartDate(e.target.value)}
+                    />
+                  </div>
+                  <div className='flex-1'>
+                    <label className='text-sm font-medium'>
+                      Data de Fim da Amostra para Projeção
+                    </label>
+                    <Input
+                      type='date'
+                      value={projectionEndDate}
+                      onChange={(e) => setProjectionEndDate(e.target.value)}
+                    />
+                  </div>
+                  <Button
+                    onClick={handleCalculateProjection}
+                    disabled={isProjectionLoading}
+                  >
+                    {isProjectionLoading
+                      ? 'Calculando...'
+                      : 'Calcular Projeção'}
+                  </Button>
+                </div>
+                <ProjectionDataTable
+                  projectionData={projectionApiData}
+                  period={period}
+                  criterionName={selectedCriterion.nome}
+                  formattedPeriod={formattedCurrentPeriod}
+                />
+              </>
             )}
 
             <ComparisonDataTable
