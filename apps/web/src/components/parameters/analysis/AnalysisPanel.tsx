@@ -1,7 +1,6 @@
-// apps/web/src/components/parameters/analysis/AnalysisPanel.tsx - VERSÃO RESTAURADA
+// apps/web/src/components/parameters/analysis/AnalysisPanel.tsx - VERSÃO FINAL LIMPA
 'use client';
 
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
@@ -17,7 +16,7 @@ import {
   EntradaResultadoDetalhado,
   Sector,
 } from '@/hooks/useParametersData';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ComparisonDataTable } from './ComparisonDataTable';
 import { HistoricalDataTable } from './HistoricalDataTable';
@@ -65,6 +64,9 @@ export const AnalysisPanel = ({
     EntradaResultadoDetalhado[]
   >([]);
 
+  // ✅ CORREÇÃO: useRef para evitar dependência circular
+  const isAutoCalculatingRef = useRef(false);
+
   const selectedCriterion = useMemo(
     () => allCriteria.find((c) => c.id === Number(selectedCriterionId)) || null,
     [allCriteria, selectedCriterionId]
@@ -102,16 +104,20 @@ export const AnalysisPanel = ({
     return periodsArray.reverse();
   }, [period, historyMonths]);
 
-  const handleCalculateProjection = async () => {
+  // ✅ CORREÇÃO 1: Removido isProjectionLoading das dependências
+  const handleCalculateProjection = useCallback(async () => {
     if (
       !selectedCriterionId ||
       !projectionStartDate ||
       !projectionEndDate ||
       !period
     ) {
-      toast.error(
-        'Por favor, selecione um critério e um intervalo de datas para a projeção.'
-      );
+      // Só exibe toast se for chamada manual (não automática)
+      if (!isAutoCalculatingRef.current) {
+        toast.error(
+          'Por favor, selecione um critério e um intervalo de datas para a projeção.'
+        );
+      }
       return;
     }
 
@@ -130,7 +136,7 @@ export const AnalysisPanel = ({
     } finally {
       setIsProjectionLoading(false);
     }
-  };
+  }, [selectedCriterionId, projectionStartDate, projectionEndDate, period]);
 
   useEffect(() => {
     setProjectionApiData([]); // Limpa os dados da projeção ao mudar o critério
@@ -176,6 +182,27 @@ export const AnalysisPanel = ({
       fetchData();
     }
   }, [selectedCriterionId, historicalPeriods, previousMonthPeriod]);
+
+  // ✅ CORREÇÃO 2: useEffect separado com controle de auto-cálculo
+  useEffect(() => {
+    if (
+      selectedCriterionId &&
+      projectionStartDate &&
+      projectionEndDate &&
+      period
+    ) {
+      isAutoCalculatingRef.current = true;
+      handleCalculateProjection().finally(() => {
+        isAutoCalculatingRef.current = false;
+      });
+    }
+  }, [
+    selectedCriterionId,
+    projectionStartDate,
+    projectionEndDate,
+    period,
+    handleCalculateProjection,
+  ]);
 
   const historicalDataFormatted = useMemo(() => {
     if (!historicalResults.length || !sectors.length) return [];
@@ -270,63 +297,135 @@ export const AnalysisPanel = ({
             Selecione um critério acima para visualizar os dados de apoio.
           </div>
         ) : (
-          <div className='space-y-8 animate-in fade-in-25'>
-            <HistoricalDataTable
-              data={historicalDataFormatted}
-              periods={historicalPeriods}
-              isLoading={isLoading}
-              criterionName={selectedCriterion.nome}
-              decimalPlaces={selectedCriterion.casasDecimaisPadrao ?? 0}
-              periodLabel={historyPeriodLabel}
-            />
+          <div className='space-y-6 animate-in fade-in-25'>
+            <Card className='border-orange-200 dark:border-orange-800 bg-orange-50/30 dark:bg-orange-950/20'>
+              <CardHeader className='pb-4'>
+                <div className='flex items-center gap-2'>
+                  <div className='h-2 w-2 bg-orange-500 rounded-full' />
+                  <CardTitle className='text-lg'>
+                    Histórico de Realizado: {selectedCriterion.nome} -{' '}
+                    {historyPeriodLabel}
+                  </CardTitle>
+                </div>
+                <p className='text-sm text-muted-foreground mt-1'>
+                  Evolução dos valores realizados por filial nos últimos
+                  períodos
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className='[&_table]:text-base [&_td]:text-base [&_th]:text-base'>
+                  <HistoricalDataTable
+                    data={historicalDataFormatted}
+                    periods={historicalPeriods}
+                    isLoading={isLoading}
+                    criterionName={selectedCriterion.nome}
+                    decimalPlaces={selectedCriterion.casasDecimaisPadrao ?? 0}
+                    periodLabel={historyPeriodLabel}
+                  />
+                </div>
+              </CardContent>
+            </Card>
 
             {period.status !== 'FECHADA' && (
-              <>
-                <div className='flex items-end gap-2'>
-                  <div className='flex-1'>
-                    <label className='text-sm font-medium'>
-                      Data de Início da Amostra para Projeção
-                    </label>
-                    <Input
-                      type='date'
-                      value={projectionStartDate}
-                      onChange={(e) => setProjectionStartDate(e.target.value)}
-                    />
+              <Card className='border-blue-200 dark:border-blue-800 bg-blue-50/30 dark:bg-blue-950/20'>
+                <CardHeader className='pb-4'>
+                  <div className='flex items-center gap-2'>
+                    <div className='h-2 w-2 bg-blue-500 rounded-full' />
+                    <CardTitle className='text-lg'>
+                      Projeção de {selectedCriterion.nome} para{' '}
+                      {formattedCurrentPeriod}
+                    </CardTitle>
                   </div>
-                  <div className='flex-1'>
-                    <label className='text-sm font-medium'>
-                      Data de Fim da Amostra para Projeção
-                    </label>
-                    <Input
-                      type='date'
-                      value={projectionEndDate}
-                      onChange={(e) => setProjectionEndDate(e.target.value)}
-                    />
+                  <p className='text-sm text-muted-foreground mt-1'>
+                    Selecione um período de amostra para calcular a projeção
+                    baseada em dados históricos
+                  </p>
+                </CardHeader>
+                <CardContent className='space-y-4'>
+                  <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                    <div className='space-y-2'>
+                      <label className='text-sm font-medium text-foreground'>
+                        📅 Data de Início da Amostra
+                      </label>
+                      <Input
+                        type='date'
+                        value={projectionStartDate}
+                        onChange={(e) => setProjectionStartDate(e.target.value)}
+                        className='w-full'
+                        placeholder='Selecione a data inicial'
+                      />
+                    </div>
+                    <div className='space-y-2'>
+                      <label className='text-sm font-medium text-foreground'>
+                        📅 Data de Fim da Amostra
+                      </label>
+                      <Input
+                        type='date'
+                        value={projectionEndDate}
+                        onChange={(e) => setProjectionEndDate(e.target.value)}
+                        className='w-full'
+                        placeholder='Selecione a data final'
+                      />
+                    </div>
                   </div>
-                  <Button
-                    onClick={handleCalculateProjection}
-                    disabled={isProjectionLoading}
-                  >
-                    {isProjectionLoading
-                      ? 'Calculando...'
-                      : 'Calcular Projeção'}
-                  </Button>
-                </div>
-                <ProjectionDataTable
-                  projectionData={projectionApiData}
-                  period={period}
-                  criterionName={selectedCriterion.nome}
-                  formattedPeriod={formattedCurrentPeriod}
-                />
-              </>
+
+                  {projectionStartDate && projectionEndDate ? (
+                    <div className='mt-6 pt-4 border-t border-blue-200 dark:border-blue-800'>
+                      <div className='[&_table]:text-base [&_td]:text-base [&_th]:text-base'>
+                        <ProjectionDataTable
+                          projectionData={projectionApiData}
+                          period={period}
+                          criterionName={selectedCriterion.nome}
+                          formattedPeriod={formattedCurrentPeriod}
+                          sectors={sectors}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className='mt-6 pt-4 border-t border-blue-200 dark:border-blue-800'>
+                      <div className='text-center py-8 text-muted-foreground'>
+                        <div className='w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center'>
+                          <span className='text-2xl'>⏳</span>
+                        </div>
+                        <h4 className='font-medium mb-2'>
+                          Selecione o Período de Amostra
+                        </h4>
+                        <p className='text-sm'>
+                          Escolha as datas de início e fim para calcular a
+                          projeção baseada em dados históricos
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             )}
 
-            <ComparisonDataTable
-              data={previousMonthFilteredData}
-              period={previousMonthPeriod}
-              criterionName={selectedCriterion.nome}
-              formattedPeriod={formattedPreviousPeriod}
-            />
+            <Card className='border-green-200 dark:border-green-800 bg-green-50/30 dark:bg-green-950/20'>
+              <CardHeader className='pb-4'>
+                <div className='flex items-center gap-2'>
+                  <div className='h-2 w-2 bg-green-500 rounded-full' />
+                  <CardTitle className='text-lg'>
+                    Meta vs. Realizado: {selectedCriterion.nome} -{' '}
+                    {formattedPreviousPeriod}
+                  </CardTitle>
+                </div>
+                <p className='text-sm text-muted-foreground mt-1'>
+                  Comparação entre metas definidas e valores realizados no
+                  período anterior
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className='[&_table]:text-base [&_td]:text-base [&_th]:text-base'>
+                  <ComparisonDataTable
+                    data={previousMonthFilteredData}
+                    period={previousMonthPeriod}
+                    criterionName={selectedCriterion.nome}
+                    formattedPeriod={formattedPreviousPeriod}
+                  />
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
       </CardContent>

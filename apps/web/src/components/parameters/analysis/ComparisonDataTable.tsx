@@ -46,10 +46,10 @@ export const ComparisonDataTable = ({
           <TableHeader className='bg-amber-300/80 dark:bg-amber-950/20'>
             <TableRow>
               <TableHead className='font-bold'>Filial</TableHead>
-              <TableHead className='text-right font-bold'>
+              <TableHead className='text-center font-bold'>
                 Meta Definida
               </TableHead>
-              <TableHead className='text-right font-bold'>Realizado</TableHead>
+              <TableHead className='text-center font-bold'>Realizado</TableHead>
               <TableHead className='font-bold'>Atingimento</TableHead>
             </TableRow>
           </TableHeader>
@@ -57,10 +57,10 @@ export const ComparisonDataTable = ({
             {data.map((row) => (
               <TableRow key={row.setorId}>
                 <TableCell>{row.setorNome}</TableCell>
-                <TableCell className='text-right'>
+                <TableCell className='text-center'>
                   {row.valorMeta?.toLocaleString('pt-BR') ?? 'N/D'}
                 </TableCell>
-                <TableCell className='text-right'>
+                <TableCell className='text-center'>
                   {row.valorRealizado?.toLocaleString('pt-BR') ?? '-'}
                 </TableCell>
                 <TableCell>

@@ -1,4 +1,4 @@
-// apps/web/src/components/parameters/analysis/ProjectionDataTable.tsx - VERSÃO COM UI MELHORADA
+// apps/web/src/components/parameters/analysis/ProjectionDataTable.tsx - VERSÃO CORRIGIDA
 'use client';
 import {
   Table,
@@ -8,10 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  CompetitionPeriod,
-  EntradaResultadoDetalhado,
-} from '@/hooks/useParametersData';
+import { CompetitionPeriod, Sector } from '@/hooks/useParametersData';
 import { useMemo } from 'react';
 
 interface ProjectionDataTableProps {
@@ -23,6 +20,7 @@ interface ProjectionDataTableProps {
   period: CompetitionPeriod;
   criterionName: string;
   formattedPeriod: string;
+  sectors: Sector[]; // ✅ NOVA PROP: Lista completa de setores
 }
 
 export const ProjectionDataTable = ({
@@ -30,8 +28,23 @@ export const ProjectionDataTable = ({
   period,
   criterionName,
   formattedPeriod,
+  sectors, // ✅ RECEBE A LISTA COMPLETA DE SETORES
 }: ProjectionDataTableProps) => {
-  if (!projectionData.length) return null;
+  // ✅ DADOS FORMATADOS: Sempre inclui todos os setores
+  const formattedData = useMemo(() => {
+    return sectors.map((sector) => {
+      // Procura dados do setor na API
+      const apiData = projectionData.find(
+        (item) => item.sectorName === sector.nome
+      );
+
+      return {
+        sectorName: sector.nome,
+        realizadoNoPeriodo: apiData?.realizadoNoPeriodo ?? 0,
+        valorProjetado: apiData?.valorProjetado ?? 0,
+      };
+    });
+  }, [projectionData, sectors]);
 
   return (
     <div>
@@ -45,23 +58,27 @@ export const ProjectionDataTable = ({
           <TableHeader className='bg-amber-300/80 dark:bg-amber-950/20'>
             <TableRow>
               <TableHead className='font-bold'>Filial</TableHead>
-              <TableHead className='text-right font-bold'>
+              <TableHead className='text-center font-bold'>
                 Realizado Atual
               </TableHead>
-              <TableHead className='text-right font-bold'>
+              <TableHead className='text-center font-bold'>
                 Projeção Fim do Mês
               </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {projectionData.map((row) => (
+            {formattedData.map((row) => (
               <TableRow key={row.sectorName}>
                 <TableCell>{row.sectorName}</TableCell>
-                <TableCell className='text-right'>
-                  {row.realizadoNoPeriodo?.toLocaleString('pt-BR') ?? '-'}
+                <TableCell className='text-center'>
+                  {row.realizadoNoPeriodo > 0
+                    ? row.realizadoNoPeriodo.toLocaleString('pt-BR')
+                    : '0'}
                 </TableCell>
-                <TableCell className='text-right font-semibold'>
-                  {Math.round(row.valorProjetado).toLocaleString('pt-BR')}
+                <TableCell className='text-center font-semibold'>
+                  {row.valorProjetado > 0
+                    ? Math.round(row.valorProjetado).toLocaleString('pt-BR')
+                    : '0'}
                 </TableCell>
               </TableRow>
             ))}
