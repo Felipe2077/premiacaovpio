@@ -173,7 +173,7 @@ export function AdminHeader({
             <DropdownMenuTrigger asChild>
               <Button
                 variant='ghost'
-                className='flex items-center space-x-3 px-3 py-2 hover:bg-amber-500/5 hover:border hover:border-amber-500/20 text-white rounded-lg transition-all'
+                className='flex cursor-pointer items-center space-x-3 px-3 py-2 hover:bg-amber-500/5 hover:border hover:border-amber-500/20 text-white rounded-lg transition-all'
               >
                 <Avatar className='h-8 w-8 ring-2 ring-amber-400/30'>
                   <AvatarFallback

@@ -157,7 +157,7 @@ export function AdminSidebar({
               variant='ghost'
               size='sm'
               onClick={handleToggleCollapse}
-              className='text-neutral-400 hover:text-amber-300 hover:bg-amber-500/5 p-2 rounded-lg transition-all'
+              className=' cursor-pointer text-neutral-400 hover:text-amber-300 hover:bg-amber-500/5 p-2 rounded-lg transition-all'
             >
               {isCollapsed ? (
                 <ChevronRight className='h-4 w-4' />
