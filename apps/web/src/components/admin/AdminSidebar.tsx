@@ -77,7 +77,7 @@ export function AdminSidebar({
       icon: Clock,
       show: canViewReports() || isDirector(),
       hasBadge: true,
-      description: 'Gerenciar vigências',
+      description: 'Períodos ativos',
     },
     {
       title: 'Gerenciar Metas',

@@ -433,7 +433,7 @@ export default function ParametersPage() {
             <CardHeader>
               <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4'>
                 <CardTitle>
-                  Salvar metas - {selectedPeriod.mesAno}
+                  Matriz de Parâmetros - {selectedPeriod.mesAno}
                   <span
                     className={`ml-2 text-sm font-normal px-2 py-0.5 rounded-full ${
                       selectedPeriod.status === 'PLANEJAMENTO'

@@ -29,9 +29,9 @@ export const ParametersHeader: React.FC<ParametersHeaderProps> = ({
   return (
     <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'>
       <div>
-        <h1 className='text-2xl font-bold tracking-tight'>Metas</h1>
+        <h1 className='text-2xl font-bold tracking-tight'>Parâmetros</h1>
         <p className='text-muted-foreground'>
-          Gerencie as metas e para cada setor e critério.
+          Gerencie as metas e parâmetros para cada setor e critério.
         </p>
       </div>
       <div className='flex items-center gap-2'>
