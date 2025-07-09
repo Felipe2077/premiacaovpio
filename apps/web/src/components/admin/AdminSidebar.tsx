@@ -225,16 +225,6 @@ export function AdminSidebar({
                       <span className='text-sm font-medium truncate'>
                         {item.title}
                       </span>
-                      <div className='flex items-center space-x-1'>
-                        {/* Badge novo com cor mais suave */}
-                        {item.isNew && (
-                          <div className='bg-gradient-to-r from-emerald-400 to-green-500 text-xs px-2 py-0.5 rounded-full text-neutral-900 font-bold'>
-                            NOVO
-                          </div>
-                        )}
-                        {/* Badge de notificação */}
-                        {item.hasBadge && <VigenciasBadge />}
-                      </div>
                     </div>
                     {item.description && (
                       <p className='text-xs text-neutral-500 mt-0.5 truncate'>

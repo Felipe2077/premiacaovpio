@@ -28,7 +28,11 @@ export default function Header() {
               priority // Carrega a logo com prioridade
             />
           </Link>
-
+          <div>
+            <h1 className='text-3xl font-bold text-white'>
+              Premiação - Viação Pioneira
+            </h1>
+          </div>
           {/* Lado Direito: Navegação por Ícones e Botão de Admin */}
           <div className='flex items-center gap-2'>
             {/* Ícone para "Como funciona?" com Tooltip */}
