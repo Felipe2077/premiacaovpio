@@ -22,7 +22,14 @@ import {
   UpdateParameterDto,
 } from '@sistema-premiacao/shared-types';
 import 'reflect-metadata';
-import { DeepPartial, FindOptionsWhere, In, IsNull, Repository } from 'typeorm';
+import {
+  Between,
+  DeepPartial,
+  FindOptionsWhere,
+  In,
+  IsNull,
+  Repository,
+} from 'typeorm';
 import { AuditLogService } from '../audit/audit.service';
 import { ExpurgoAutomationHook } from '../expurgos/expurgo-automation.hook';
 import { CriterionCalculationSettingsService } from './criterion-calculation-settings.service';
@@ -1839,16 +1846,7 @@ export class ParameterService {
       return [];
     }
 
-    const mapping = this.rawDataTableMappings[criterion.nome.toUpperCase()];
-    if (!mapping) {
-      console.warn(
-        `[ParameterService] Mapeamento de tabela raw não encontrado para o critério: ${criterion.nome}`
-      );
-      return [];
-    }
-
-    const rawRepo = AppDataSource.getRepository(mapping.entity);
-    const alias = 'raw';
+    const criterionNameUpper = criterion.nome.toUpperCase();
 
     // 2. Calcular o número de dias no período de amostra e no mês alvo
     const start = new Date(startDate);
@@ -1860,9 +1858,6 @@ export class ParameterService {
       number,
       number,
     ];
-    // Date(year, month, 0) retorna o último dia do mês anterior.
-    // Date(year, month, 0).getDate() retorna o número de dias do mês anterior.
-    // Para o mês atual, use new Date(year, month + 1, 0).getDate()
     const targetMonthDays = new Date(year, month, 0).getDate();
 
     if (sampleDays <= 0) {
@@ -1872,38 +1867,114 @@ export class ParameterService {
       return [];
     }
 
-    // 3. Construir a query dinamicamente
-    const queryBuilder = rawRepo
-      .createQueryBuilder(alias)
-      .select(`${alias}.${mapping.sectorColumn}`, 'sectorName')
-      .addSelect(`SUM(${alias}.${mapping.valueColumn})`, 'realizadoNoPeriodo')
-      .groupBy(`${alias}.${mapping.sectorColumn}`);
+    let results: any[] = [];
 
-    // Adicionar filtro de data
-    if (mapping.dateGranularity === 'day') {
-      queryBuilder.andWhere(`${alias}.${mapping.dateColumn} BETWEEN :startDate AND :endDate`, {
-        startDate,
-        endDate,
+    // Lógica especial para KM OCIOSA
+    if (criterionNameUpper === 'KM OCIOSA') {
+      const rawKmOciosaRepo = AppDataSource.getRepository(
+        RawOracleKmOciosaComponentsEntity
+      );
+
+      // Buscar dados brutos de KM Ociosa para o período de amostragem
+      const rawData = await rawKmOciosaRepo.find({
+        where: {
+          metricMonth: Between(
+            startDate.substring(0, 7),
+            endDate.substring(0, 7)
+          ),
+        },
+      });
+
+      // Agrupar por setor e calcular o percentual de ociosidade
+      const groupedBySector = rawData.reduce(
+        (acc, item) => {
+          const sector = item.sectorName || 'Geral';
+          if (!acc[sector]) {
+            acc[sector] = { kmOperacional: 0, kmHodometroAjustado: 0 };
+          }
+          acc[sector].kmOperacional += Number(item.kmOperacional) || 0;
+          acc[sector].kmHodometroAjustado +=
+            Number(item.kmHodometroAjustado) || 0;
+          return acc;
+        },
+        {} as Record<
+          string,
+          { kmOperacional: number; kmHodometroAjustado: number }
+        >
+      );
+
+      results = Object.entries(groupedBySector).map(([sectorName, totals]) => {
+        let percentOciosa = 0;
+        if (totals.kmOperacional > 0) {
+          percentOciosa =
+            ((totals.kmHodometroAjustado - totals.kmOperacional) /
+              totals.kmOperacional) *
+            100;
+          percentOciosa = Number(percentOciosa.toFixed(4));
+        } else {
+          // Se KM Operacional é 0, e Hodômetro é positivo, ociosidade é alta. Se ambos 0, ociosidade 0.
+          percentOciosa = totals.kmHodometroAjustado > 0 ? 9999 : 0; // Usar um valor alto para indicar alta ociosidade
+        }
+        return {
+          sectorName: sectorName,
+          realizadoNoPeriodo: percentOciosa, // O 'realizado' para projeção é o percentual
+        };
       });
     } else {
-      // Para granularidade mensal, extrair o mês/ano e comparar
-      // Assumindo que metricMonth está no formato YYYY-MM
-      const startMonth = startDate.substring(0, 7); // YYYY-MM
-      const endMonth = endDate.substring(0, 7); // YYYY-MM
-      queryBuilder.andWhere(`${alias}.${mapping.dateColumn} BETWEEN :startMonth AND :endMonth`, {
-        startMonth,
-        endMonth,
-      });
-    }
+      // Lógica existente para outros critérios
+      const mapping = this.rawDataTableMappings[criterionNameUpper];
+      if (!mapping) {
+        console.warn(
+          `[ParameterService] Mapeamento de tabela raw não encontrado para o critério: ${criterion.nome}`
+        );
+        return [];
+      }
 
-    // Adicionar filtro específico do critério, se houver
-    if (mapping.filterColumn && mapping.filterValue) {
-      queryBuilder.andWhere(`${alias}.${mapping.filterColumn} = :filterValue`, {
-        filterValue: mapping.filterValue,
-      });
-    }
+      const rawRepo = AppDataSource.getRepository(mapping.entity);
+      const alias = 'raw';
 
-    const results = await queryBuilder.getRawMany();
+      // 3. Construir a query dinamicamente
+      const queryBuilder = rawRepo
+        .createQueryBuilder(alias)
+        .select(`${alias}.${mapping.sectorColumn}`, 'sectorName')
+        .addSelect(`SUM(${alias}.${mapping.valueColumn})`, 'realizadoNoPeriodo')
+        .groupBy(`${alias}.${mapping.sectorColumn}`);
+
+      // Adicionar filtro de data
+      if (mapping.dateGranularity === 'day') {
+        queryBuilder.andWhere(
+          `${alias}.${mapping.dateColumn} BETWEEN :startDate AND :endDate`,
+          {
+            startDate,
+            endDate,
+          }
+        );
+      } else {
+        // Para granularidade mensal, extrair o mês/ano e comparar
+        // Assumindo que metricMonth está no formato YYYY-MM
+        const startMonth = startDate.substring(0, 7); // YYYY-MM
+        const endMonth = endDate.substring(0, 7); // YYYY-MM
+        queryBuilder.andWhere(
+          `${alias}.${mapping.dateColumn} BETWEEN :startMonth AND :endMonth`,
+          {
+            startMonth,
+            endMonth,
+          }
+        );
+      }
+
+      // Adicionar filtro específico do critério, se houver
+      if (mapping.filterColumn && mapping.filterValue) {
+        queryBuilder.andWhere(
+          `${alias}.${mapping.filterColumn} = :filterValue`,
+          {
+            filterValue: mapping.filterValue,
+          }
+        );
+      }
+
+      results = await queryBuilder.getRawMany();
+    }
 
     console.log(
       `[ParameterService] ${results.length} resultados brutos encontrados para projeção.`
