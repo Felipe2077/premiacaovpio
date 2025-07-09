@@ -1,4 +1,6 @@
-// apps/web/src/app/admin/users/components/UserForm.tsx
+// apps/web/src/components/users/UserForm.tsx - LAYOUT CORRIGIDO
+'use client';
+
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -39,7 +41,7 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-// Schema de validação baseado nos DTOs do sistema
+// Schema de validação
 const userFormSchema = z.object({
   nome: z
     .string()
@@ -105,20 +107,15 @@ export function UserForm({
   const handleSubmit = async (data: UserFormData) => {
     try {
       if (isEditing) {
-        // Para edição, remover campos não necessários
         const { password, sendWelcomeEmail, justification, ...updateData } =
           data;
         await onSubmit(updateData as UpdateUserDto);
       } else {
-        // Para criação, incluir todos os campos necessários
         const { justification, ...createData } = data;
         await onSubmit(createData as CreateUserDto);
       }
-
-      // Navegar de volta após sucesso
       router.push('/admin/users');
     } catch (error) {
-      // Erro já tratado pelos hooks de mutação
       console.error('Erro no formulário:', error);
     }
   };
@@ -147,10 +144,12 @@ export function UserForm({
   ];
 
   return (
-    <div className='max-w-2xl mx-auto space-y-6'>
+    <div className='max-w-4xl mx-auto'>
       <Card>
         <CardHeader>
-          <CardTitle>{isEditing ? 'Editar Usuário' : 'Novo Usuário'}</CardTitle>
+          <CardTitle className='text-2xl'>
+            {isEditing ? 'Editar Usuário' : 'Novo Usuário'}
+          </CardTitle>
           <CardDescription>
             {isEditing
               ? 'Atualize as informações do usuário. Campos obrigatórios estão marcados com *'
@@ -162,24 +161,35 @@ export function UserForm({
           <Form {...form}>
             <form
               onSubmit={form.handleSubmit(handleSubmit)}
-              className='space-y-6'
+              className='space-y-8'
             >
-              {/* Informações básicas */}
-              <div className='space-y-4'>
-                <h3 className='text-lg font-medium'>Informações Básicas</h3>
+              {/* SEÇÃO 1: INFORMAÇÕES BÁSICAS */}
+              <div className='space-y-6'>
+                <div className='border-b border-gray-200 pb-2'>
+                  <h3 className='text-lg font-semibold text-gray-900'>
+                    Informações Básicas
+                  </h3>
+                  <p className='text-sm text-gray-600'>
+                    Dados pessoais e de contato do usuário
+                  </p>
+                </div>
 
-                <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+                  {/* Nome Completo */}
                   <FormField
                     control={form.control}
                     name='nome'
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Nome Completo *</FormLabel>
+                        <FormLabel className='text-sm font-medium'>
+                          Nome Completo *
+                        </FormLabel>
                         <FormControl>
                           <Input
                             placeholder='Digite o nome completo'
                             {...field}
                             disabled={isLoading}
+                            className='h-10'
                           />
                         </FormControl>
                         <FormMessage />
@@ -187,21 +197,25 @@ export function UserForm({
                     )}
                   />
 
+                  {/* Email */}
                   <FormField
                     control={form.control}
                     name='email'
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Email *</FormLabel>
+                        <FormLabel className='text-sm font-medium'>
+                          Email *
+                        </FormLabel>
                         <FormControl>
                           <Input
                             type='email'
                             placeholder='usuario@empresa.com'
                             {...field}
                             disabled={isLoading}
+                            className='h-10'
                           />
                         </FormControl>
-                        <FormDescription>
+                        <FormDescription className='text-xs'>
                           {isEditing
                             ? 'Alterar o email pode afetar o acesso do usuário'
                             : 'Email será usado para login no sistema'}
@@ -212,50 +226,67 @@ export function UserForm({
                   />
                 </div>
 
+                {/* Senha (apenas na criação) */}
                 {!isEditing && (
-                  <FormField
-                    control={form.control}
-                    name='password'
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Senha</FormLabel>
-                        <FormControl>
-                          <Input
-                            type='password'
-                            placeholder='Deixe vazio para gerar automaticamente'
-                            {...field}
-                            disabled={isLoading}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          Se não informada, uma senha temporária será gerada
-                          automaticamente
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+                    <FormField
+                      control={form.control}
+                      name='password'
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className='text-sm font-medium'>
+                            Senha
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              type='password'
+                              placeholder='Deixe vazio para gerar automaticamente'
+                              {...field}
+                              disabled={isLoading}
+                              className='h-10'
+                            />
+                          </FormControl>
+                          <FormDescription className='text-xs'>
+                            Se não informada, uma senha temporária será gerada
+                            automaticamente
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div></div> {/* Espaço vazio para manter o grid */}
+                  </div>
                 )}
               </div>
 
-              {/* Permissões e acesso */}
-              <div className='space-y-4'>
-                <h3 className='text-lg font-medium'>Permissões e Acesso</h3>
+              {/* SEÇÃO 2: PERMISSÕES E ACESSO */}
+              <div className='space-y-6'>
+                <div className='border-b border-gray-200 pb-2'>
+                  <h3 className='text-lg font-semibold text-gray-900'>
+                    Permissões e Acesso
+                  </h3>
+                  <p className='text-sm text-gray-600'>
+                    Defina o nível de acesso e setor do usuário
+                  </p>
+                </div>
 
-                <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+                  {/* Função */}
                   <FormField
                     control={form.control}
                     name='role'
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Função *</FormLabel>
+                        <FormLabel className='text-sm font-medium'>
+                          Função *
+                        </FormLabel>
                         <Select
                           onValueChange={field.onChange}
                           defaultValue={field.value}
                           disabled={isLoading}
                         >
                           <FormControl>
-                            <SelectTrigger>
+                            <SelectTrigger className='h-10'>
                               <SelectValue placeholder='Selecione a função' />
                             </SelectTrigger>
                           </FormControl>
@@ -282,26 +313,31 @@ export function UserForm({
                     )}
                   />
 
+                  {/* Setor */}
                   <FormField
                     control={form.control}
                     name='sectorId'
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Setor</FormLabel>
+                        <FormLabel className='text-sm font-medium'>
+                          Setor
+                        </FormLabel>
                         <Select
                           onValueChange={(value) =>
-                            field.onChange(value ? parseInt(value) : null)
+                            field.onChange(
+                              value && value !== 'none' ? parseInt(value) : null
+                            )
                           }
-                          defaultValue={field.value?.toString() || ''}
+                          defaultValue={field.value?.toString() || 'none'}
                           disabled={isLoading || isLoadingSectors}
                         >
                           <FormControl>
-                            <SelectTrigger>
+                            <SelectTrigger className='h-10'>
                               <SelectValue placeholder='Selecione o setor (opcional)' />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value=''>Nenhum setor</SelectItem>
+                            <SelectItem value='none'>Nenhum setor</SelectItem>
                             {sectors?.map((sector) => (
                               <SelectItem
                                 key={sector.id}
@@ -312,7 +348,7 @@ export function UserForm({
                             ))}
                           </SelectContent>
                         </Select>
-                        <FormDescription>
+                        <FormDescription className='text-xs'>
                           Gerentes são limitados ao setor selecionado
                         </FormDescription>
                         <FormMessage />
@@ -320,44 +356,34 @@ export function UserForm({
                     )}
                   />
                 </div>
+              </div>
 
-                <FormField
-                  control={form.control}
-                  name='ativo'
-                  render={({ field }) => (
-                    <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
-                      <div className='space-y-0.5'>
-                        <FormLabel className='text-base'>Conta Ativa</FormLabel>
-                        <FormDescription>
-                          {field.value
-                            ? 'Usuário pode fazer login no sistema'
-                            : 'Usuário não pode fazer login no sistema'}
-                        </FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          disabled={isLoading}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
+              {/* SEÇÃO 3: CONFIGURAÇÕES DA CONTA */}
+              <div className='space-y-6'>
+                <div className='border-b border-gray-200 pb-2'>
+                  <h3 className='text-lg font-semibold text-gray-900'>
+                    Configurações da Conta
+                  </h3>
+                  <p className='text-sm text-gray-600'>
+                    Status e preferências do usuário
+                  </p>
+                </div>
 
-                {!isEditing && (
+                <div className='space-y-4'>
+                  {/* Conta Ativa */}
                   <FormField
                     control={form.control}
-                    name='sendWelcomeEmail'
+                    name='ativo'
                     render={({ field }) => (
                       <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
                         <div className='space-y-0.5'>
-                          <FormLabel className='text-base'>
-                            Enviar Email de Boas-vindas
+                          <FormLabel className='text-base font-medium'>
+                            Conta Ativa
                           </FormLabel>
-                          <FormDescription>
-                            Enviar email com informações de acesso para o
-                            usuário
+                          <FormDescription className='text-sm'>
+                            {field.value
+                              ? 'Usuário pode fazer login no sistema'
+                              : 'Usuário não pode fazer login no sistema'}
                           </FormDescription>
                         </div>
                         <FormControl>
@@ -370,33 +396,69 @@ export function UserForm({
                       </FormItem>
                     )}
                   />
-                )}
+
+                  {/* Enviar Email de Boas-vindas (apenas na criação) */}
+                  {!isEditing && (
+                    <FormField
+                      control={form.control}
+                      name='sendWelcomeEmail'
+                      render={({ field }) => (
+                        <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
+                          <div className='space-y-0.5'>
+                            <FormLabel className='text-base font-medium'>
+                              Enviar Email de Boas-vindas
+                            </FormLabel>
+                            <FormDescription className='text-sm'>
+                              Enviar email com informações de acesso para o
+                              usuário
+                            </FormDescription>
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              disabled={isLoading}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </div>
               </div>
 
-              {/* Justificativa */}
-              <div className='space-y-4'>
-                <h3 className='text-lg font-medium'>Justificativa</h3>
+              {/* SEÇÃO 4: JUSTIFICATIVA */}
+              <div className='space-y-6'>
+                <div className='border-b border-gray-200 pb-2'>
+                  <h3 className='text-lg font-semibold text-gray-900'>
+                    Justificativa
+                  </h3>
+                  <p className='text-sm text-gray-600'>
+                    Descreva o motivo da {isEditing ? 'alteração' : 'criação'}{' '}
+                    deste usuário
+                  </p>
+                </div>
 
                 <FormField
                   control={form.control}
                   name='justification'
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>
+                      <FormLabel className='text-sm font-medium'>
                         Justificativa para {isEditing ? 'alteração' : 'criação'}{' '}
                         *
                       </FormLabel>
                       <FormControl>
                         <Textarea
                           placeholder={`Descreva o motivo da ${isEditing ? 'alteração' : 'criação'} deste usuário...`}
-                          className='min-h-[100px]'
                           {...field}
                           disabled={isLoading}
+                          rows={4}
+                          className='resize-none'
                         />
                       </FormControl>
-                      <FormDescription>
-                        Esta justificativa ficará registrada nos logs de
-                        auditoria
+                      <FormDescription className='text-xs'>
+                        Esta informação será registrada nos logs de auditoria
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -404,12 +466,12 @@ export function UserForm({
                 />
               </div>
 
-              {/* Botões de ação */}
-              <div className='flex flex-col sm:flex-row gap-3 pt-6 border-t'>
+              {/* BOTÕES DE AÇÃO */}
+              <div className='flex flex-col sm:flex-row gap-3 pt-6 border-t border-gray-200'>
                 <Button
                   type='submit'
                   disabled={isLoading}
-                  className='flex-1 sm:flex-none'
+                  className='flex-1 sm:flex-none sm:min-w-[120px]'
                 >
                   {isLoading ? (
                     <>
@@ -429,7 +491,7 @@ export function UserForm({
                   variant='outline'
                   onClick={handleCancel}
                   disabled={isLoading}
-                  className='flex-1 sm:flex-none'
+                  className='flex-1 sm:flex-none sm:min-w-[120px]'
                 >
                   <X className='h-4 w-4 mr-2' />
                   Cancelar

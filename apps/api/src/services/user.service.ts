@@ -269,6 +269,12 @@ export class UserService {
     // Construir query SEM LEFT JOIN (removendo relação sector)
     let query = this.userRepository.createQueryBuilder('user');
 
+    const queryBuilder = this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.sector', 'sector') // ✅ ADICIONADO: LEFT JOIN com tabela sectors
+      .skip(skip)
+      .take(limit);
+
     // Aplicar filtros
     if (validatedFilters.active !== undefined) {
       query = query.andWhere('user.ativo = :active', {
@@ -322,27 +328,29 @@ export class UserService {
     }
 
     // Contar total antes da paginação
-    const total = await query.getCount();
+    const [users, total] = await queryBuilder.getManyAndCount();
 
-    // Aplicar paginação
-    const users = await query.skip(skip).take(limit).getMany();
-
-    // Mapear para UserSummary (sem carregar setor por enquanto)
-    const data: UserSummary[] = users.map((user) => ({
-      id: user.id,
-      nome: user.nome,
-      email: user.email,
-      role: user.role, // Corrigido: role singular, não roles plural
-      ativo: user.ativo,
-      lastLoginAt: user.lastLoginAt,
-      sectorId: user.sectorId,
-      // Não carregar setor por enquanto - placeholder simples
-      sector: undefined,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-      loginAttempts: user.loginAttempts,
-      isLocked: user.isLocked(),
-    }));
+    const data = users.map(
+      (user): UserSummary => ({
+        id: user.id,
+        nome: user.nome,
+        email: user.email,
+        role: user.role,
+        ativo: user.ativo,
+        lastLoginAt: user.lastLoginAt,
+        sectorId: user.sectorId,
+        sector: user.sectorId
+          ? {
+              id: user.sector!.id,
+              nome: user.sector!.nome,
+            }
+          : undefined,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+        loginAttempts: user.loginAttempts,
+        isLocked: user.isLocked(),
+      })
+    );
 
     const totalPages = Math.ceil(total / limit);
 
@@ -363,6 +371,7 @@ export class UserService {
   async findUserById(userId: number): Promise<UserSummary> {
     const user = await this.userRepository
       .createQueryBuilder('user')
+      .leftJoinAndSelect('user.sector', 'sector')
       .where('user.id = :id', { id: userId })
       .getOne();
 
@@ -374,12 +383,17 @@ export class UserService {
       id: user.id,
       nome: user.nome,
       email: user.email,
-      role: user.role, // Corrigido: role singular
+      role: user.role,
       ativo: user.ativo,
       lastLoginAt: user.lastLoginAt,
       sectorId: user.sectorId,
-      // Não carregar setor por enquanto
-      sector: undefined,
+      sector: user.sector
+        ? {
+            // ✅ CORRIGIDO: Mapear dados do setor
+            id: user.sector.id,
+            nome: user.sector.nome,
+          }
+        : undefined,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
       loginAttempts: user.loginAttempts,
@@ -393,6 +407,7 @@ export class UserService {
   async findUserDetailById(userId: number): Promise<UserDetail> {
     const user = await this.userRepository
       .createQueryBuilder('user')
+      .leftJoinAndSelect('user.sector', 'sector') // ✅ ADICIONADO: LEFT JOIN
       .where('user.id = :id', { id: userId })
       .getOne();
 
@@ -405,23 +420,22 @@ export class UserService {
       nome: user.nome,
       email: user.email,
       role: user.role,
-      permissions: user.getPermissions() as Permission[], // Corrigindo o tipo
+      permissions: user.getPermissions() as Permission[],
       ativo: user.ativo,
       sectorId: user.sectorId,
-      // Não carregar setor por enquanto
-      sector: undefined,
-
-      // Dados de segurança
+      sector: user.sector
+        ? {
+            // ✅ CORRIGIDO: Mapear dados do setor
+            id: user.sector.id,
+            nome: user.sector.nome,
+          }
+        : undefined,
       lastLoginAt: user.lastLoginAt,
       loginAttempts: user.loginAttempts,
       lockedUntil: user.lockedUntil,
       isLocked: user.isLocked(),
-
-      // Dados de auditoria
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
-
-      // TODO: Implementar estatísticas opcionais
       activeSessions: 0,
       recentActivity: [],
     };

@@ -15,14 +15,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import {
-  Bell,
   ChevronDown,
   HelpCircle,
   LogOut,
   MessageSquare,
   Monitor,
-  Settings,
-  User,
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -146,7 +143,7 @@ export function AdminHeader({
           </div>
 
           {/* Notificações com hover mais sutil */}
-          <Button
+          {/* <Button
             variant='ghost'
             size='sm'
             className='relative text-neutral-300 hover:text-amber-200 hover:bg-amber-500/5'
@@ -157,7 +154,7 @@ export function AdminHeader({
                 {notifications > 9 ? '9+' : notifications}
               </div>
             )}
-          </Button>
+          </Button> */}
 
           {/* Ajuda com hover mais sutil */}
           <Button
@@ -226,18 +223,12 @@ export function AdminHeader({
               <DropdownMenuSeparator />
 
               {/* Perfil pessoal */}
-              <DropdownMenuItem asChild>
+              {/* <DropdownMenuItem asChild>
                 <Link href='/profile' className='cursor-pointer'>
                   <User className='mr-3 h-4 w-4' />
                   Meu Perfil
                 </Link>
-              </DropdownMenuItem>
-
-              {/* Configurações pessoais */}
-              <DropdownMenuItem>
-                <Settings className='mr-3 h-4 w-4' />
-                Minhas Configurações
-              </DropdownMenuItem>
+              </DropdownMenuItem> */}
 
               {/* Link para página pública */}
               <DropdownMenuItem asChild>

@@ -57,7 +57,7 @@ export default function StartPeriodPage() {
   const params = useParams();
   const router = useRouter();
   const { user } = useAuth();
-  const { isDirector } = usePermissions();
+  const { roles } = usePermissions();
   const periodId = parseInt(params.id as string);
 
   const [justification, setJustification] = useState('');
@@ -66,6 +66,7 @@ export default function StartPeriodPage() {
   const [periodData, setPeriodData] = useState<PeriodData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isDirector = () => roles[0] === 'DIRETOR';
 
   // Verificar se usuário tem permissão
   useEffect(() => {
@@ -83,7 +84,8 @@ export default function StartPeriodPage() {
         setError(null);
 
         // Simular chamada à API - você deve substituir pela API real
-        const response = await fetch(`/api/periods/${periodId}`, {
+        const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+        const response = await fetch(`${API_BASE_URL}/api/periods/${periodId}`, {
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
         });
@@ -140,7 +142,8 @@ export default function StartPeriodPage() {
     setIsSubmitting(true);
     try {
       // Chamada à API para iniciar período
-      const response = await fetch(`/api/periods/${periodId}/start`, {
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${API_BASE_URL}/api/periods/${periodId}/start`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

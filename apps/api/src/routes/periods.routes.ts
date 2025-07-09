@@ -67,6 +67,32 @@ const periodsRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     }
   });
 
+  // GET /api/periods/:id - ROTA PROTEGIDA
+  fastify.get(
+    '/api/periods/:id',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      try {
+        const params = request.params as { id: string };
+        const periodId = parseInt(params.id, 10);
+        request.log.info(`GET /api/periods/${periodId}`);
+
+        const data = await fastify.services.competitionPeriod.findPeriodById(
+          periodId
+        );
+
+        if (!data) {
+          return reply
+            .status(404)
+            .send({ message: 'Período não encontrado.' });
+        }
+        reply.send(data);
+      } catch (error: any) {
+        reply.status(500).send({ error: error.message || 'Erro interno.' });
+      }
+    }
+  );
+
   // POST /api/periods/:id/start - ROTA PROTEGIDA
   fastify.post(
     '/api/periods/:id/start',

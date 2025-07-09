@@ -52,7 +52,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           <main
             className={`flex-1 transition-all duration-300 ${
               sidebarCollapsed ? 'ml-16' : 'ml-72'
-            } pt-16`} // pt-16 para compensar altura do header fixo
+            } `} // pt-16 para compensar altura do header fixo
           >
             {/* Container do conteúdo */}
             <div className='p-4 sm:p-6 lg:p-8'>{children}</div>

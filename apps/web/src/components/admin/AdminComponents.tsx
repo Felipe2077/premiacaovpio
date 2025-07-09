@@ -13,6 +13,7 @@ import {
   ArrowUp,
   CheckCircle,
   Clock,
+  ExternalLink,
   Minus,
   XCircle,
 } from 'lucide-react';
@@ -221,33 +222,9 @@ export function AdminPageHeader({
   title,
   description,
   actions,
-  breadcrumbs,
 }: AdminPageHeaderProps) {
   return (
     <div className='mb-8'>
-      {/* Breadcrumbs */}
-      {breadcrumbs && (
-        <nav className='flex items-center space-x-2 text-sm text-slate-600 mb-4'>
-          {breadcrumbs.map((crumb, index) => (
-            <div key={index} className='flex items-center space-x-2'>
-              {index > 0 && <span>/</span>}
-              {crumb.href ? (
-                <a
-                  href={crumb.href}
-                  className='hover:text-yellow-600 transition-colors'
-                >
-                  {crumb.label}
-                </a>
-              ) : (
-                <span className='text-slate-900 font-medium'>
-                  {crumb.label}
-                </span>
-              )}
-            </div>
-          ))}
-        </nav>
-      )}
-
       {/* Header principal */}
       <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-4'>
         <div>
@@ -258,7 +235,10 @@ export function AdminPageHeader({
         </div>
 
         {actions && (
-          <div className='flex items-center space-x-3'>{actions}</div>
+          <div className='flex items-center space-x-3 bg-amber-300 p-3 rounded-lg hover:bg-amber-200 cursor-pointer'>
+            {actions}
+            <ExternalLink className='h-5 w-5 text-yellow-600' />
+          </div>
         )}
       </div>
     </div>

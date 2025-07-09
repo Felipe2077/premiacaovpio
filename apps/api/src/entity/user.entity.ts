@@ -9,10 +9,13 @@ import {
   CreateDateColumn,
   Entity,
   Index,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { Permission } from './role.entity';
+import { SectorEntity } from './sector.entity';
 
 @Entity('users')
 @Index(['email'], { unique: true })
@@ -41,6 +44,9 @@ export class UserEntity {
 
   @Column({ type: 'int', nullable: true, name: 'sectorId' })
   sectorId?: number;
+  @ManyToOne(() => SectorEntity, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'sectorId' })
+  sector?: SectorEntity;
 
   // Campos que já existem no banco (nomes exatos)
   @CreateDateColumn({ name: 'createdAt' })

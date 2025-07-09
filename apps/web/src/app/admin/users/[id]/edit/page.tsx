@@ -3,12 +3,12 @@
 
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Skeleton } from '@/components/ui/skeleton';
+import { UserForm } from '@/components/users/UserForm';
 import { useUpdateUser, useUserById } from '@/hooks/useUsersData';
 import { Permission } from '@sistema-premiacao/shared-types';
 import { ArrowLeft, Edit, Shield, User } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { UserForm } from '../../components/UserForm';
 
 export default function EditUserPage() {
   const params = useParams();
