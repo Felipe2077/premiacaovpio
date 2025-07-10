@@ -50,6 +50,7 @@ export function AdminSidebar({
     canApproveExpurgos,
     isDirector,
     canViewReports,
+    canViewParameters,
   } = useComponentAccess();
 
   // Use external state if provided, otherwise use internal state
@@ -83,7 +84,7 @@ export function AdminSidebar({
       title: 'Gerenciar Metas',
       href: '/admin/parameters',
       icon: FileText,
-      show: canManageParameters(),
+      show: canViewParameters(),
       description: 'Definir objetivos',
     },
     {

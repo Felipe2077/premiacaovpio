@@ -1,6 +1,8 @@
 // apps/web/src/app/admin/parameters/page.tsx - VERSÃO COMPLETA COM FILTRO NA MATRIZ
 'use client';
-import { FilterX, Loader2 } from 'lucide-react';
+import { useComponentAccess } from '@/components/auth/ProtectedRoute';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { FilterX, Info, Loader2, Lock } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -52,7 +54,6 @@ type CreatePayload = {
 export default function ParametersPage() {
   const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
   const [isMounted, setIsMounted] = useState(false);
-  // ✅ NOVO ESTADO PARA O FILTRO DA MATRIZ
   const [matrixCriterionFilterId, setMatrixCriterionFilterId] = useState<
     string | null
   >(null);
@@ -63,6 +64,9 @@ export default function ParametersPage() {
     calculation: false,
     history: false,
   });
+
+  const { canManageParameters } = useComponentAccess();
+  const isManager = !canManageParameters();
 
   const [modalData, setModalData] = useState({
     editing: null as any,
@@ -398,6 +402,9 @@ export default function ParametersPage() {
       </div>
     );
   }
+  // Verificar se gerente está tentando acessar período PLANEJAMENTO
+  const shouldBlockAccess =
+    isManager && selectedPeriod?.status === 'PLANEJAMENTO';
 
   return (
     <div className='container mx-auto py-6 space-y-6'>
@@ -414,6 +421,38 @@ export default function ParametersPage() {
             <p className='text-muted-foreground'>Selecione um período.</p>
           </CardContent>
         </Card>
+      ) : shouldBlockAccess ? (
+        // ✅ Bloquear acesso de gerente a período PLANEJAMENTO
+        <div className='space-y-4'>
+          <Alert className='border-orange-200 bg-orange-50'>
+            <Lock className='h-4 w-4 text-orange-600' />
+            <AlertDescription className='text-orange-800'>
+              <strong>Acesso Restrito:</strong> Você não tem permissão para
+              visualizar dados de períodos em planejamento. Apenas diretores
+              podem acessar esta vigência.
+            </AlertDescription>
+          </Alert>
+
+          <Card>
+            <CardContent className='flex flex-col items-center justify-center h-64 space-y-4'>
+              <div className='text-center'>
+                <Lock className='h-16 w-16 text-gray-400 mx-auto mb-4' />
+                <h3 className='text-lg font-semibold text-gray-900'>
+                  Período em Planejamento
+                </h3>
+                <p className='text-gray-600 mt-2 max-w-md'>
+                  O período <strong>{selectedPeriod.mesAno}</strong> está em
+                  fase de planejamento. Os dados estarão disponíveis quando o
+                  período for ativado.
+                </p>
+              </div>
+
+              <div className='text-sm text-gray-500 text-center'>
+                <p>Entre em contato com a diretoria para mais informações.</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       ) : (
         <>
           {selectedPeriod.status === 'PLANEJAMENTO' && (
@@ -446,6 +485,13 @@ export default function ParametersPage() {
                     {selectedPeriod.status}
                   </span>
                 </CardTitle>
+                {/* ✅ ADICIONAR INDICADOR VISUAL PARA GERENTES */}
+                {isManager && (
+                  <div className='flex items-center gap-2 text-sm text-blue-600 bg-blue-50 px-3 py-1 rounded-full'>
+                    <Info className='h-4 w-4' />
+                    Modo Visualização
+                  </div>
+                )}
                 <div className='flex items-center gap-2'>
                   <Select
                     value={matrixCriterionFilterId ?? ''}

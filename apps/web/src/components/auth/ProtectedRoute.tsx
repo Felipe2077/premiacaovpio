@@ -246,6 +246,9 @@ export function useComponentAccess() {
     canApproveExpurgos: () => hasPermission(Permission.APPROVE_EXPURGOS),
     canViewReports: () => hasPermission(Permission.VIEW_REPORTS),
     canClosePeriods: () => hasPermission(Permission.CLOSE_PERIODS),
+    canViewParameters: () =>
+      hasPermission(Permission.VIEW_PARAMETERS) ||
+      hasPermission(Permission.MANAGE_PARAMETERS),
 
     // Verificações de role
     isDirector: () => hasRole(Role.DIRETOR),
@@ -260,6 +263,7 @@ export function useComponentAccess() {
         Permission.MANAGE_PARAMETERS,
         Permission.APPROVE_EXPURGOS,
         Permission.VIEW_REPORTS,
+        Permission.VIEW_PARAMETERS,
       ]),
   };
 }
