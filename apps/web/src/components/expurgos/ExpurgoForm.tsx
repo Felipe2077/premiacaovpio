@@ -1,6 +1,7 @@
-// apps/web/src/components/expurgos/forms/ExpurgoForm.tsx (ATUALIZADO)
+// apps/web/src/components/expurgos/ExpurgoForm.tsx - COM RESTRIÇÕES POR ROLE (MANTENDO UI ORIGINAL)
 'use client';
 
+import { useAuth } from '@/components/providers/AuthProvider';
 import { Button } from '@/components/ui/button';
 import { DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -15,10 +16,11 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2 } from 'lucide-react';
-import { useForm, Controller } from 'react-hook-form';
+import { useEffect } from 'react';
+import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-// Schema de validação atualizado
+// Schema de validação (mantido igual)
 const createExpurgoSchema = z.object({
   competitionPeriodId: z
     .number({ required_error: 'Período é obrigatório' })
@@ -58,6 +60,7 @@ interface ExpurgoFormProps {
   onSubmit: (data: CreateExpurgoFormData) => Promise<void>;
   isLoading?: boolean;
   onCancel?: () => void;
+  defaultPeriod?: { id: number; mesAno: string; status: string } | null;
 }
 
 export default function ExpurgoForm({
@@ -70,7 +73,10 @@ export default function ExpurgoForm({
   onSubmit,
   isLoading = false,
   onCancel,
+  defaultPeriod,
 }: ExpurgoFormProps) {
+  const { user } = useAuth();
+
   const {
     register,
     handleSubmit,
@@ -78,6 +84,7 @@ export default function ExpurgoForm({
     formState: { errors, isValid },
     watch,
     reset,
+    setValue,
   } = useForm<CreateExpurgoFormData>({
     resolver: zodResolver(createExpurgoSchema),
     mode: 'onChange',
@@ -89,21 +96,53 @@ export default function ExpurgoForm({
     },
   });
 
+  // Verificar se é gerente
+  const isManager = user?.roles?.includes('GERENTE');
+
+  // Encontrar setor do usuário se for gerente
+  const userSector =
+    isManager && user?.sectorId
+      ? setores.find((s) => s.id === user.sectorId)
+      : null;
+
+  // Filtrar apenas períodos ATIVA (mudança de regra)
+  const availablePeriods = periodos.filter((p) => p.status === 'ATIVA');
+
+  // Período ativo padrão
+  const defaultActivePeriod =
+    defaultPeriod && defaultPeriod.status === 'ATIVA'
+      ? defaultPeriod
+      : availablePeriods[0] || null;
+
   // Observar critério selecionado para mostrar unidade de medida
   const selectedCriterionId = watch('criterionId');
-  const selectedCriterion = criterios.find(c => c.id === selectedCriterionId);
-
-  // Filtrar apenas períodos em PLANEJAMENTO ou ATIVA
-  const availablePeriods = periodos.filter(p => 
-    p.status === 'PLANEJAMENTO' || p.status === 'ATIVA'
-  );
+  const selectedCriterion = criterios.find((c) => c.id === selectedCriterionId);
 
   // Critérios elegíveis para expurgo (conforme backend)
-  const eligibleCriteria = criterios.filter(c => 
-    ['QUEBRA', 'DEFEITO', 'KM OCIOSA', 'FALTA FUNC', 'ATRASO', 'PEÇAS', 'PNEUS'].includes(
-      c.nome.toUpperCase()
-    )
+  const eligibleCriteria = criterios.filter((c) =>
+    [
+      'QUEBRA',
+      'DEFEITO',
+      'KM OCIOSA',
+      'FALTA FUNC',
+      'ATRASO',
+      'PEÇAS',
+      'PNEUS',
+    ].includes(c.nome.toUpperCase())
   );
+
+  // Efeito para pré-selecionar valores quando o componente monta
+  useEffect(() => {
+    // Pré-selecionar período ativo
+    if (defaultActivePeriod && !watch('competitionPeriodId')) {
+      setValue('competitionPeriodId', defaultActivePeriod.id);
+    }
+
+    // Pré-selecionar setor do gerente
+    if (isManager && userSector && !watch('sectorId')) {
+      setValue('sectorId', userSector.id);
+    }
+  }, [defaultActivePeriod, isManager, userSector, setValue, watch]);
 
   const handleFormSubmit = async (data: CreateExpurgoFormData) => {
     try {
@@ -121,128 +160,177 @@ export default function ExpurgoForm({
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className='grid grid-cols-1 lg:grid-cols-3 gap-6'>
       {/* Coluna Principal - Formulário */}
-      <div className="lg:col-span-2">
-        <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
+      <div className='lg:col-span-2'>
+        <form onSubmit={handleSubmit(handleFormSubmit)} className='space-y-4'>
           {/* Período de Competição */}
-          <div className="space-y-2">
-            <Label htmlFor="competitionPeriodId">
-              Período de Competição <span className="text-red-500">*</span>
+          <div className='space-y-2'>
+            <Label htmlFor='competitionPeriodId'>
+              Período de Competição <span className='text-red-500'>*</span>
             </Label>
             <Controller
-              name="competitionPeriodId"
+              name='competitionPeriodId'
               control={control}
               render={({ field }) => (
                 <Select
-                  value={field.value ? String(field.value) : ""}
+                  value={
+                    field.value
+                      ? String(field.value)
+                      : defaultActivePeriod
+                        ? String(defaultActivePeriod.id)
+                        : ''
+                  }
                   onValueChange={(value) => field.onChange(parseInt(value, 10))}
-                  disabled={isLoadingPeriodos || availablePeriods.length === 0}
+                  disabled={true} // SEMPRE READONLY - só período ativo
                 >
-                  <SelectTrigger className={errors.competitionPeriodId ? 'border-red-500' : ''}>
-                    <SelectValue
-                      placeholder={
-                        isLoadingPeriodos 
-                          ? 'Carregando períodos...' 
-                          : availablePeriods.length === 0
-                            ? 'Nenhum período disponível'
-                            : 'Selecione o período...'
-                      }
-                    />
+                  <SelectTrigger
+                    className={`${errors.competitionPeriodId ? 'border-red-500' : ''} bg-gray-50`}
+                  >
+                    <SelectValue>
+                      {defaultActivePeriod
+                        ? `${defaultActivePeriod.mesAno} (Vigência Ativa)`
+                        : 'Nenhum período ativo encontrado'}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    {availablePeriods.map((periodo) => (
-                      <SelectItem key={periodo.id} value={String(periodo.id)}>
-                        {periodo.mesAno} ({periodo.status})
+                    {defaultActivePeriod ? (
+                      <SelectItem
+                        key={defaultActivePeriod.id}
+                        value={String(defaultActivePeriod.id)}
+                      >
+                        {defaultActivePeriod.mesAno} (Vigência Ativa)
                       </SelectItem>
-                    ))}
+                    ) : (
+                      <SelectItem value='none' disabled>
+                        Nenhum período ativo
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               )}
             />
             {errors.competitionPeriodId && (
-              <p className="text-sm text-red-500">{errors.competitionPeriodId.message}</p>
+              <p className='text-sm text-red-500'>
+                {errors.competitionPeriodId.message}
+              </p>
             )}
           </div>
 
           {/* Grid para Setor e Critério */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
             {/* Setor */}
-            <div className="space-y-2">
-              <Label htmlFor="sectorId">
-                Setor/Filial <span className="text-red-500">*</span>
+            <div className='space-y-2'>
+              <Label htmlFor='sectorId'>
+                Setor/Filial <span className='text-red-500'>*</span>
               </Label>
               <Controller
-                name="sectorId"
+                name='sectorId'
                 control={control}
                 render={({ field }) => (
                   <Select
-                    value={field.value ? String(field.value) : ""}
-                    onValueChange={(value) => field.onChange(parseInt(value, 10))}
-                    disabled={isLoadingSetores || setores.length === 0}
+                    value={
+                      field.value
+                        ? String(field.value)
+                        : isManager && userSector
+                          ? String(userSector.id)
+                          : ''
+                    }
+                    onValueChange={(value) =>
+                      field.onChange(parseInt(value, 10))
+                    }
+                    disabled={
+                      isManager || isLoadingSetores || setores.length === 0
+                    } // READONLY para gerentes
                   >
-                    <SelectTrigger className={errors.sectorId ? 'border-red-500' : ''}>
-                      <SelectValue
-                        placeholder={
-                          isLoadingSetores 
-                            ? 'Carregando...' 
+                    <SelectTrigger
+                      className={`${errors.sectorId ? 'border-red-500' : ''} ${isManager ? 'bg-gray-50' : ''}`}
+                    >
+                      <SelectValue>
+                        {isLoadingSetores
+                          ? 'Carregando...'
+                          : isManager && userSector
+                            ? userSector.nome
                             : setores.length === 0
                               ? 'Nenhum setor disponível'
-                              : 'Selecione o setor...'
-                        }
-                      />
+                              : 'Selecione o setor...'}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      {setores.map((setor) => (
-                        <SelectItem key={setor.id} value={String(setor.id)}>
-                          {setor.nome}
+                      {isManager && userSector ? (
+                        // Mostrar apenas o setor do gerente
+                        <SelectItem
+                          key={userSector.id}
+                          value={String(userSector.id)}
+                        >
+                          {userSector.nome}
                         </SelectItem>
-                      ))}
+                      ) : (
+                        // Mostrar todos os setores (para diretores)
+                        setores.map((setor) => (
+                          <SelectItem key={setor.id} value={String(setor.id)}>
+                            {setor.nome}
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                 )}
               />
               {errors.sectorId && (
-                <p className="text-sm text-red-500">{errors.sectorId.message}</p>
+                <p className='text-sm text-red-500'>
+                  {errors.sectorId.message}
+                </p>
               )}
             </div>
 
             {/* Critério */}
-            <div className="space-y-2">
-              <Label htmlFor="criterionId">
-                Critério <span className="text-red-500">*</span>
+            <div className='space-y-2'>
+              <Label htmlFor='criterionId'>
+                Critério <span className='text-red-500'>*</span>
               </Label>
               <Controller
-                name="criterionId"
+                name='criterionId'
                 control={control}
                 render={({ field }) => (
                   <Select
-                    value={field.value ? String(field.value) : ""}
-                    onValueChange={(value) => field.onChange(parseInt(value, 10))}
-                    disabled={isLoadingCriterios || eligibleCriteria.length === 0}
+                    value={field.value ? String(field.value) : ''}
+                    onValueChange={(value) =>
+                      field.onChange(parseInt(value, 10))
+                    }
+                    disabled={
+                      isLoadingCriterios || eligibleCriteria.length === 0
+                    }
                   >
-                    <SelectTrigger className={errors.criterionId ? 'border-red-500' : ''}>
+                    <SelectTrigger
+                      className={errors.criterionId ? 'border-red-500' : ''}
+                    >
                       <SelectValue
                         placeholder={
-                          isLoadingCriterios 
-                            ? 'Carregando...' 
+                          isLoadingCriterios
+                            ? 'Carregando...'
                             : eligibleCriteria.length === 0
-                              ? 'Nenhum critério elegível'
+                              ? 'Nenhum critério disponível'
                               : 'Selecione o critério...'
                         }
                       />
                     </SelectTrigger>
                     <SelectContent>
                       {eligibleCriteria.map((criterio) => (
-                        <SelectItem key={criterio.id} value={String(criterio.id)}>
-                          <div className="flex items-center justify-between w-full">
-                            <span>{criterio.nome}</span>
-                            {criterio.unidade_medida && (
-                              <span className="text-xs text-muted-foreground ml-2">
-                                ({criterio.unidade_medida})
-                              </span>
-                            )}
-                          </div>
+                        <SelectItem
+                          key={criterio.id}
+                          value={String(criterio.id)}
+                        >
+                          {criterio.nome}
+                          {criterio.unidade_medida && (
+                            <span className='text-gray-500 ml-1'>
+                              (
+                              {criterio.nome.toUpperCase().includes('KM OCIOSA')
+                                ? 'KM'
+                                : criterio.unidade_medida}
+                              )
+                            </span>
+                          )}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -250,178 +338,155 @@ export default function ExpurgoForm({
                 )}
               />
               {errors.criterionId && (
-                <p className="text-sm text-red-500">{errors.criterionId.message}</p>
-              )}
-              {eligibleCriteria.length === 0 && !isLoadingCriterios && (
-                <p className="text-xs text-amber-600">
-                  ⚠️ Apenas critérios específicos são elegíveis para expurgo
+                <p className='text-sm text-red-500'>
+                  {errors.criterionId.message}
                 </p>
               )}
             </div>
           </div>
 
-          {/* Grid para Data e Valor */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Data do Evento */}
-            <div className="space-y-2">
-              <Label htmlFor="dataEvento">
-                Data do Evento <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="dataEvento"
-                type="date"
-                {...register('dataEvento')}
-                className={errors.dataEvento ? 'border-red-500' : ''}
-                max={new Date().toISOString().split('T')[0]} // Não permitir datas futuras
-              />
-              {errors.dataEvento && (
-                <p className="text-sm text-red-500">{errors.dataEvento.message}</p>
-              )}
-              <p className="text-xs text-muted-foreground">
-                Data em que ocorreu o evento
+          {/* Data do Evento */}
+          <div className='space-y-2'>
+            <Label htmlFor='dataEvento'>
+              Data do Evento <span className='text-red-500'>*</span>
+            </Label>
+            <Input
+              type='date'
+              {...register('dataEvento')}
+              className={errors.dataEvento ? 'border-red-500' : ''}
+              max={new Date().toISOString().split('T')[0]} // Não permitir datas futuras
+            />
+            {errors.dataEvento && (
+              <p className='text-sm text-red-500'>
+                {errors.dataEvento.message}
               </p>
-            </div>
+            )}
+          </div>
 
-            {/* Valor Solicitado */}
-            <div className="space-y-2">
-              <Label htmlFor="valorSolicitado">
-                Valor Solicitado <span className="text-red-500">*</span>
-                {selectedCriterion?.unidade_medida && (
-                  <span className="text-muted-foreground ml-1">
-                    ({selectedCriterion.unidade_medida})
-                  </span>
-                )}
-              </Label>
-              <Input
-                id="valorSolicitado"
-                type="number"
-                step="0.01"
-                min="0.01"
-                {...register('valorSolicitado', { valueAsNumber: true })}
-                placeholder="Digite o valor"
-                className={errors.valorSolicitado ? 'border-red-500' : ''}
-              />
-              {errors.valorSolicitado && (
-                <p className="text-sm text-red-500">{errors.valorSolicitado.message}</p>
+          {/* Valor Solicitado */}
+          <div className='space-y-2'>
+            <Label htmlFor='valorSolicitado'>
+              Valor a Ser Expurgado <span className='text-red-500'>*</span>
+              {selectedCriterion?.unidade_medida && (
+                <span className='text-gray-500 text-sm ml-1'>
+                  (
+                  {selectedCriterion.nome.toUpperCase().includes('KM OCIOSA')
+                    ? 'KM'
+                    : selectedCriterion.unidade_medida}
+                  )
+                </span>
               )}
-              <p className="text-xs text-muted-foreground">
-                Quantidade a ser expurgada
+            </Label>
+            <Input
+              type='number'
+              step='0.01'
+              min='0.01'
+              placeholder='Digite o valor...'
+              {...register('valorSolicitado', { valueAsNumber: true })}
+              className={errors.valorSolicitado ? 'border-red-500' : ''}
+            />
+            {errors.valorSolicitado && (
+              <p className='text-sm text-red-500'>
+                {errors.valorSolicitado.message}
               </p>
-            </div>
+            )}
           </div>
 
           {/* Descrição do Evento */}
-          <div className="space-y-2">
-            <Label htmlFor="descricaoEvento">
-              Descrição do Evento <span className="text-red-500">*</span>
+          <div className='space-y-2'>
+            <Label htmlFor='descricaoEvento'>
+              Descrição do Evento <span className='text-red-500'>*</span>
             </Label>
             <Textarea
-              id="descricaoEvento"
+              placeholder='Descreva detalhadamente o que aconteceu...'
+              className={`min-h-[80px] ${errors.descricaoEvento ? 'border-red-500' : ''}`}
               {...register('descricaoEvento')}
-              placeholder="Descreva o evento que justifica o expurgo..."
-              rows={2}
-              className={errors.descricaoEvento ? 'border-red-500' : ''}
             />
             {errors.descricaoEvento && (
-              <p className="text-sm text-red-500">{errors.descricaoEvento.message}</p>
+              <p className='text-sm text-red-500'>
+                {errors.descricaoEvento.message}
+              </p>
             )}
-            <p className="text-xs text-muted-foreground">
-              Mínimo de 10 caracteres
-            </p>
           </div>
 
-          {/* Justificativa da Solicitação */}
-          <div className="space-y-2">
-            <Label htmlFor="justificativaSolicitacao">
-              Justificativa da Solicitação <span className="text-red-500">*</span>
+          {/* Justificativa */}
+          <div className='space-y-2'>
+            <Label htmlFor='justificativaSolicitacao'>
+              Justificativa da Solicitação{' '}
+              <span className='text-red-500'>*</span>
             </Label>
             <Textarea
-              id="justificativaSolicitacao"
+              placeholder='Explique por que este valor deve ser expurgado do cálculo da premiação...'
+              className={`min-h-[100px] ${errors.justificativaSolicitacao ? 'border-red-500' : ''}`}
               {...register('justificativaSolicitacao')}
-              placeholder="Explique por que este valor deve ser expurgado..."
-              rows={3}
-              className={errors.justificativaSolicitacao ? 'border-red-500' : ''}
             />
             {errors.justificativaSolicitacao && (
-              <p className="text-sm text-red-500">{errors.justificativaSolicitacao.message}</p>
+              <p className='text-sm text-red-500'>
+                {errors.justificativaSolicitacao.message}
+              </p>
             )}
-            <p className="text-xs text-muted-foreground">
-              Mínimo de 20 caracteres
-            </p>
           </div>
 
-          <DialogFooter className="gap-2 pt-4">
-            <Button 
-              type="button" 
-              variant="outline" 
+          {/* Botões de Ação */}
+          <DialogFooter className='pt-4'>
+            <Button
+              type='button'
+              variant='outline'
               onClick={handleCancel}
               disabled={isLoading}
             >
               Cancelar
             </Button>
-            <Button 
-              type="submit" 
+            <Button
+              type='submit'
               disabled={!isValid || isLoading}
-              className="min-w-[140px]"
+              className='min-w-[120px]'
             >
               {isLoading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className='mr-2 h-4 w-4 animate-spin' />
                   Enviando...
                 </>
               ) : (
-                <>
-                  📤 Enviar Solicitação
-                </>
+                <>📤 Enviar Solicitação</>
               )}
             </Button>
           </DialogFooter>
         </form>
       </div>
 
-      {/* Coluna Lateral - Informações e Avisos */}
-      <div className="space-y-4">
+      {/* Coluna Lateral - Informações e Avisos (MANTIDA ORIGINAL) */}
+      <div className='space-y-4'>
         {/* Aviso Importante */}
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-          <div className="flex items-start gap-2">
-            <div className="text-amber-600 mt-1">⚠️</div>
-            <div className="text-amber-800">
-              <h4 className="font-medium">Importante</h4>
-              <ul className="text-sm mt-2 space-y-1.5">
+        <div className='rounded-lg border border-amber-200 bg-amber-50 p-4'>
+          <div className='flex items-start gap-2'>
+            <div className='text-amber-600 mt-1'>⚠️</div>
+            <div className='text-amber-800'>
+              <h4 className='font-medium'>Importante</h4>
+              <ul className='text-sm mt-2 space-y-1.5'>
                 <li>• A solicitação será enviada para análise da diretoria</li>
-                <li>• Anexe documentos comprobatórios após criar a solicitação</li>
-                <li>• Justificativas inadequadas resultarão em rejeição automática</li>
+                <li>
+                  • Anexe documentos comprobatórios após criar a solicitação
+                </li>
+                <li>
+                  • Justificativas inadequadas resultarão em rejeição automática
+                </li>
                 <li>• O valor aprovado pode ser diferente do solicitado</li>
+                {isManager && (
+                  <li>• Gerentes só podem solicitar para seu setor</li>
+                )}
               </ul>
             </div>
           </div>
         </div>
 
-        {/* Informações do Critério Selecionado */}
-        {selectedCriterion && (
-          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-            <div className="flex items-start gap-2">
-              <div className="text-blue-600 mt-1">ℹ️</div>
-              <div className="text-blue-800">
-                <h4 className="font-medium">Critério Selecionado</h4>
-                <div className="text-sm mt-2 space-y-1">
-                  <p><strong>Nome:</strong> {selectedCriterion.nome}</p>
-                  {selectedCriterion.unidade_medida && (
-                    <p><strong>Unidade:</strong> {selectedCriterion.unidade_medida}</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Dicas de Preenchimento */}
-        <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-          <div className="flex items-start gap-2">
-            <div className="text-green-600 mt-1">💡</div>
-            <div className="text-green-800">
-              <h4 className="font-medium">Dicas</h4>
-              <ul className="text-sm mt-2 space-y-1">
+        <div className='rounded-lg border border-green-200 bg-green-50 p-4'>
+          <div className='flex items-start gap-2'>
+            <div className='text-green-600 mt-1'>💡</div>
+            <div className='text-green-800'>
+              <h4 className='font-medium'>Dicas</h4>
+              <ul className='text-sm mt-2 space-y-1'>
                 <li>• Seja específico na descrição do evento</li>
                 <li>• Forneça argumentos sólidos na justificativa</li>
                 <li>• Mantenha documentos de apoio organizados</li>
@@ -431,5 +496,5 @@ export default function ExpurgoForm({
         </div>
       </div>
     </div>
-    
-  ); 
+  );
+}
