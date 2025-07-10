@@ -4,35 +4,25 @@ import { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
 
 const corsPlugin = async (fastify: FastifyInstance) => {
+  // Lista de origens permitidas
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:3001', // Para testes diretos no browser
+    'http://127.0.0.1:3001',
+    'http://10.10.112.205:3000',
+  ];
+
+  // Em produção, adicione seu domínio
+  if (process.env.NODE_ENV === 'production') {
+    if (process.env.FRONTEND_URL) {
+      allowedOrigins.push(process.env.FRONTEND_URL);
+    }
+  }
+
   await fastify.register(cors, {
-    // 🎯 CONFIGURAÇÃO CRUCIAL PARA RESOLVER O ERRO
-    origin: (origin, callback) => {
-      // Lista de origens permitidas
-      const allowedOrigins = [
-        'http://localhost:3000',
-        'http://127.0.0.1:3000',
-        'http://localhost:3001', // Para testes diretos no browser
-        'http://127.0.0.1:3001',
-      ];
-
-      // Em produção, adicione seu domínio
-      if (process.env.NODE_ENV === 'production') {
-        allowedOrigins.push(
-          process.env.FRONTEND_URL || 'https://seu-dominio.com'
-        );
-      }
-
-      // Permitir requisições sem origin (ex: Postman, curl)
-      if (!origin) return callback(null, true);
-
-      // Verificar se a origin está na lista permitida
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      // Rejeitar origin não permitida
-      return callback(new Error('Não permitido pelo CORS'), false);
-    },
+    // 🎯 CONFIGURAÇÃO ALTERADA: Passando a lista diretamente
+    origin: allowedOrigins,
 
     // 🚨 ESTA É A CONFIGURAÇÃO QUE ESTAVA FALTANDO:
     credentials: true, // Permite cookies e headers de autenticação

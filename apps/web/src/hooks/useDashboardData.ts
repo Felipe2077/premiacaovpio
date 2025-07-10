@@ -39,7 +39,7 @@ export interface ResultData {
   isMetaDefinida: boolean;
 }
 
-const API_BASE_URL = 'http://localhost:3001';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 export function useDashboardData() {
   const [periods, setPeriods] = useState<Period[]>([]);

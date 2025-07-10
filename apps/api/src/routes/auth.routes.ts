@@ -55,8 +55,8 @@ export const authRoutes: FastifyPluginAsync = async (
         // 🎯 CORREÇÃO: Adicionar cookies para o middleware
         const cookieOptions = {
           httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax' as const,
+          secure: process.env.NODE_ENV !== 'development',
+          sameSite: 'none' as const,
           path: '/',
           maxAge: rememberMe ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000,
         };

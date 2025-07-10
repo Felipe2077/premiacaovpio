@@ -86,6 +86,10 @@ const start = async () => {
             url: 'http://localhost:3001',
             description: 'Development server',
           },
+          {
+            url: 'http://10.10.112.205:3001',
+            description: 'Development server',
+          },
         ],
         tags: [
           { name: 'auth', description: 'Autenticação e autorização' },

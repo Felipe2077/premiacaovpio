@@ -268,6 +268,7 @@ export const AnalysisPanel = ({
                 <SelectValue placeholder='Período do Histórico' />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value='2'>Últimos 2 meses</SelectItem>
                 <SelectItem value='3'>Últimos 3 meses</SelectItem>
                 <SelectItem value='6'>Últimos 6 meses</SelectItem>
                 <SelectItem value='12'>Últimos 12 meses</SelectItem>
