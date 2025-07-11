@@ -49,10 +49,7 @@ export const ProjectionDataTable = ({
   return (
     <div>
       {/* ✅ TÍTULO ATUALIZADO PARA MAIOR CLAREZA */}
-      <h3 className='text-lg font-semibold mb-2'>
-        Projeção de <span className='text-amber-600'>{criterionName}</span> para{' '}
-        <span className='capitalize'>{formattedPeriod}</span>
-      </h3>
+
       <div className='rounded-md border'>
         <Table>
           <TableHeader className='bg-amber-300/80 dark:bg-amber-950/20'>

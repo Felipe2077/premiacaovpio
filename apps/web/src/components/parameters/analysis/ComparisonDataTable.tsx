@@ -36,11 +36,11 @@ export const ComparisonDataTable = ({
   return (
     <div>
       {/* ✅ TÍTULO ATUALIZADO PARA MAIOR CLAREZA */}
-      <h3 className='text-lg font-semibold mb-2'>
+      {/* <h3 className='text-lg font-semibold mb-2'>
         Meta vs. Realizado:{' '}
         <span className='text-amber-600'>{criterionName}</span> -{' '}
         <span className='capitalize'>{formattedPeriod}</span>
-      </h3>
+      </h3> */}
       <div className='rounded-md border'>
         <Table>
           <TableHeader className='bg-amber-300/80 dark:bg-amber-950/20'>

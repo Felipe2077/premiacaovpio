@@ -306,8 +306,11 @@ export const AnalysisPanel = ({
                   <div className='flex items-center gap-2'>
                     <div className='h-2 w-2 bg-blue-500 rounded-full' />
                     <CardTitle className='text-lg'>
-                      Projeção de {selectedCriterion.nome} para{' '}
-                      {formattedCurrentPeriod}
+                      Projeção de{' '}
+                      <span className='text-amber-600'>
+                        {selectedCriterion.nome}
+                      </span>{' '}
+                      para {formattedCurrentPeriod}
                     </CardTitle>
                   </div>
                   <p className='text-sm text-muted-foreground mt-1'>
@@ -379,8 +382,11 @@ export const AnalysisPanel = ({
                 <div className='flex items-center gap-2'>
                   <div className='h-2 w-2 bg-orange-500 rounded-full' />
                   <CardTitle className='text-lg'>
-                    Histórico de Realizado: {selectedCriterion.nome} -{' '}
-                    {historyPeriodLabel}
+                    Histórico de Realizado:{' '}
+                    <span className='text-amber-600'>
+                      {selectedCriterion.nome}
+                    </span>{' '}
+                    - {historyPeriodLabel}
                   </CardTitle>
                 </div>
                 <p className='text-sm text-muted-foreground mt-1'>
@@ -407,8 +413,11 @@ export const AnalysisPanel = ({
                 <div className='flex items-center gap-2'>
                   <div className='h-2 w-2 bg-green-500 rounded-full' />
                   <CardTitle className='text-lg'>
-                    Meta vs. Realizado: {selectedCriterion.nome} -{' '}
-                    {formattedPreviousPeriod}
+                    Meta vs. Realizado:{' '}
+                    <span className='text-amber-600'>
+                      {selectedCriterion.nome}
+                    </span>{' '}
+                    - {formattedPreviousPeriod}
                   </CardTitle>
                 </div>
                 <p className='text-sm text-muted-foreground mt-1'>

@@ -51,10 +51,10 @@ export const HistoricalDataTable = ({
   return (
     <div>
       {/* ✅ TÍTULO ATUALIZADO PARA O NOVO PADRÃO */}
-      <h3 className='text-lg font-semibold mb-2'>
+      {/* <h3 className='text-lg font-semibold mb-2'>
         Histórico de Realizado:{' '}
         <span className='text-amber-600'>{criterionName}</span> - {periodLabel}
-      </h3>
+      </h3> */}
       <div className='rounded-md border'>
         <Table>
           <TableHeader className='bg-amber-300/80 dark:bg-amber-950/20'>
