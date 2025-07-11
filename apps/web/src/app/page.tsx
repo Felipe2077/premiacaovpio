@@ -11,9 +11,8 @@ import { useCompetitionData } from '@/hooks/useCompetitionData';
 import { useEffect, useMemo, useState } from 'react';
 
 export default function HomePage() {
-  // ✅ Usar apenas o hook principal que já carrega todos os dados
   const {
-    rankingData, // ← Este já contém o ranking calculado!
+    rankingData,
     activeCriteria,
     resultsBySector,
     uniqueCriteria,
@@ -31,20 +30,16 @@ export default function HomePage() {
   useEffect(() => {
     async function fetchSystemStatus() {
       try {
-        console.log('[LOG] Fazendo fetch para /api/system/status...');
         const response = await fetch('/api/system/status', {
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
         });
-
-        console.log('[LOG] Response status:', response.status);
 
         if (!response.ok) {
           throw new Error(`Erro de rede! Status: ${response.status}`);
         }
 
         const result = await response.json();
-        console.log('[LOG] Dados da API (após parse JSON):', result);
 
         if (result.success && result.data && result.data.lastUpdate) {
           console.log(

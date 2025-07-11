@@ -292,6 +292,7 @@ export const AnalysisPanel = ({
           </div>
         </div>
       </CardHeader>
+
       <CardContent className='pt-6'>
         {!selectedCriterion || !period ? (
           <div className='text-center text-muted-foreground py-16'>
@@ -299,34 +300,6 @@ export const AnalysisPanel = ({
           </div>
         ) : (
           <div className='space-y-6 animate-in fade-in-25'>
-            <Card className='border-orange-200 dark:border-orange-800 bg-orange-50/30 dark:bg-orange-950/20'>
-              <CardHeader className='pb-4'>
-                <div className='flex items-center gap-2'>
-                  <div className='h-2 w-2 bg-orange-500 rounded-full' />
-                  <CardTitle className='text-lg'>
-                    Histórico de Realizado: {selectedCriterion.nome} -{' '}
-                    {historyPeriodLabel}
-                  </CardTitle>
-                </div>
-                <p className='text-sm text-muted-foreground mt-1'>
-                  Evolução dos valores realizados por filial nos últimos
-                  períodos
-                </p>
-              </CardHeader>
-              <CardContent>
-                <div className='[&_table]:text-base [&_td]:text-base [&_th]:text-base'>
-                  <HistoricalDataTable
-                    data={historicalDataFormatted}
-                    periods={historicalPeriods}
-                    isLoading={isLoading}
-                    criterionName={selectedCriterion.nome}
-                    decimalPlaces={selectedCriterion.casasDecimaisPadrao ?? 0}
-                    periodLabel={historyPeriodLabel}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
             {period.status !== 'FECHADA' && (
               <Card className='border-blue-200 dark:border-blue-800 bg-blue-50/30 dark:bg-blue-950/20'>
                 <CardHeader className='pb-4'>
@@ -401,6 +374,33 @@ export const AnalysisPanel = ({
                 </CardContent>
               </Card>
             )}
+            <Card className='border-orange-200 dark:border-orange-800 bg-orange-50/30 dark:bg-orange-950/20'>
+              <CardHeader className='pb-4'>
+                <div className='flex items-center gap-2'>
+                  <div className='h-2 w-2 bg-orange-500 rounded-full' />
+                  <CardTitle className='text-lg'>
+                    Histórico de Realizado: {selectedCriterion.nome} -{' '}
+                    {historyPeriodLabel}
+                  </CardTitle>
+                </div>
+                <p className='text-sm text-muted-foreground mt-1'>
+                  Evolução dos valores realizados por filial nos últimos
+                  períodos
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className='[&_table]:text-base [&_td]:text-base [&_th]:text-base'>
+                  <HistoricalDataTable
+                    data={historicalDataFormatted}
+                    periods={historicalPeriods}
+                    isLoading={isLoading}
+                    criterionName={selectedCriterion.nome}
+                    decimalPlaces={selectedCriterion.casasDecimaisPadrao ?? 0}
+                    periodLabel={historyPeriodLabel}
+                  />
+                </div>
+              </CardContent>
+            </Card>
 
             <Card className='border-green-200 dark:border-green-800 bg-green-50/30 dark:bg-green-950/20'>
               <CardHeader className='pb-4'>
