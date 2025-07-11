@@ -7,7 +7,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Calendar, Copy, Download, Loader2, Share, Trophy } from 'lucide-react';
+import { Copy, Download, Loader2, Share, Trophy } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -63,22 +63,24 @@ const formatDate = (dateStr: string) => {
   });
 };
 
-// Componente da imagem para compartilhamento
+// ✅ COMPONENTE RESPONSIVO DA IMAGEM PARA COMPARTILHAMENTO
 function ShareableRankingImage({ period, rankingData }: ShareRankingProps) {
-  // Estilos inline para evitar conflitos com Tailwind e oklch
+  // ✅ Estilos responsivos que funcionam bem em mobile
   const styles = {
     container: {
       fontFamily: 'Inter, system-ui, sans-serif',
       backgroundColor: '#ffffff',
       color: '#111827',
-      width: '600px',
+      width: '100%',
+      maxWidth: '500px', // ✅ Reduzido para mobile
       margin: '0 auto',
-      padding: '32px',
+      padding: '24px', // ✅ Reduzido para mobile
+      boxSizing: 'border-box' as const,
     },
     header: {
       textAlign: 'center' as const,
-      marginBottom: '32px',
-      paddingBottom: '24px',
+      marginBottom: '24px', // ✅ Reduzido
+      paddingBottom: '16px', // ✅ Reduzido
       borderBottom: '2px solid #fbbf24',
     },
     logoContainer: {
@@ -86,30 +88,32 @@ function ShareableRankingImage({ period, rankingData }: ShareRankingProps) {
       alignItems: 'center',
       justifyContent: 'center',
       gap: '12px',
-      marginBottom: '16px',
+      marginBottom: '12px', // ✅ Reduzido
+      flexWrap: 'wrap' as const, // ✅ Para mobile
     },
     logo: {
-      width: '48px',
-      height: '48px',
+      width: '40px', // ✅ Reduzido para mobile
+      height: '40px',
       backgroundColor: '#fbbf24',
       borderRadius: '50%',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
+      flexShrink: 0,
     },
     logoText: {
       color: '#ffffff',
       fontWeight: 'bold',
-      fontSize: '20px',
+      fontSize: '16px', // ✅ Reduzido
     },
     title: {
-      fontSize: '24px',
+      fontSize: '20px', // ✅ Reduzido para mobile
       fontWeight: 'bold',
       color: '#111827',
       margin: '0',
     },
     subtitle: {
-      fontSize: '20px',
+      fontSize: '16px', // ✅ Reduzido
       fontWeight: '600',
       color: '#374151',
       margin: '8px 0',
@@ -118,24 +122,26 @@ function ShareableRankingImage({ period, rankingData }: ShareRankingProps) {
       color: '#6b7280',
       textTransform: 'capitalize' as const,
       margin: '0',
+      fontSize: '14px', // ✅ Reduzido
     },
     infoBox: {
       backgroundColor: '#fefce8',
       border: '1px solid #fde047',
       borderRadius: '8px',
-      padding: '16px',
-      marginBottom: '24px',
+      padding: '12px', // ✅ Reduzido
+      marginBottom: '16px', // ✅ Reduzido
     },
     infoGrid: {
-      display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      gap: '16px',
-      fontSize: '14px',
+      display: 'flex', // ✅ Mudou para flex para melhor responsividade
+      flexDirection: 'column' as const,
+      gap: '8px',
+      fontSize: '12px', // ✅ Reduzido
     },
     infoItem: {
       display: 'flex',
       alignItems: 'center',
-      gap: '8px',
+      gap: '6px',
+      justifyContent: 'space-between', // ✅ Para alinhar melhor
     },
     infoText: {
       color: '#374151',
@@ -144,11 +150,12 @@ function ShareableRankingImage({ period, rankingData }: ShareRankingProps) {
       border: '1px solid #d1d5db',
       borderRadius: '8px',
       overflow: 'hidden',
+      width: '100%',
     },
     tableHeader: {
       backgroundColor: '#f9fafb',
       borderBottom: '1px solid #d1d5db',
-      padding: '12px 16px',
+      padding: '12px',
     },
     tableTitle: {
       fontWeight: '600',
@@ -157,15 +164,80 @@ function ShareableRankingImage({ period, rankingData }: ShareRankingProps) {
       alignItems: 'center',
       gap: '8px',
       margin: '0',
+      fontSize: '14px', // ✅ Reduzido
+    },
+    rankingItem: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '12px',
+      borderBottom: '1px solid #f3f4f6',
+    },
+    rankingLeft: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      flex: 1,
+    },
+    position: {
+      width: '28px', // ✅ Reduzido
+      height: '28px',
+      borderRadius: '50%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: '12px', // ✅ Reduzido
+      fontWeight: 'bold',
+      flexShrink: 0,
+    },
+    sectorInfo: {
+      flex: 1,
+      minWidth: 0, // ✅ Para permitir quebra de texto
+    },
+    sectorName: {
+      fontWeight: '600',
+      fontSize: '14px', // ✅ Reduzido
+      marginBottom: '2px',
+    },
+    winnerBadge: {
+      color: '#d97706',
+      fontSize: '10px', // ✅ Reduzido
+      fontWeight: '500',
+    },
+    points: {
+      textAlign: 'right' as const,
+      flexShrink: 0,
+    },
+    pointsValue: {
+      fontWeight: 'bold',
+      fontSize: '14px', // ✅ Reduzido
+    },
+    pointsLabel: {
+      fontSize: '10px', // ✅ Reduzido
+      color: '#9ca3af',
     },
     footer: {
-      marginTop: '24px',
+      marginTop: '16px', // ✅ Reduzido
       textAlign: 'center' as const,
-      fontSize: '12px',
+      fontSize: '10px', // ✅ Reduzido
       color: '#9ca3af',
       borderTop: '1px solid #f3f4f6',
-      paddingTop: '16px',
+      paddingTop: '12px', // ✅ Reduzido
     },
+  };
+
+  const getPositionStyle = (position: number) => {
+    const baseStyle = styles.position;
+    switch (position) {
+      case 1:
+        return { ...baseStyle, backgroundColor: '#fbbf24', color: '#ffffff' };
+      case 2:
+        return { ...baseStyle, backgroundColor: '#e5e7eb', color: '#374151' };
+      case 3:
+        return { ...baseStyle, backgroundColor: '#fed7aa', color: '#9a3412' };
+      default:
+        return { ...baseStyle, backgroundColor: '#f3f4f6', color: '#6b7280' };
+    }
   };
 
   return (
@@ -186,149 +258,64 @@ function ShareableRankingImage({ period, rankingData }: ShareRankingProps) {
       <div style={styles.infoBox}>
         <div style={styles.infoGrid}>
           <div style={styles.infoItem}>
-            <Calendar
-              style={{ height: '16px', width: '16px', color: '#d97706' }}
-            />
-            <span style={styles.infoText}>
-              {formatDate(period.dataInicio)} - {formatDate(period.dataFim)}
-            </span>
+            <div style={styles.infoText}>
+              📅 {formatDate(period.dataInicio)} - {formatDate(period.dataFim)}
+            </div>
           </div>
           <div style={styles.infoItem}>
-            <Trophy
-              style={{ height: '16px', width: '16px', color: '#d97706' }}
-            />
-            <span style={styles.infoText}>Status: Finalizada</span>
+            <div style={styles.infoText}>🏆 Status: Finalizada</div>
           </div>
         </div>
       </div>
 
-      {/* Ranking Table */}
+      {/* Tabela de classificação */}
       <div style={styles.table}>
         <div style={styles.tableHeader}>
           <h3 style={styles.tableTitle}>
-            <Trophy
-              style={{ height: '20px', width: '20px', color: '#d97706' }}
-            />
+            <Trophy size={16} />
             Classificação Final
           </h3>
         </div>
 
-        <div>
-          {rankingData.map((item, index) => {
-            const isWinner = item.isWinner;
-            const positionColors = {
-              1: { bg: '#fbbf24', color: '#ffffff' },
-              2: { bg: '#d1d5db', color: '#374151' },
-              3: { bg: '#fed7aa', color: '#ea580c' },
-              default: { bg: '#f3f4f6', color: '#6b7280' },
-            };
-
-            const positionStyle =
-              positionColors[item.position as keyof typeof positionColors] ||
-              positionColors.default;
-
-            const rowStyle = {
-              padding: '16px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              backgroundColor: isWinner ? '#fefce8' : '#ffffff',
-              borderLeft: isWinner ? '4px solid #fbbf24' : 'none',
+        {/* Lista de ranking */}
+        {rankingData.map((item, index) => (
+          <div
+            key={`${item.setor}-${item.position}`}
+            style={{
+              ...styles.rankingItem,
               borderBottom:
-                index < rankingData.length - 1 ? '1px solid #f3f4f6' : 'none',
-            };
-
-            const positionBadgeStyle = {
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '32px',
-              height: '32px',
-              borderRadius: '50%',
-              fontWeight: 'bold',
-              fontSize: '14px',
-              backgroundColor: positionStyle.bg,
-              color: positionStyle.color,
-            };
-
-            const leftSideStyle = {
-              display: 'flex',
-              alignItems: 'center',
-              gap: '16px',
-            };
-
-            const sectorNameStyle = {
-              fontWeight: '500',
-              color: isWinner ? '#b45309' : '#111827',
-              margin: '0 0 4px 0',
-            };
-
-            const winnerBadgeStyle = {
-              fontSize: '12px',
-              fontWeight: '500',
-              color: '#d97706',
-              margin: '0',
-            };
-
-            const rightSideStyle = {
-              textAlign: 'right' as const,
-            };
-
-            const pointsStyle = {
-              fontSize: '18px',
-              fontWeight: 'bold',
-              color:
-                item.position === 1
-                  ? '#d97706'
-                  : item.position === 2
-                    ? '#6b7280'
-                    : item.position === 3
-                      ? '#ea580c'
-                      : '#dc2626',
-              margin: '0',
-            };
-
-            const pointsLabelStyle = {
-              fontSize: '12px',
-              color: '#9ca3af',
-              margin: '0',
-            };
-
-            return (
-              <div key={index} style={rowStyle}>
-                <div style={leftSideStyle}>
-                  <div style={positionBadgeStyle}>{item.position}°</div>
-
-                  <div>
-                    <div style={sectorNameStyle}>{item.setor}</div>
-                    {isWinner && (
-                      <div style={winnerBadgeStyle}>🏆 Vencedor</div>
-                    )}
-                  </div>
-                </div>
-
-                <div style={rightSideStyle}>
-                  <div style={pointsStyle}>{item.pontos.toFixed(2)}</div>
-                  <div style={pointsLabelStyle}>pontos</div>
-                </div>
+                index === rankingData.length - 1 ? 'none' : '1px solid #f3f4f6',
+            }}
+          >
+            <div style={styles.rankingLeft}>
+              <div style={getPositionStyle(item.position)}>
+                {item.position}°
               </div>
-            );
-          })}
-        </div>
+              <div style={styles.sectorInfo}>
+                <div style={styles.sectorName}>{item.setor}</div>
+                {item.isWinner && (
+                  <div style={styles.winnerBadge}>🏆 Vencedor</div>
+                )}
+              </div>
+            </div>
+            <div style={styles.points}>
+              <div style={styles.pointsValue}>{item.pontos.toFixed(2)}</div>
+              <div style={styles.pointsLabel}>pontos</div>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Footer */}
       <div style={styles.footer}>
-        <p>
+        <p style={{ margin: '0 0 4px 0' }}>
           Gerado em {new Date().toLocaleDateString('pt-BR')} às{' '}
           {new Date().toLocaleTimeString('pt-BR', {
             hour: '2-digit',
             minute: '2-digit',
           })}
         </p>
-        <p style={{ marginTop: '4px' }}>
-          Sistema de Premiação - Viação Pioneira
-        </p>
+        <p style={{ margin: '0' }}>Sistema de Premiação - Viação Pioneira</p>
       </div>
     </div>
   );
@@ -347,149 +334,12 @@ export default function ShareRankingButton({
     return null;
   }
 
-  const generateImage = async () => {
-    setIsGenerating(true);
-
-    try {
-      console.log('🎯 Iniciando geração de imagem...');
-
-      // Carregar html2canvas dinamicamente se não estiver disponível
-      if (!window.html2canvas) {
-        console.log('📦 Carregando html2canvas...');
-        const html2canvas = await import('html2canvas');
-        window.html2canvas = html2canvas.default;
-      }
-
-      const element = document.getElementById('ranking-share-image');
-      if (!element) {
-        throw new Error('Elemento não encontrado');
-      }
-
-      console.log('📋 Elemento encontrado:', element);
-      console.log(
-        '🎨 Estilos computados do elemento:',
-        window.getComputedStyle(element)
-      );
-
-      // Log para verificar se há cores oklch
-      const allElements = element.querySelectorAll('*');
-      console.log(
-        '🔍 Verificando cores oklch em',
-        allElements.length,
-        'elementos...'
-      );
-
-      let oklchFound = false;
-      allElements.forEach((el, index) => {
-        const styles = window.getComputedStyle(el);
-        const colorProps = [
-          'color',
-          'backgroundColor',
-          'borderColor',
-          'borderTopColor',
-          'borderRightColor',
-          'borderBottomColor',
-          'borderLeftColor',
-        ];
-
-        colorProps.forEach((prop) => {
-          const value = styles.getPropertyValue(prop);
-          if (value && value.includes('oklch')) {
-            console.warn(`⚠️ OKLCH encontrado no elemento ${index}:`, {
-              element: el.tagName,
-              property: prop,
-              value: value,
-              className: el.className,
-            });
-            oklchFound = true;
-          }
-        });
-      });
-
-      if (oklchFound) {
-        console.error('❌ Cores oklch foram encontradas! Tentando corrigir...');
-
-        // Forçar re-render com um delay para garantir que os estilos sejam aplicados
-        element.style.display = 'none';
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        element.style.display = 'block';
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-
-      console.log('🖼️ Iniciando captura com html2canvas...');
-
-      const canvas = await window.html2canvas(element, {
-        backgroundColor: '#ffffff',
-        scale: 2, // Alta qualidade
-        useCORS: true,
-        allowTaint: true,
-        width: 600,
-        height: element.scrollHeight,
-        logging: true, // Ativar logs do html2canvas
-        ignoreElements: (el) => {
-          // Ignorar elementos que possam ter cores problemáticas
-          const styles = window.getComputedStyle(el);
-          const hasOklch = ['color', 'backgroundColor', 'borderColor'].some(
-            (prop) => {
-              const value = styles.getPropertyValue(prop);
-              return value && value.includes('oklch');
-            }
-          );
-
-          if (hasOklch) {
-            console.warn('🚫 Ignorando elemento com oklch:', el);
-            return true;
-          }
-          return false;
-        },
-        onclone: (clonedDoc) => {
-          console.log('📄 Documento clonado para captura');
-
-          // Forçar substituição de cores oklch no documento clonado
-          const clonedElement = clonedDoc.getElementById('ranking-share-image');
-          if (clonedElement) {
-            // Aplicar estilos seguros recursivamente
-            const applyFallbackStyles = (el: Element) => {
-              if (el instanceof HTMLElement) {
-                // Forçar cores seguras
-                el.style.setProperty('color', '#111827', 'important');
-                el.style.setProperty(
-                  'background-color',
-                  'transparent',
-                  'important'
-                );
-
-                // Processar filhos
-                Array.from(el.children).forEach(applyFallbackStyles);
-              }
-            };
-
-            applyFallbackStyles(clonedElement);
-          }
-        },
-      });
-
-      console.log('✅ Imagem gerada com sucesso!', canvas);
-      return canvas;
-    } catch (error) {
-      console.error('❌ Erro detalhado ao gerar imagem:', {
-        error: error,
-        message: error.message,
-        stack: error.stack,
-      });
-      toast.error(`Erro ao gerar imagem: ${error.message}`);
-      return null;
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  // Função para desenhar diretamente no canvas (sem CSS) - CORRIGIDA
+  // ✅ FUNÇÃO DE GERAÇÃO MELHORADA PARA MOBILE COM HIGH DPI
   const generateImageDirectCanvas = async () => {
     setIsGenerating(true);
 
     try {
-      console.log('🎨 Gerando imagem com canvas nativo...');
+      console.log('🎨 Gerando imagem com canvas nativo (High DPI)...');
       console.log('📊 Dados do ranking:', rankingData);
 
       const canvas = document.createElement('canvas');
@@ -499,20 +349,41 @@ export default function ShareRankingButton({
         throw new Error('Não foi possível criar contexto do canvas');
       }
 
-      // Configurações do canvas (tamanho fixo inicial)
-      const width = 600;
-      const height = 400 + rankingData.length * 60; // Altura dinâmica
+      // ✅ HIGH DPI/RETINA SUPPORT - Principal correção para qualidade
+      const devicePixelRatio = window.devicePixelRatio || 1;
+      const scaleFactor = Math.max(devicePixelRatio, 2); // Mínimo 2x para qualidade
 
-      canvas.width = width;
-      canvas.height = height;
+      // Dimensões lógicas (o que vemos)
+      const logicalWidth = 500;
+      const logicalHeight = 300 + rankingData.length * 50;
 
-      console.log(`📐 Canvas criado: ${width}x${height}`);
+      // Dimensões físicas (resolução real do canvas)
+      const physicalWidth = logicalWidth * scaleFactor;
+      const physicalHeight = logicalHeight * scaleFactor;
+
+      // Configurar canvas para alta resolução
+      canvas.width = physicalWidth;
+      canvas.height = physicalHeight;
+      canvas.style.width = `${logicalWidth}px`;
+      canvas.style.height = `${logicalHeight}px`;
+
+      // Escalar o contexto para desenhar em alta resolução
+      ctx.scale(scaleFactor, scaleFactor);
+
+      console.log(
+        `📐 Canvas criado: ${logicalWidth}x${logicalHeight} (${physicalWidth}x${physicalHeight} físico, escala ${scaleFactor}x)`
+      );
+
+      // ✅ MELHORAR QUALIDADE DE RENDERIZAÇÃO
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.textRenderingOptimization = 'optimizeQuality';
 
       // Fundo branco
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, width, height);
+      ctx.fillRect(0, 0, logicalWidth, logicalHeight);
 
-      let y = 40;
+      let y = 30;
 
       // LOGO E HEADER
       console.log('🎨 Desenhando header...');
@@ -520,178 +391,90 @@ export default function ShareRankingButton({
       // Logo circular amarelo
       ctx.fillStyle = '#fbbf24';
       ctx.beginPath();
-      ctx.arc(300, y, 24, 0, 2 * Math.PI);
+      ctx.arc(250, y, 20, 0, 2 * Math.PI);
       ctx.fill();
 
       // Texto "VP" na logo
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 20px Arial, sans-serif';
+      ctx.font = 'bold 16px Inter, Arial, sans-serif'; // ✅ Font stack melhor
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('VP', 300, y);
-      y += 50;
+      ctx.fillText('VP', 250, y);
+      y += 40;
 
       // Título principal
-      ctx.font = 'bold 28px Arial, sans-serif';
+      ctx.font = 'bold 22px Inter, Arial, sans-serif';
       ctx.fillStyle = '#111827';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
-      ctx.fillText('Viação Pioneira', 300, y);
-      y += 35;
+      ctx.fillText('Viação Pioneira', 250, y);
+      y += 28;
 
       // Subtítulo
-      ctx.font = '20px Arial, sans-serif';
+      ctx.font = '16px Inter, Arial, sans-serif';
       ctx.fillStyle = '#374151';
-      ctx.fillText('Resultado da Premiação por Desempenho', 300, y);
-      y += 25;
+      ctx.fillText('Resultado da Premiação por Desempenho', 250, y);
+      y += 20;
 
       // Período
-      ctx.font = '16px Arial, sans-serif';
+      ctx.font = '14px Inter, Arial, sans-serif';
       ctx.fillStyle = '#6b7280';
-      ctx.fillText(formatPeriod(period.mesAno), 300, y);
-      y += 30;
+      ctx.fillText(formatPeriod(period.mesAno), 250, y);
+      y += 25;
 
-      // Linha separadora dourada
+      // Linha separadora dourada - ✅ Com anti-aliasing
       ctx.strokeStyle = '#fbbf24';
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.moveTo(50, y);
-      ctx.lineTo(550, y);
+      ctx.moveTo(40, y);
+      ctx.lineTo(460, y);
       ctx.stroke();
-      y += 30;
+      y += 25;
 
-      console.log('📋 Desenhando box de informações...');
+      console.log('🏆 Desenhando ranking...');
 
-      // BOX DE INFORMAÇÕES
-      // Fundo do box
-      ctx.fillStyle = '#fefce8';
-      ctx.fillRect(50, y, 500, 50);
-
-      // Borda do box
-      ctx.strokeStyle = '#fde047';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(50, y, 500, 50);
-
-      // Informações do período
-      ctx.textAlign = 'left';
-      ctx.font = '14px Arial, sans-serif';
-      ctx.fillStyle = '#374151';
-      ctx.fillText(
-        `📅 Período: ${formatDate(period.dataInicio)} - ${formatDate(period.dataFim)}`,
-        70,
-        y + 20
-      );
-      ctx.fillText('🏆 Status: Finalizada', 70, y + 35);
-      y += 70;
-
-      // TÍTULO DA TABELA
-      ctx.font = 'bold 20px Arial, sans-serif';
-      ctx.fillStyle = '#111827';
-      ctx.textAlign = 'left';
-      ctx.fillText('🏆 Classificação Final', 50, y);
-      y += 35;
-
-      console.log('📊 Desenhando tabela de ranking...');
-
-      // HEADER DA TABELA
-      ctx.fillStyle = '#f9fafb';
-      ctx.fillRect(50, y, 500, 40);
-      ctx.strokeStyle = '#e5e7eb';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(50, y, 500, 40);
-
-      ctx.font = 'bold 14px Arial, sans-serif';
-      ctx.fillStyle = '#374151';
-      ctx.textAlign = 'left';
-      ctx.fillText('Pos.', 70, y + 25);
-      ctx.fillText('Setor', 150, y + 25);
-      ctx.textAlign = 'right';
-      ctx.fillText('Pontuação', 520, y + 25);
-      y += 40;
-
-      // LINHAS DO RANKING
+      // RANKING
       rankingData.forEach((item, index) => {
-        console.log(
-          `🏅 Desenhando linha ${index + 1}: ${item.setor} - ${item.pontos.toFixed(2)} pontos`
-        );
+        const rowY = y + index * 50;
 
-        const rowHeight = 55;
-        const rowY = y + index * rowHeight;
-
-        // Fundo da linha
-        if (item.isWinner) {
-          // Destaque para vencedor
-          ctx.fillStyle = '#fefce8';
-          ctx.fillRect(50, rowY, 500, rowHeight);
-
-          // Borda esquerda dourada
-          ctx.fillStyle = '#fbbf24';
-          ctx.fillRect(50, rowY, 4, rowHeight);
-        } else {
-          // Fundo alternado
-          ctx.fillStyle = index % 2 === 0 ? '#ffffff' : '#f9fafb';
-          ctx.fillRect(50, rowY, 500, rowHeight);
-        }
-
-        // Borda inferior
-        ctx.strokeStyle = '#f3f4f6';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(50, rowY + rowHeight);
-        ctx.lineTo(550, rowY + rowHeight);
-        ctx.stroke();
-
-        // CÍRCULO DA POSIÇÃO
-        const positionColors = {
+        // ✅ Círculo da posição com anti-aliasing
+        const colors = {
           1: '#fbbf24',
-          2: '#d1d5db',
+          2: '#e5e7eb',
           3: '#fed7aa',
           default: '#f3f4f6',
         };
 
-        const textColors = {
-          1: '#ffffff',
-          2: '#374151',
-          3: '#ea580c',
-          default: '#6b7280',
-        };
-
-        const circleColor =
-          positionColors[item.position as keyof typeof positionColors] ||
-          positionColors.default;
-        const circleTextColor =
-          textColors[item.position as keyof typeof textColors] ||
-          textColors.default;
-
-        ctx.fillStyle = circleColor;
+        ctx.fillStyle =
+          colors[item.position as keyof typeof colors] || colors.default;
         ctx.beginPath();
-        ctx.arc(85, rowY + 27, 18, 0, 2 * Math.PI);
+        ctx.arc(65, rowY + 15, 14, 0, 2 * Math.PI);
         ctx.fill();
 
         // Número da posição
-        ctx.fillStyle = circleTextColor;
-        ctx.font = 'bold 14px Arial, sans-serif';
+        ctx.fillStyle = item.position === 1 ? '#ffffff' : '#374151';
+        ctx.font = 'bold 12px Inter, Arial, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(`${item.position}°`, 85, rowY + 27);
+        ctx.fillText(`${item.position}°`, 65, rowY + 15);
 
-        // NOME DO SETOR
+        // Nome do setor
         ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        ctx.font = 'bold 16px Arial, sans-serif';
+        ctx.font = 'bold 14px Inter, Arial, sans-serif';
         ctx.fillStyle = item.isWinner ? '#b45309' : '#111827';
-        ctx.fillText(item.setor, 120, rowY + 18);
+        ctx.fillText(item.setor, 90, rowY + 12);
 
         // Badge "Vencedor" para o primeiro lugar
         if (item.isWinner) {
-          ctx.font = '12px Arial, sans-serif';
+          ctx.font = '10px Inter, Arial, sans-serif';
           ctx.fillStyle = '#d97706';
-          ctx.fillText('🏆 Vencedor', 120, rowY + 38);
+          ctx.fillText('🏆 Vencedor', 90, rowY + 28);
         }
 
         // PONTUAÇÃO
         ctx.textAlign = 'right';
-        ctx.font = 'bold 20px Arial, sans-serif';
+        ctx.font = 'bold 16px Inter, Arial, sans-serif';
         const pointColors = {
           1: '#d97706',
           2: '#6b7280',
@@ -701,42 +484,45 @@ export default function ShareRankingButton({
         ctx.fillStyle =
           pointColors[item.position as keyof typeof pointColors] ||
           pointColors.default;
-        ctx.fillText(item.pontos.toFixed(2), 520, rowY + 22);
+        ctx.fillText(item.pontos.toFixed(2), 440, rowY + 15);
 
         // Label "pontos"
-        ctx.font = '12px Arial, sans-serif';
+        ctx.font = '10px Inter, Arial, sans-serif';
         ctx.fillStyle = '#9ca3af';
-        ctx.fillText('pontos', 520, rowY + 40);
+        ctx.fillText('pontos', 440, rowY + 30);
       });
 
       console.log('📄 Desenhando footer...');
 
       // FOOTER
-      const footerY = y + rankingData.length * 55 + 30;
+      const footerY = y + rankingData.length * 50 + 20;
 
       // Linha separadora
       ctx.strokeStyle = '#f3f4f6';
       ctx.lineWidth = 1;
+      ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.moveTo(50, footerY);
-      ctx.lineTo(550, footerY);
+      ctx.moveTo(40, footerY);
+      ctx.lineTo(460, footerY);
       ctx.stroke();
 
       // Texto do footer
       ctx.textAlign = 'center';
-      ctx.font = '12px Arial, sans-serif';
+      ctx.font = '10px Inter, Arial, sans-serif';
       ctx.fillStyle = '#9ca3af';
       ctx.textBaseline = 'top';
       const now = new Date();
       ctx.fillText(
         `Gerado em ${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
-        300,
-        footerY + 15
+        250,
+        footerY + 10
       );
-      ctx.fillText('Sistema de Premiação - Viação Pioneira', 300, footerY + 30);
+      ctx.fillText('Sistema de Premiação - Viação Pioneira', 250, footerY + 22);
 
       console.log('✅ Canvas desenhado com sucesso!');
-      console.log(`📐 Tamanho final: ${canvas.width}x${canvas.height}`);
+      console.log(
+        `📐 Tamanho final: ${canvas.width}x${canvas.height} (escala ${scaleFactor}x)`
+      );
 
       return canvas;
     } catch (error) {
@@ -751,7 +537,6 @@ export default function ShareRankingButton({
   const handleDownload = async () => {
     console.log('📥 Gerando imagem com canvas nativo...');
 
-    // Usar diretamente o método que funciona
     const canvas = await generateImageDirectCanvas();
 
     if (!canvas) {
@@ -759,7 +544,7 @@ export default function ShareRankingButton({
       return;
     }
 
-    // Converter para blob e fazer download
+    // ✅ CONFIGURAÇÃO DE ALTA QUALIDADE PARA DOWNLOAD
     canvas.toBlob(
       (blob) => {
         if (!blob) return;
@@ -776,7 +561,7 @@ export default function ShareRankingButton({
         toast.success('Imagem baixada com sucesso!');
       },
       'image/png',
-      1.0
+      1.0 // ✅ Qualidade máxima
     );
   };
 
@@ -863,29 +648,36 @@ export default function ShareRankingButton({
         </Button>
       </DialogTrigger>
 
-      <DialogContent className='max-w-4xl max-h-[90vh] overflow-y-auto'>
-        <DialogHeader>
-          <DialogTitle className='flex items-center gap-2'>
-            <Share className='h-5 w-5 text-yellow-600' />
+      {/* ✅ MODAL RESPONSIVO - Principal mudança aqui */}
+      <DialogContent className='w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6'>
+        <DialogHeader className='pb-4'>
+          <DialogTitle className='flex items-center gap-2 text-base sm:text-lg'>
+            <Share className='h-4 w-4 sm:h-5 sm:w-5 text-yellow-600' />
             Compartilhar Resultado da Premiação
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className='text-sm'>
             Gere uma imagem com o ranking final para compartilhar
           </DialogDescription>
         </DialogHeader>
 
-        <div className='space-y-6'>
-          {/* Preview da imagem */}
-          <div className='border rounded-lg overflow-hidden bg-gray-50'>
-            <ShareableRankingImage period={period} rankingData={rankingData} />
+        <div className='space-y-4'>
+          {/* ✅ Preview da imagem - Responsivo */}
+          <div className='border rounded-lg overflow-hidden bg-gray-50 w-full'>
+            <div className='overflow-x-auto'>
+              <ShareableRankingImage
+                period={period}
+                rankingData={rankingData}
+              />
+            </div>
           </div>
 
-          {/* Botões de ação */}
-          <div className='flex flex-wrap gap-3 justify-center'>
+          {/* ✅ Botões de ação - Layout responsivo */}
+          <div className='flex flex-col sm:flex-row gap-2 sm:gap-3'>
             <Button
               onClick={handleDownload}
               disabled={isGenerating}
-              className='bg-yellow-600 hover:bg-yellow-700 text-white'
+              className='bg-yellow-600 hover:bg-yellow-700 text-white flex-1'
+              size='sm'
             >
               {isGenerating ? (
                 <Loader2 className='h-4 w-4 mr-2 animate-spin' />
@@ -899,24 +691,32 @@ export default function ShareRankingButton({
               variant='outline'
               onClick={handleCopyImage}
               disabled={isGenerating}
+              className='flex-1'
+              size='sm'
             >
               <Copy className='h-4 w-4 mr-2' />
-              Copiar Imagem
+              Copiar
             </Button>
 
             <Button
               variant='outline'
               onClick={handleShare}
               disabled={isGenerating}
+              className='flex-1'
+              size='sm'
             >
               <Share className='h-4 w-4 mr-2' />
               Compartilhar
             </Button>
           </div>
 
+          {/* ✅ Indicador de loading */}
           {isGenerating && (
-            <div className='text-center text-sm text-gray-600'>
-              Gerando imagem...
+            <div className='text-center text-sm text-gray-600 py-2'>
+              <div className='flex items-center justify-center gap-2'>
+                <Loader2 className='h-4 w-4 animate-spin' />
+                <span>Gerando imagem...</span>
+              </div>
             </div>
           )}
         </div>

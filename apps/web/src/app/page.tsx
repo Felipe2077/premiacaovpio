@@ -8,75 +8,12 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import ShareRankingButton from '@/components/vigencia/ShareRankingButton';
 import VigenciaStatusBadge from '@/components/vigencia/VigenciaStatusBadge';
 import { useCompetitionData } from '@/hooks/useCompetitionData';
-import React, { useEffect, useState } from 'react';
-
-// Hook específico para ranking do período
-function usePeriodRanking(period: string | null) {
-  const [ranking, setRanking] = useState<
-    Array<{
-      position: number;
-      setor: string;
-      pontos: number;
-      isWinner: boolean;
-    }>
-  >([]);
-  const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    if (!period) {
-      setRanking([]);
-      return;
-    }
-
-    const fetchRanking = async () => {
-      setIsLoading(true);
-      try {
-        console.log('🔍 Buscando ranking específico para período:', period);
-
-        const response = await fetch(`/api/ranking?period=${period}`, {
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-        });
-
-        if (!response.ok) {
-          throw new Error(`Erro ${response.status}`);
-        }
-
-        const data = await response.json();
-        console.log('📊 Ranking recebido da API:', data);
-
-        // Converter para formato de compartilhamento
-        const rankingForShare = data.map((item: any) => ({
-          position: item.RANK,
-          setor: item.SETOR,
-          pontos: item.PONTUACAO,
-          isWinner: item.RANK === 1,
-        }));
-
-        console.log('🏆 Ranking formatado:', rankingForShare);
-        setRanking(rankingForShare);
-      } catch (error) {
-        console.error('❌ Erro ao buscar ranking:', error);
-        setRanking([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchRanking();
-  }, [period]);
-
-  return { ranking, isLoading };
-}
+import { useEffect, useMemo, useState } from 'react';
 
 export default function HomePage() {
-  // Hook para buscar dados via useDashboardData que já aplica a lógica correta
-  // LÓGICA DE SELEÇÃO AUTOMÁTICA DO PERÍODO PADRÃO:
-  // 1. ATIVA (sempre prioridade máxima)
-  // 2. PRE_FECHADA (mais recente)
-  // 3. FECHADA (mais recente)
-  // 4. PLANEJAMENTO (só como última opção)
+  // ✅ Usar apenas o hook principal que já carrega todos os dados
   const {
+    rankingData, // ← Este já contém o ranking calculado!
     activeCriteria,
     resultsBySector,
     uniqueCriteria,
@@ -91,70 +28,16 @@ export default function HomePage() {
   const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
   const [isStatusLoading, setIsStatusLoading] = useState(true);
 
-  // Buscar período atual com informações completas
-  // REGRA DE PRIORIDADE PARA SELEÇÃO PADRÃO:
-  // 1. ATIVA (sempre prioridade máxima)
-  // 2. PRE_FECHADA (mais recente)
-  // 3. FECHADA (mais recente)
-  // 4. PLANEJAMENTO nunca é selecionado por padrão
-  const currentPeriod = React.useMemo(() => {
-    if (!periods || periods.length === 0) return null;
-
-    // 1º: Procurar período ATIVO (sempre prioridade)
-    const active = periods.find((p) => p.status === 'ATIVA');
-    if (active) return active;
-
-    // 2º: Procurar períodos PRE_FECHADA (mais recente)
-    const preClosed = periods
-      .filter((p) => p.status === 'PRE_FECHADA')
-      .sort(
-        (a, b) =>
-          new Date(b.dataInicio).getTime() - new Date(a.dataInicio).getTime()
-      )[0];
-    if (preClosed) return preClosed;
-
-    // 3º: Procurar períodos FECHADA (mais recente)
-    const closed = periods
-      .filter((p) => p.status === 'FECHADA')
-      .sort(
-        (a, b) =>
-          new Date(b.dataInicio).getTime() - new Date(a.dataInicio).getTime()
-      )[0];
-    if (closed) return closed;
-
-    // 4º: PLANEJAMENTO como última opção (só se não houver nada)
-    const planning = periods.find((p) => p.status === 'PLANEJAMENTO');
-    return planning || null;
-  }, [periods]);
-
-  // Função para formatar o período (Ex: "junho de 2025")
-  const formatMesAno = (mesAno: string) => {
-    if (!mesAno || !mesAno.includes('-')) return 'Período Indisponível';
-    const [ano, mes] = mesAno.split('-');
-    const date = new Date(Number(ano), Number(mes) - 1);
-    return date.toLocaleString('pt-BR', {
-      month: 'long',
-      year: 'numeric',
-    });
-  };
-
-  const formatFullTimestamp = (date: Date | null): string => {
-    if (!date) return '';
-    return date.toLocaleString('pt-BR', {
-      dateStyle: 'long',
-      timeStyle: 'short',
-    });
-  };
-
-  // Buscar status do sistema e última atualização
   useEffect(() => {
     async function fetchSystemStatus() {
-      console.log('[LOG] Iniciando fetch do status do sistema...');
-      setIsStatusLoading(true);
-
       try {
-        const response = await fetch('/api/automation/status');
-        console.log('[LOG] Resposta da API recebida. Status:', response.status);
+        console.log('[LOG] Fazendo fetch para /api/system/status...');
+        const response = await fetch('/api/system/status', {
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        console.log('[LOG] Response status:', response.status);
 
         if (!response.ok) {
           throw new Error(`Erro de rede! Status: ${response.status}`);
@@ -193,24 +76,43 @@ export default function HomePage() {
 
     fetchSystemStatus();
   }, []);
-
-  // Determinar se deve mostrar os dados das tabelas
-  // Mostra dados se:
-  // 1. Tem vigência selecionada no filtro E não está em PLANEJAMENTO, OU
-  // 2. Não há vigência selecionada mas tem dados disponíveis
+  const formatMesAno = (mesAno: string) => {
+    if (!mesAno || !mesAno.includes('-')) return 'Período Indisponível';
+    const [ano, mes] = mesAno.split('-');
+    const date = new Date(Number(ano), Number(mes) - 1);
+    return date.toLocaleString('pt-BR', {
+      month: 'long',
+      year: 'numeric',
+    });
+  };
+  // ✅ Determinar período selecionado
   const selectedPeriodData = periods.find((p) => p.mesAno === activePeriod);
+
+  // ✅ Determinar se deve mostrar os dados das tabelas
   const shouldShowData = selectedPeriodData
     ? selectedPeriodData.status !== 'PLANEJAMENTO'
     : Object.keys(resultsBySector).length > 0;
 
-  // Hook para buscar ranking específico do período selecionado
-  const { ranking: rankingForShare, isLoading: isLoadingRanking } =
-    usePeriodRanking(
-      selectedPeriodData?.status === 'FECHADA' ? activePeriod : null
-    );
+  // ✅ SOLUÇÃO INTELIGENTE: Transformar rankingData existente para formato de compartilhamento
+  const rankingForShare = useMemo(() => {
+    if (!rankingData || rankingData.length === 0) {
+      console.log('🔍 Sem dados de ranking disponíveis');
+      return [];
+    }
 
-  console.log('🎯 Período selecionado:', selectedPeriodData);
-  console.log('🏆 Ranking para compartilhamento:', rankingForShare);
+    console.log('🔍 rankingData original:', rankingData);
+
+    // Transformar dados do formato EntradaRanking para formato ShareRanking
+    const transformed = rankingData.map((item) => ({
+      position: item.RANK,
+      setor: item.SETOR,
+      pontos: item.PONTUACAO,
+      isWinner: item.RANK === 1,
+    }));
+
+    console.log('🏆 Ranking transformado para compartilhamento:', transformed);
+    return transformed;
+  }, [rankingData]);
 
   return (
     <TooltipProvider>
@@ -241,23 +143,42 @@ export default function HomePage() {
                       <VigenciaStatusBadge
                         selectedPeriod={selectedPeriodData}
                       />
-                      {/* Botão de compartilhar para períodos FECHADA */}
-                      {selectedPeriodData &&
-                        selectedPeriodData.status === 'FECHADA' &&
-                        rankingForShare.length > 0 &&
-                        !isLoadingRanking && (
+
+                      {/* ✅ BOTÃO DE COMPARTILHAR - Usando dados existentes */}
+                      {selectedPeriodData?.status === 'FECHADA' &&
+                        !isLoading &&
+                        rankingForShare.length > 0 && (
                           <ShareRankingButton
                             period={selectedPeriodData}
                             rankingData={rankingForShare}
                           />
                         )}
+
+                      {/* 🔍 DEBUG: Indicador quando deveria aparecer mas não aparece */}
+                      {selectedPeriodData?.status === 'FECHADA' &&
+                        !isLoading &&
+                        rankingForShare.length === 0 && (
+                          <div className='text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded'>
+                            ⚠️ Período FECHADO mas sem ranking
+                          </div>
+                        )}
+
+                      {/* Indicador de loading quando necessário */}
+                      {selectedPeriodData?.status === 'FECHADA' &&
+                        isLoading && (
+                          <div className='text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded'>
+                            ⏳ Carregando dados...
+                          </div>
+                        )}
                     </div>
+
                     <FilterControls
                       periods={periods}
                       activePeriod={activePeriod}
                       onPeriodChange={setActivePeriod}
                     />
                   </div>
+
                   <PerformanceTable
                     resultsBySector={resultsBySector}
                     uniqueCriteria={uniqueCriteria}
@@ -293,17 +214,18 @@ export default function HomePage() {
                   📈 Consultar Resultados
                 </h2>
                 <VigenciaStatusBadge selectedPeriod={selectedPeriodData} />
-                {/* Botão de compartilhar para períodos FECHADA */}
-                {selectedPeriodData &&
-                  selectedPeriodData.status === 'FECHADA' &&
-                  rankingForShare.length > 0 &&
-                  !isLoadingRanking && (
+
+                {/* ✅ Botão de compartilhar também na área de consulta */}
+                {selectedPeriodData?.status === 'FECHADA' &&
+                  !isLoading &&
+                  rankingForShare.length > 0 && (
                     <ShareRankingButton
                       period={selectedPeriodData}
                       rankingData={rankingForShare}
                     />
                   )}
               </div>
+
               <FilterControls
                 periods={periods}
                 activePeriod={activePeriod}
@@ -314,7 +236,6 @@ export default function HomePage() {
             {/* Verificar se período selecionado está em planejamento */}
             {selectedPeriodData &&
             selectedPeriodData.status === 'PLANEJAMENTO' ? (
-              /* Aviso específico para período em planejamento - MELHORADO */
               <div className='relative overflow-hidden bg-gradient-to-br from-yellow-50 via-yellow-25 to-amber-50 rounded-xl border border-yellow-200 shadow-lg'>
                 {/* Padrão de fundo decorativo */}
                 <div className='absolute inset-0 opacity-5'>
@@ -413,31 +334,14 @@ export default function HomePage() {
                 </div>
               </div>
             ) : (
-              /* Estado geral sem dados - MELHORADO */
-              <div className='relative overflow-hidden bg-gradient-to-br from-gray-50 via-slate-50 to-gray-100 rounded-xl border border-gray-200 shadow-sm'>
-                <div className='text-center py-12 px-8'>
-                  <div className='max-w-md mx-auto space-y-6'>
-                    {/* Ícone principal */}
-                    <div className='w-16 h-16 bg-gradient-to-br from-gray-200 to-gray-300 rounded-full flex items-center justify-center mx-auto shadow-sm'>
-                      <div className='text-3xl'>📊</div>
-                    </div>
-
-                    <div className='space-y-2'>
-                      <h3 className='text-xl font-bold text-gray-900'>
-                        Nenhum Dado Disponível
-                      </h3>
-                      <div className='w-16 h-0.5 bg-gray-300 mx-auto rounded-full'></div>
-                    </div>
-
-                    <div className='bg-white/60 rounded-lg p-4 border border-gray-200/50'>
-                      <p className='text-gray-600'>
-                        {activePeriod
-                          ? `Não há dados disponíveis para ${formatMesAno(activePeriod)}.`
-                          : 'Selecione um período no filtro acima para visualizar os resultados.'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+              <div className='bg-gray-50 border border-gray-200 rounded-lg p-6 text-center'>
+                <h3 className='text-lg font-semibold text-gray-900 mb-2'>
+                  📊 Nenhum Resultado Disponível
+                </h3>
+                <p className='text-gray-600'>
+                  Selecione um período com dados disponíveis para visualizar os
+                  resultados da competição.
+                </p>
               </div>
             )}
           </div>
