@@ -1,4 +1,4 @@
-// Arquivo: src/hooks/useDashboardData.ts (NOVO ARQUIVO)
+// src/hooks/useDashboardData.ts - CORRIGIDO COM LÓGICA CORRETA
 
 import {
   Criterio as Criterion,
@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 export interface Period {
   id: number;
   mesAno: string;
-  status: 'ATIVA' | 'FECHADA' | 'PLANEJAMENTO';
+  status: 'ATIVA' | 'FECHADA' | 'PLANEJAMENTO' | 'PRE_FECHADA';
   dataInicio: string;
   dataFim: string;
 }
@@ -37,6 +37,43 @@ export interface ResultData {
   regrasAplicadasPadrao: RegrasAplicadasPadrao | null;
   metaDefinidaValor: number | null;
   isMetaDefinida: boolean;
+}
+
+/**
+ * Seleciona o período padrão baseado nas regras de negócio:
+ * 1. ATIVA (sempre prioridade máxima)
+ * 2. PRE_FECHADA (mais recente)
+ * 3. FECHADA (mais recente)
+ * 4. PLANEJAMENTO (só como última opção)
+ */
+function selectDefaultPeriod(periods: Period[]): Period | null {
+  if (!periods || periods.length === 0) return null;
+
+  // 1º: Procurar período ATIVO (sempre prioridade)
+  const active = periods.find((p) => p.status === 'ATIVA');
+  if (active) return active;
+
+  // 2º: Procurar períodos PRE_FECHADA (mais recente)
+  const preClosed = periods
+    .filter((p) => p.status === 'PRE_FECHADA')
+    .sort(
+      (a, b) =>
+        new Date(b.dataInicio).getTime() - new Date(a.dataInicio).getTime()
+    )[0];
+  if (preClosed) return preClosed;
+
+  // 3º: Procurar períodos FECHADA (mais recente)
+  const closed = periods
+    .filter((p) => p.status === 'FECHADA')
+    .sort(
+      (a, b) =>
+        new Date(b.dataInicio).getTime() - new Date(a.dataInicio).getTime()
+    )[0];
+  if (closed) return closed;
+
+  // 4º: PLANEJAMENTO como última opção (só se não houver nada)
+  const planning = periods.find((p) => p.status === 'PLANEJAMENTO');
+  return planning || null;
 }
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -146,13 +183,22 @@ export function useDashboardData() {
         fetchSectors(),
       ]);
 
-      const active = periodsData.find((p) => p.status === 'ATIVA');
-      const defaultPeriod = active
-        ? active.mesAno
-        : periodsData[0]?.mesAno || null;
+      // 🎯 CORREÇÃO: Aplicar a regra correta de seleção
+      const defaultPeriod = selectDefaultPeriod(periodsData);
+
+      console.log(
+        '🔍 Períodos disponíveis:',
+        periodsData.map((p) => ({ mesAno: p.mesAno, status: p.status }))
+      );
+      console.log(
+        '🎯 Período selecionado:',
+        defaultPeriod
+          ? { mesAno: defaultPeriod.mesAno, status: defaultPeriod.status }
+          : 'nenhum'
+      );
 
       if (defaultPeriod) {
-        setActivePeriod(defaultPeriod);
+        setActivePeriod(defaultPeriod.mesAno);
       }
     } catch (error: any) {
       const errorMessage = 'Falha ao carregar dados iniciais';
