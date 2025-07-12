@@ -124,9 +124,28 @@ export function NotificationItem({
     });
   }, [notification.createdAt]);
 
-  // Handler de clique
+  // Handler de clique - COM redirecionamento inteligente
   const handleClick = () => {
-    onClick?.(notification.link);
+    // Marcar como lida se não estiver
+    if (!notification.isRead) {
+      onMarkAsRead?.();
+    }
+
+    // Lógica de redirecionamento inteligente
+    if (notification.link) {
+      let targetLink = notification.link;
+
+      // Padronizar links de expurgo para a página geral
+      if (notification.type.includes('EXPURGO')) {
+        targetLink = '/admin/expurgos';
+      }
+      // Adicionar outras padronizações aqui se necessário
+      // else if (notification.type.includes('ETL')) {
+      //   targetLink = '/admin/reports';
+      // }
+
+      onClick?.(targetLink);
+    }
   };
 
   // Handler para marcar como lida
@@ -134,6 +153,19 @@ export function NotificationItem({
     e.stopPropagation();
     onMarkAsRead?.();
   };
+
+  // Determinar o link final para exibição
+  const getFinalLink = () => {
+    if (!notification.link) return null;
+
+    if (notification.type.includes('EXPURGO')) {
+      return '/admin/expurgos';
+    }
+
+    return notification.link;
+  };
+
+  const finalLink = getFinalLink();
 
   // Conteúdo do item
   const content = (
@@ -205,8 +237,8 @@ export function NotificationItem({
             {notification.message}
           </p>
 
-          {/* Link indicator */}
-          {notification.link && (
+          {/* Link indicator - mostra o link FINAL */}
+          {finalLink && (
             <div className='flex items-center gap-1 mt-2 text-xs text-blue-600 dark:text-blue-400'>
               <ExternalLink className='h-3 w-3' />
               <span>Clique para ver detalhes</span>
@@ -235,10 +267,10 @@ export function NotificationItem({
     </div>
   );
 
-  // Se tem link, envolver com Link do Next.js
-  if (notification.link) {
+  // Se tem link final, envolver com Link do Next.js
+  if (finalLink) {
     return (
-      <Link href={notification.link} className='block'>
+      <Link href={finalLink} className='block'>
         {content}
       </Link>
     );
