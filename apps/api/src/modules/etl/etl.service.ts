@@ -433,11 +433,14 @@ export class EtlService {
           }
           console.log(`  -> Total Expurgado: ${totalExpurgado}`);
 
-          const valorRealizadoFinal =
+          const valorRealizadoAjustado =
             (totalRealizadoBruto !== null ? totalRealizadoBruto : 0) -
             totalExpurgado;
+          
+          const valorRealizadoFinal = Math.max(0, valorRealizadoAjustado);
+
           console.log(
-            `  -> Valor Realizado Final (Pós-Expurgo): ${valorRealizadoFinal}`
+            `  -> Valor Realizado Final (Pós-Expurgo e Pós-Validação): ${valorRealizadoFinal}`
           );
 
           if (totalRealizadoBruto !== null) {

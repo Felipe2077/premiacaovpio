@@ -1,4 +1,4 @@
-// apps/web/src/components/competition/PerformanceTable.tsx (ATUALIZADO COM TOTAIS)
+// apps/web/src/components/competition/PerformanceTable.tsx (ATUALIZADO COM RESPONSIVIDADE)
 'use client';
 
 import {
@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/tooltip';
 import { Criterion } from '@/hooks/useParametersData';
 import { ArrowDown, ArrowUp } from 'lucide-react';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react'; // Importados useState e useEffect
 
 interface PerformanceTableProps {
   resultsBySector: Record<number, any>;
@@ -65,28 +65,29 @@ const formatNumberByCriterion = (
   if (num === null || num === undefined) return '0';
 
   const normalizedName = criterionName.toUpperCase().trim();
-  const roundedNum = Math.round(num);
+  // Não arredondar aqui, a menos que seja especificamente para o caso de dinheiro ou litros
+  // Para valores gerais, manter a precisão original antes de formatar
+  const numToFormat = Number(num);
 
   // Formatação para valores monetários (arredondado)
   if (normalizedName.includes('PNEUS') || normalizedName.includes('PEÇAS')) {
     return new Intl.NumberFormat('pt-BR', {
-      style: 'decimal',
-      currency: 'BRL',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(roundedNum);
+      style: 'decimal', // Use decimal para apenas o número
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(numToFormat); // Aplicar o formatador ao número original
   }
 
   // Formatação para litros (arredondado)
   if (normalizedName.includes('COMBUSTIVEL')) {
-    return `${roundedNum.toLocaleString('pt-BR')}L`;
+    return `${numToFormat.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}L`;
   }
 
   // Formatação padrão para outros números
-  if (num % 1 === 0) {
-    return num.toLocaleString('pt-BR');
+  if (numToFormat % 1 === 0) {
+    return numToFormat.toLocaleString('pt-BR');
   }
-  return Number(num).toLocaleString('pt-BR', {
+  return numToFormat.toLocaleString('pt-BR', {
     minimumFractionDigits: 1,
     maximumFractionDigits: 2,
   });
@@ -139,7 +140,7 @@ const getStatusByPoints = (points: number): string => {
   return 'N/A';
 };
 
-// Componente de célula compacta com tooltip
+// Componente de célula compacta com tooltip (mantido igual)
 const CompactCell = ({
   criterio,
   dados,
@@ -199,7 +200,6 @@ const CompactCell = ({
           </div>
         </TooltipTrigger>
         <TooltipContent side='top' className='max-w-xs'>
-          {/* O Tooltip continua o mesmo, com os dados completos */}
           <div className='space-y-1 text-xs'>
             <div className='font-semibold text-center border-b pb-1 mb-2'>
               {criterio.nome}
@@ -245,7 +245,7 @@ const CompactCell = ({
   );
 };
 
-// Componente de célula de total
+// Componente de célula de total (mantido igual)
 const TotalCell = ({
   criterionName,
   total,
@@ -271,11 +271,8 @@ const TotalCell = ({
     ) {
       return `${value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}L`;
     }
-    if (normalizedName.includes('PNEUS')) {
-      return `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    }
-    if (normalizedName.includes('PEÇAS')) {
-      return `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (normalizedName.includes('PNEUS') || normalizedName.includes('PEÇAS')) {
+      return `R\$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     }
 
     // Para outros critérios
@@ -285,10 +282,10 @@ const TotalCell = ({
         maximumFractionDigits: 2,
       });
     } else {
-      // Soma - sempre valor exato, sem "k"
+      // Soma - sempre valor exato
       return value.toLocaleString('pt-BR', {
         minimumFractionDigits: 0,
-        maximumFractionDigits: 1,
+        maximumFractionDigits: 0, // Corrigido para 0 para somas exatas
       });
     }
   };
@@ -322,7 +319,17 @@ export default function PerformanceTable({
   isLoading,
   error,
 }: PerformanceTableProps) {
-  // Transformar dados para ordenação por pontuação total
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Hook para detectar se é mobile
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768); // Exemplo: 768px como breakpoint
+    checkMobile(); // Checa na montagem
+    window.addEventListener('resize', checkMobile); // Adiciona listener para redimensionamento
+    return () => window.removeEventListener('resize', checkMobile); // Remove listener na desmontagem
+  }, []);
+
+  // Transformar dados para ordenação por pontuação total (mantido igual)
   const dataWithRanking = useMemo(() => {
     if (!resultsBySector || Object.keys(resultsBySector).length === 0) {
       return [];
@@ -332,7 +339,7 @@ export default function PerformanceTable({
       ([sectorId, sectorData]) => {
         if (!sectorData) {
           return {
-            sectorId,
+            sectorId: Number(sectorId), // Garante que sectorId é um número
             setorNome: 'Desconhecido',
             totalPontos: 0,
             criteriaResults: {},
@@ -347,7 +354,7 @@ export default function PerformanceTable({
         );
 
         return {
-          sectorId,
+          sectorId: Number(sectorId), // Garante que sectorId é um número
           setorNome: sectorData.setorNome || 'Desconhecido',
           totalPontos,
           criteriaResults,
@@ -359,7 +366,7 @@ export default function PerformanceTable({
     return sectorsWithPoints.sort((a, b) => a.totalPontos - b.totalPontos);
   }, [resultsBySector]);
 
-  // Calcular totais por critério
+  // Calcular totais por critério (mantido igual)
   const criterionTotals = useMemo(() => {
     if (!uniqueCriteria || dataWithRanking.length === 0) {
       return {};
@@ -371,16 +378,16 @@ export default function PerformanceTable({
     > = {};
 
     uniqueCriteria.forEach((criterion) => {
-      const sectorData = dataWithRanking
-        .map((sector) => sector.criteriaResults[criterion.id])
-        .filter(
-          (data) =>
-            data &&
-            data.valorRealizado !== null &&
-            data.valorRealizado !== undefined
-        );
+      // Filtrar dados de todos os setores para o critério atual
+      const sectorDataForCriterion = dataWithRanking.flatMap((sector) => {
+        const criterionResult = sector.criteriaResults[criterion.id];
+        return criterionResult ? [criterionResult] : [];
+      });
 
-      const result = calculateCriterionTotal(criterion.nome, sectorData);
+      const result = calculateCriterionTotal(
+        criterion.nome,
+        sectorDataForCriterion
+      );
       totals[criterion.id] = result;
     });
 
@@ -399,155 +406,344 @@ export default function PerformanceTable({
     return <div>Nenhum dado disponível.</div>;
   }
 
+  // Componente de Card para Mobile
+  const MobileSectorCard = ({
+    setor,
+    posicao,
+  }: {
+    setor: any;
+    posicao: number;
+  }) => {
+    const isFirstPlace = posicao === 1;
+    return (
+      <div
+        className={`p-4 mb-4 rounded-lg shadow-md ${isFirstPlace ? 'bg-green-50 border-2 border-green-200' : 'bg-white border border-gray-200'}`}
+      >
+        <div className='flex items-center justify-between mb-3 border-b pb-2'>
+          <div className='flex items-center gap-2'>
+            <span className='text-xl font-bold'>{getPosicaoIcon(posicao)}</span>
+            <h3 className='text-lg font-semibold text-gray-800'>
+              {setor.setorNome}
+            </h3>
+          </div>
+          <div className='text-right'>
+            <div
+              className={`font-bold text-2xl ${getPointsColorByRank(posicao)}`}
+            >
+              {setor.totalPontos.toFixed(2)}
+            </div>
+            <div className='text-xs font-medium text-blue-600 -mt-1'>
+              pontos
+            </div>
+          </div>
+        </div>
+
+        <div className='grid grid-cols-1 gap-4'>
+          {uniqueCriteria.map((criterio) => {
+            const dados = setor.criteriaResults[criterio.id];
+            if (!dados) {
+              return (
+                <div
+                  key={criterio.id}
+                  className='border p-2 rounded-md bg-gray-50'
+                >
+                  <h4 className='font-semibold text-sm mb-1 text-gray-700'>
+                    {criterio.nome}
+                  </h4>
+                  <p className='text-xs text-gray-500'>Dados não disponíveis</p>
+                </div>
+              );
+            }
+
+            const percentage = (dados.percentualAtingimento || 0) * 100;
+            const colorClass = getPontuacaoColor(dados.pontos || 0);
+
+            return (
+              <div
+                key={criterio.id}
+                className='border p-2 rounded-md bg-gray-50'
+              >
+                <h4 className='font-semibold text-sm mb-1 text-gray-700'>
+                  {criterio.nome}
+                </h4>
+                <div className='flex justify-between items-center text-sm mb-1'>
+                  <div>
+                    <span className='text-gray-600'>Realizado:</span>{' '}
+                    <strong className='text-gray-800'>
+                      {formatNumberByCriterion(
+                        dados.valorRealizado,
+                        criterio.nome
+                      )}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className='text-gray-600'>Meta:</span>{' '}
+                    <strong className='text-gray-700'>
+                      {formatNumberByCriterion(dados.valorMeta, criterio.nome)}
+                    </strong>
+                  </div>
+                </div>
+                <div className='flex items-center justify-between text-xs mt-1'>
+                  <div className='flex-1'>
+                    <div className='w-full bg-gray-200 rounded-full h-1.5'>
+                      <div
+                        className={`h-1.5 rounded-full ${colorClass}`}
+                        style={{ width: `${Math.min(percentage, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className='ml-2'>
+                    <span className='font-semibold text-gray-700'>
+                      {percentage.toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+                <div className='text-xs text-gray-600 mt-2'>
+                  Pontos:{' '}
+                  <strong className='font-bold text-gray-800'>
+                    {(dados.pontos || 0).toFixed(1)}
+                  </strong>{' '}
+                  | Status:{' '}
+                  <span
+                    className={`${getStatusByPoints(dados.pontos || 0) === 'Excelente' ? 'text-green-700' : getStatusByPoints(dados.pontos || 0) === 'Bom' ? 'text-green-600' : getStatusByPoints(dados.pontos || 0) === 'Atenção' ? 'text-yellow-700' : 'text-red-700'}`}
+                  >
+                    {getStatusByPoints(dados.pontos || 0)}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // Componente de Card de Totais para Mobile
+  const MobileTotalsCard = () => (
+    <div className='bg-blue-100 border-2 border-blue-300 p-4 rounded-lg shadow-md mt-4'>
+      <h3 className='font-bold text-lg mb-3 text-blue-900 border-b border-blue-300 pb-2'>
+        📊 Totais por Critério
+      </h3>
+      <div className='space-y-3'>
+        {uniqueCriteria.map((criterio) => {
+          const totalData = criterionTotals[criterio.id];
+          if (!totalData) return null;
+
+          const normalizedName = criterio.nome.toUpperCase().trim();
+          const isSpecialCriterion =
+            normalizedName.includes('COMBUSTIVEL') ||
+            normalizedName.includes('COMBUSTÍVEL') ||
+            normalizedName.includes('PNEUS') ||
+            normalizedName.includes('PEÇAS');
+
+          const fontSizeClass = isSpecialCriterion ? 'text-sm' : 'text-base'; // Adjusted for mobile card
+          const formattedValue = formatNumberByCriterion(
+            totalData.value,
+            criterio.nome
+          );
+
+          return (
+            <div
+              key={criterio.id}
+              className='flex justify-between items-center py-1'
+            >
+              <div className='flex-1 pr-2'>
+                <span className='text-sm text-blue-800 font-medium block'>
+                  {criterio.nome}
+                </span>
+                <span className='text-xs text-blue-600'>
+                  ({totalData.type === 'sum' ? 'Soma' : 'Média'} de{' '}
+                  {totalData.count} filiais)
+                </span>
+              </div>
+              <span
+                className={`${fontSizeClass} font-bold text-blue-900 text-right`}
+              >
+                {formattedValue}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   return (
     <TooltipProvider>
       <div className='w-full'>
-        <div className='mb-4'>
-          <p className='text-sm text-gray-600'>
-            Período Atual • Menor pontuação = Melhor posição
-          </p>
-        </div>
-        <div className='border rounded-lg bg-white overflow-hidden'>
-          <div className='overflow-x-auto'>
-            <table className='w-full table-fixed'>
-              <thead className='bg-gray-50'>
-                <tr>
-                  <th className='sticky left-0 bg-gray-50 px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-r w-[140px]'>
-                    Setor
-                  </th>
-
-                  {uniqueCriteria.map((criterio) => {
-                    const normalizedName = criterio.nome.toUpperCase().trim();
-                    const isCurrency =
-                      normalizedName.includes('PNEUS') ||
-                      normalizedName.includes('PEÇAS');
-
-                    // Lógica para renomear
-                    let displayName = criterio.nome;
-                    if (normalizedName === 'ATESTADO FUNC') {
-                      displayName = 'ATESTADO';
-                    }
-
-                    // Lógica para direção da seta
-                    const isBiggerBetter =
-                      normalizedName === 'IPK' ||
-                      normalizedName === 'MEDIA KM/L';
-                    const ArrowIcon = isBiggerBetter ? ArrowUp : ArrowDown;
-                    const arrowColor = isBiggerBetter
-                      ? 'text-blue-600'
-                      : 'text-blue-600';
-
-                    return (
-                      <th
-                        key={criterio.id}
-                        className='px-2 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider border-r max-w-[95px]'
-                      >
-                        <div className='flex flex-col items-center justify-center'>
-                          <div className='flex items-center justify-center gap-1'>
-                            <span className='whitespace-normal break-words'>
-                              {displayName}
-                            </span>
-                            <ArrowIcon
-                              className={`h-4 w-4 shrink-0 ${arrowColor}`}
-                            />
-                          </div>
-                          {isCurrency && (
-                            <span className='mt-1 font-normal normal-case text-green-700'>
-                              (R$)
-                            </span>
-                          )}
-                        </div>
+        {isMobile ? (
+          // LAYOUT PARA MOBILE (CARDS)
+          <>
+            <div className='mb-4'>
+              <p className='text-sm text-gray-600'>
+                Período Atual • Menor pontuação = Melhor posição
+              </p>
+            </div>
+            {dataWithRanking.map((setor, index) => (
+              <MobileSectorCard
+                key={setor.sectorId}
+                setor={setor}
+                posicao={index + 1}
+              />
+            ))}
+            <MobileTotalsCard />
+          </>
+        ) : (
+          // LAYOUT ORIGINAL PARA DESKTOP (TABELA)
+          <>
+            <div className='mb-4'>
+              <p className='text-sm text-gray-600'>
+                Período Atual • Menor pontuação = Melhor posição
+              </p>
+            </div>
+            <div className='border rounded-lg bg-white overflow-hidden'>
+              <div className='overflow-x-auto'>
+                <table className='w-full table-fixed'>
+                  <thead className='bg-gray-50'>
+                    <tr>
+                      <th className='sticky left-0 bg-gray-50 px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-r w-[140px]'>
+                        Setor
                       </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody className='divide-y divide-gray-200'>
-                {dataWithRanking.map((setor, index) => {
-                  const posicao = index + 1;
-                  const isFirstPlace = posicao === 1;
-                  return (
-                    <tr
-                      key={setor.sectorId}
-                      className={`${isFirstPlace ? 'bg-green-50' : ''} hover:bg-gray-50`}
-                    >
-                      {/* ---   CÉLULA DE SETOR COM PONTUAÇÃO --- */}
-                      <td
-                        className={`sticky left-0 py-3 border-r ${isFirstPlace ? 'bg-green-50' : 'bg-white'}`}
-                      >
-                        <div className='flex flex-col items-center justify-center gap-3'>
-                          {/* Lado Esquerdo: Posição e Nome */}
-                          <div className='flex items-center gap-3'>
-                            <span className='text-lg'>
-                              {getPosicaoIcon(posicao)}
-                            </span>
-                            <div>
-                              <div className='font-semibold text-[12px] text-gray-800'>
-                                {setor.setorNome}
+
+                      {uniqueCriteria.map((criterio) => {
+                        const normalizedName = criterio.nome
+                          .toUpperCase()
+                          .trim();
+                        const isCurrency =
+                          normalizedName.includes('PNEUS') ||
+                          normalizedName.includes('PEÇAS');
+
+                        // Lógica para renomear
+                        let displayName = criterio.nome;
+                        if (normalizedName === 'ATESTADO FUNC') {
+                          displayName = 'ATESTADO';
+                        }
+
+                        // Lógica para direção da seta
+                        const isBiggerBetter =
+                          normalizedName === 'IPK' ||
+                          normalizedName === 'MEDIA KM/L';
+                        const ArrowIcon = isBiggerBetter ? ArrowUp : ArrowDown;
+                        const arrowColor = isBiggerBetter
+                          ? 'text-blue-600'
+                          : 'text-blue-600';
+
+                        return (
+                          <th
+                            key={criterio.id}
+                            className='px-2 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider border-r max-w-[95px]'
+                          >
+                            <div className='flex flex-col items-center justify-center'>
+                              <div className='flex items-center justify-center gap-1'>
+                                <span className='whitespace-normal break-words'>
+                                  {displayName}
+                                </span>
+                                <ArrowIcon
+                                  className={`h-4 w-4 shrink-0 ${arrowColor}`}
+                                />
+                              </div>
+                              {isCurrency && (
+                                <span className='mt-1 font-normal normal-case text-green-700'>
+                                  (R\$)
+                                </span>
+                              )}
+                            </div>
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody className='divide-y divide-gray-200'>
+                    {dataWithRanking.map((setor, index) => {
+                      const posicao = index + 1;
+                      const isFirstPlace = posicao === 1;
+                      return (
+                        <tr
+                          key={setor.sectorId}
+                          className={`${isFirstPlace ? 'bg-green-50' : ''} hover:bg-gray-50`}
+                        >
+                          {/* ---   CÉLULA DE SETOR COM PONTUAÇÃO --- */}
+                          <td
+                            className={`sticky left-0 py-3 border-r ${isFirstPlace ? 'bg-green-50' : 'bg-white'}`}
+                          >
+                            <div className='flex flex-col items-center justify-center gap-3'>
+                              {/* Lado Esquerdo: Posição e Nome */}
+                              <div className='flex items-center gap-3'>
+                                <span className='text-lg'>
+                                  {getPosicaoIcon(posicao)}
+                                </span>
+                                <div>
+                                  <div className='font-semibold text-[12px] text-gray-800'>
+                                    {setor.setorNome}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Lado Direito: Pontuação Total */}
+                              <div className='text-right'>
+                                <div
+                                  className={`font-bold text-xl ${getPointsColorByRank(posicao)}`}
+                                >
+                                  {setor.totalPontos.toFixed(2)}
+                                </div>
+                                <div className='text-xs font-medium text-blue-600 -mt-1'>
+                                  pontos
+                                </div>
                               </div>
                             </div>
-                          </div>
+                          </td>
 
-                          {/* Lado Direito: Pontuação Total */}
-                          <div className='text-right'>
-                            <div
-                              className={`font-bold text-xl ${getPointsColorByRank(posicao)}`}
-                            >
-                              {setor.totalPontos.toFixed(2)}
-                            </div>
-                            <div className='text-xs font-medium text-blue-600 -mt-1'>
-                              pontos
-                            </div>
-                          </div>
-                        </div>
+                          {/* Colunas dos critérios (sem alteração) */}
+                          {uniqueCriteria.map((criterio) => {
+                            const criterioData =
+                              setor.criteriaResults[criterio.id];
+                            return (
+                              <td
+                                key={criterio.id}
+                                className='px-1 py-2 border-r'
+                              >
+                                <CompactCell
+                                  criterio={criterio}
+                                  dados={criterioData}
+                                />
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+
+                    {/* LINHA DE TOTAIS */}
+                    <tr className='bg-blue-100 border-t-2 border-blue-300'>
+                      <td className='sticky left-0 bg-blue-100 px-3 py-3 border-r font-bold text-blue-900'>
+                        {/* Esta célula ficará vazia ou com um texto "Totais" */}
+                        TOTAIS
                       </td>
-
-                      {/* Colunas dos critérios (sem alteração) */}
                       {uniqueCriteria.map((criterio) => {
-                        const criterioData = setor.criteriaResults[criterio.id];
+                        const totalData = criterionTotals[criterio.id];
                         return (
-                          <td key={criterio.id} className='px-1 py-2 border-r'>
-                            <CompactCell
-                              criterio={criterio}
-                              dados={criterioData}
+                          <td
+                            key={`total-${criterio.id}`}
+                            className='px-1 py-2 border-r'
+                          >
+                            <TotalCell
+                              criterionName={criterio.nome}
+                              total={totalData?.value || 0}
+                              type={totalData?.type || 'sum'}
+                              count={totalData?.count || 0}
                             />
                           </td>
                         );
                       })}
-                      {/* --- MODIFICAÇÃO 3: CÉLULA DE PONTUAÇÃO REMOVIDA DAQUI --- */}
                     </tr>
-                  );
-                })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
 
-                {/* LINHA DE TOTAIS */}
-                <tr className='bg-blue-100 border-t-2 border-blue-300'>
-                  <td className='sticky left-0 bg-blue-100 px-3 py-3 border-r font-bold text-blue-900'>
-                    {/* ... (célula de totais sem alteração) ... */}
-                  </td>
-                  {uniqueCriteria.map((criterio) => {
-                    const totalData = criterionTotals[criterio.id];
-                    return (
-                      <td
-                        key={`total-${criterio.id}`}
-                        className='px-1 py-2 border-r'
-                      >
-                        <TotalCell
-                          criterionName={criterio.nome}
-                          total={totalData?.value || 0}
-                          type={totalData?.type || 'sum'}
-                          count={totalData?.count || 0}
-                        />
-                      </td>
-                    );
-                  })}
-                  {/* --- MODIFICAÇÃO 4: CÉLULA DE SOMA TOTAL DE PONTOS REMOVIDA DAQUI --- */}
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Legenda */}
+        {/* Legenda (visível em ambos) */}
         <div className='mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs'>
           <div className='flex items-center gap-2'>
             <div className='w-3 h-3 bg-green-500 rounded'></div>
@@ -567,7 +763,7 @@ export default function PerformanceTable({
           </div>
         </div>
 
-        {/* Nota explicativa */}
+        {/* Nota explicativa (visível em ambos) */}
         <div className='mt-2 text-xs text-gray-600 bg-gray-50 p-3 rounded'>
           <div className='mb-2'>
             <strong>Interação:</strong> Passe o mouse sobre as células para ver
