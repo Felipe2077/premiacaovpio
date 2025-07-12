@@ -2,8 +2,8 @@
 'use client';
 
 import { useAuthStore } from '@/store/auth-store';
-import { useRouter } from 'next/navigation';
-import { createContext, ReactNode, useContext, useEffect, useRef } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { createContext, ReactNode, useContext, useEffect } from 'react';
 
 interface AuthContextType {
   // Reexportar tudo do store para facilitar o uso
@@ -26,17 +26,26 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const router = useRouter();
   const authStore = useAuthStore();
-  const initializationRef = useRef(false);
+  const pathname = usePathname();
 
-  // Verificar autenticação ao carregar a aplicação (APENAS UMA VEZ)
+  // Revalidar a autenticação a cada mudança de rota
   useEffect(() => {
-    if (!initializationRef.current) {
-      initializationRef.current = true;
-      authStore.checkAuth().catch((error) => {
-        console.warn('Erro na verificação inicial de auth:', error);
-      });
-    }
-  }, []); // Dependências vazias - executa apenas uma vez
+    console.log(
+      `%c[AuthProvider] Rota mudou para: ${pathname}. Verificando autenticação...`,
+      'color: #9C27B0'
+    );
+
+    // Agora, checkAuth() roda na primeira carga E sempre que a URL muda.
+    authStore.checkAuth().catch((error) => {
+      // Evita logs de erro para rotas públicas onde o usuário não está logado
+      if (error.message !== 'No token found') {
+        console.warn(
+          `[AuthProvider] Aviso na verificação de auth em ${pathname}:`,
+          error.message
+        );
+      }
+    });
+  }, [pathname]); // 👈 A dependência agora é a ROTA
 
   // Criar valor do contexto
   const contextValue: AuthContextType = {

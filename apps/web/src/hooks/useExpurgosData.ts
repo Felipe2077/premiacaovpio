@@ -1,7 +1,10 @@
-// apps/web/src/hooks/useExpurgosData.ts (CORRIGIDO COMPLETO)
+// // apps/web/src/hooks/useExpurgosData.ts - SUBSTITUINDO O HOOK ORIGINAL
+
 'use client';
 
+import { useAuth } from '@/components/providers/AuthProvider';
 import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 
 // Tipos atualizados para refletir o backend
 interface ExpurgoResponseDto {
@@ -100,7 +103,9 @@ interface ExpurgoFilters {
   valorMaximoSolicitado?: number;
 }
 
-// 🎯 FUNÇÃO CORRIGIDA 1: fetchExpurgos
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+// 🎯 FUNÇÃO COM FILTROS DE SEGURANÇA
 const fetchExpurgos = async (
   filters: ExpurgoFilters = {}
 ): Promise<ExpurgoResponseDto[]> => {
@@ -113,10 +118,11 @@ const fetchExpurgos = async (
     }
   });
 
-  const url = `http://localhost:3001/api/expurgos?${searchParams.toString()}`;
+  const url = `${API_BASE_URL}/api/expurgos?${searchParams.toString()}`;
+
+  console.log('🔍 Fazendo requisição para:', url); // Debug
 
   const response = await fetch(url, {
-    // ✅ CORREÇÃO: Adicionar credentials para autenticação
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
@@ -131,14 +137,13 @@ const fetchExpurgos = async (
   }
 
   const data = await response.json();
+  console.log('📦 Dados recebidos:', data.length, 'expurgos'); // Debug
   return Array.isArray(data) ? data : [];
 };
 
-// 🎯 FUNÇÃO CORRIGIDA 2: fetchActiveCriteriaSimple
 const fetchActiveCriteriaSimple = async (): Promise<Criterio[]> => {
-  const url = 'http://localhost:3001/api/criteria/active';
+  const url = `${API_BASE_URL}/api/criteria/active`;
   const response = await fetch(url, {
-    // ✅ CORREÇÃO: Adicionar credentials para autenticação
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
@@ -152,11 +157,9 @@ const fetchActiveCriteriaSimple = async (): Promise<Criterio[]> => {
   return Array.isArray(data) ? data : [];
 };
 
-// 🎯 FUNÇÃO CORRIGIDA 3: fetchActiveSectorsSimple
 const fetchActiveSectorsSimple = async (): Promise<Setor[]> => {
-  const url = 'http://localhost:3001/api/sectors/active';
+  const url = `${API_BASE_URL}/api/sectors/active`;
   const response = await fetch(url, {
-    // ✅ CORREÇÃO: Adicionar credentials para autenticação
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
@@ -170,11 +173,9 @@ const fetchActiveSectorsSimple = async (): Promise<Setor[]> => {
   return Array.isArray(data) ? data : [];
 };
 
-// 🎯 FUNÇÃO CORRIGIDA 4: fetchExpurgoById
 const fetchExpurgoById = async (id: number): Promise<ExpurgoResponseDto> => {
-  const url = `http://localhost:3001/api/expurgos/${id}`;
+  const url = `${API_BASE_URL}/api/expurgos/${id}`;
   const response = await fetch(url, {
-    // ✅ CORREÇÃO: Adicionar credentials para autenticação
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
@@ -190,66 +191,103 @@ const fetchExpurgoById = async (id: number): Promise<ExpurgoResponseDto> => {
   return response.json();
 };
 
-// Hook principal para dados de expurgos (MANTIDO INTACTO)
-export function useExpurgosData(filters: ExpurgoFilters = {}) {
-  const expurgos = useQuery({
-    queryKey: ['expurgos', filters],
-    queryFn: () => fetchExpurgos(filters),
-    staleTime: 30000, // 30 segundos
-    retry: 2,
+// 🎯 HOOK PRINCIPAL COM FILTROS DE SEGURANÇA AUTOMÁTICOS
+export function useExpurgosData(additionalFilters: ExpurgoFilters = {}) {
+  const { user, isAuthenticated } = useAuth();
+
+  // 1. Aplica os filtros de segurança do usuário sobre os filtros do componente
+  const secureFilters = useMemo(() => {
+    const filters = { ...additionalFilters };
+    const isManager = user?.roles?.includes('GERENTE');
+
+    if (isManager && user.sectorId != null) {
+      filters.sectorId = user.sectorId;
+    }
+    return filters;
+  }, [user, additionalFilters]);
+
+  // 2. 🎯 CORREÇÃO FINAL: A query só pode executar se TUDO estiver pronto
+  const shouldEnableQueries = useMemo(() => {
+    // Condição 1: Usuário deve estar autenticado e carregado
+    if (!isAuthenticated || !user) {
+      return false;
+    }
+
+    // Condição 2: O filtro de período DEVE ter sido recebido do componente
+    if (!additionalFilters.periodMesAno) {
+      return false;
+    }
+
+    // Condição 3: Se for gerente, o sectorId deve existir
+    const isManager = user.roles?.includes('GERENTE');
+    if (isManager) {
+      return user.sectorId != null;
+    }
+
+    // Se todas as condições passarem, pode executar
+    return true;
+  }, [isAuthenticated, user, additionalFilters.periodMesAno]);
+
+  // 3. Execução das queries controlada pela flag 'enabled'
+  const expurgosQuery = useQuery({
+    queryKey: ['expurgos', secureFilters],
+    queryFn: () => fetchExpurgos(secureFilters),
+    enabled: shouldEnableQueries, // A chave de tudo está aqui
   });
 
-  const criterios = useQuery({
+  const criteriosQuery = useQuery({
     queryKey: ['activeCriteriaSimple'],
     queryFn: fetchActiveCriteriaSimple,
-    staleTime: Infinity, // Dados raramente mudam
+    staleTime: Infinity,
+    enabled: shouldEnableQueries,
   });
 
-  const setores = useQuery({
+  const setoresQuery = useQuery({
     queryKey: ['activeSectorsSimple'],
     queryFn: fetchActiveSectorsSimple,
-    staleTime: Infinity, // Dados raramente mudam
+    staleTime: Infinity,
+    enabled: shouldEnableQueries,
   });
 
   return {
     // Dados
-    expurgos: expurgos.data,
-    criterios: criterios.data,
-    setores: setores.data,
-
+    expurgos: expurgosQuery.data,
+    criterios: criteriosQuery.data,
+    setores: setoresQuery.data,
     // Estados de loading
-    isLoadingExpurgos: expurgos.isLoading,
-    isLoadingCriterios: criterios.isLoading,
-    isLoadingSetores: setores.isLoading,
-    isLoading: expurgos.isLoading || criterios.isLoading || setores.isLoading,
-
+    isLoadingExpurgos: expurgosQuery.isLoading,
+    isLoadingCriterios: criteriosQuery.isLoading,
+    isLoadingSetores: setoresQuery.isLoading,
+    isLoading:
+      expurgosQuery.isLoading ||
+      criteriosQuery.isLoading ||
+      setoresQuery.isLoading,
     // Estados de erro
-    errorExpurgos: expurgos.error,
-    errorCriterios: criterios.error,
-    errorSetores: setores.error,
-    hasError: !!expurgos.error || !!criterios.error || !!setores.error,
-
-    // Estados de fetching (para atualizações em background)
-    isFetchingExpurgos: expurgos.isFetching,
-
+    errorExpurgos: expurgosQuery.error,
+    errorCriterios: criteriosQuery.error,
+    errorSetores: setoresQuery.error,
+    hasError:
+      !!expurgosQuery.error || !!criteriosQuery.error || !!setoresQuery.error,
     // Funções de refetch
-    refetchExpurgos: expurgos.refetch,
-    refetchCriterios: criterios.refetch,
-    refetchSetores: setores.refetch,
+    refetchExpurgos: expurgosQuery.refetch,
+    refetchCriterios: criteriosQuery.refetch,
+    refetchSetores: setoresQuery.refetch,
   };
 }
 
-// Hook para buscar um expurgo específico (MANTIDO INTACTO)
+// Hook para buscar um expurgo específico
 export function useExpurgoById(id: number) {
+  const { user } = useAuth();
+
   return useQuery({
     queryKey: ['expurgo', id],
     queryFn: () => fetchExpurgoById(id),
-    enabled: !!id,
+    enabled: !!id && !!user,
     staleTime: 60000, // 1 minuto
   });
 }
 
-// Hook para filtros comuns (MANTIDO INTACTO)
+// Hook para filtros comuns
 export function useExpurgoFilters() {
   // Status disponíveis
   const statusOptions = [
@@ -264,17 +302,33 @@ export function useExpurgoFilters() {
   };
 }
 
-// 🎯 HOOK CORRIGIDO 5: useExpurgoStatistics
+// Hook para estatísticas (com filtros de segurança)
 export function useExpurgoStatistics(periodMesAno?: string) {
+  const { user } = useAuth();
+
+  // Aplicar filtros de segurança para estatísticas também
+  const secureParams = useMemo(() => {
+    const isManager = user?.roles?.includes('GERENTE');
+    const params = new URLSearchParams();
+
+    if (periodMesAno) {
+      params.append('period', periodMesAno);
+    }
+
+    // Gerentes só veem estatísticas do seu setor
+    if (isManager && user?.sectorId) {
+      params.append('sectorId', user.sectorId.toString());
+    }
+
+    return params.toString();
+  }, [user, periodMesAno]);
+
   return useQuery({
-    queryKey: ['expurgo-statistics', periodMesAno],
+    queryKey: ['expurgo-statistics', periodMesAno, user?.sectorId],
     queryFn: async () => {
-      const url = periodMesAno
-        ? `http://localhost:3001/api/expurgos/statistics/advanced?period=${periodMesAno}`
-        : 'http://localhost:3001/api/expurgos/statistics/advanced';
+      const url = `${API_BASE_URL}/api/expurgos/statistics/advanced?${secureParams}`;
 
       const response = await fetch(url, {
-        // ✅ CORREÇÃO: Adicionar credentials para autenticação
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
@@ -287,24 +341,38 @@ export function useExpurgoStatistics(periodMesAno?: string) {
       return response.json();
     },
     staleTime: 60000, // 1 minuto
+    enabled: !!user,
   });
 }
 
-// 🎯 HOOK CORRIGIDO 6: useExpurgosWithSummary
-export function useExpurgosWithSummary(filters: ExpurgoFilters = {}) {
+// Hook para expurgos com resumo (com filtros de segurança)
+export function useExpurgosWithSummary(additionalFilters: ExpurgoFilters = {}) {
+  const { user } = useAuth();
+
+  // Aplicar os mesmos filtros de segurança
+  const secureFilters = useMemo(() => {
+    const isManager = user?.roles?.includes('GERENTE');
+    let filters = { ...additionalFilters };
+
+    if (isManager && user?.sectorId) {
+      filters.sectorId = user.sectorId;
+    }
+
+    return filters;
+  }, [user, additionalFilters]);
+
   return useQuery({
-    queryKey: ['expurgos-with-summary', filters],
+    queryKey: ['expurgos-with-summary', secureFilters],
     queryFn: async () => {
       const searchParams = new URLSearchParams();
-      Object.entries(filters).forEach(([key, value]) => {
+      Object.entries(secureFilters).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '') {
           searchParams.append(key, String(value));
         }
       });
 
-      const url = `http://localhost:3001/api/expurgos/with-summary?${searchParams.toString()}`;
+      const url = `${API_BASE_URL}/api/expurgos/with-summary?${searchParams.toString()}`;
       const response = await fetch(url, {
-        // ✅ CORREÇÃO: Adicionar credentials para autenticação
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
@@ -317,5 +385,6 @@ export function useExpurgosWithSummary(filters: ExpurgoFilters = {}) {
       return response.json();
     },
     staleTime: 30000,
+    enabled: !!user,
   });
 }
