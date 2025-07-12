@@ -1,8 +1,10 @@
-// apps/web/src/components/admin/AdminHeader.tsx - AMARELO MAIS SUTIL
+// apps/web/src/components/admin/AdminHeader.tsx (UPDATED WITH NOTIFICATIONS)
 'use client';
 
 import { useComponentAccess } from '@/components/auth/ProtectedRoute';
+import { NotificationBellAdmin } from '@/components/notifications/NotificationBell';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { useNotificationStatus } from '@/components/providers/NotificationProvider';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,11 +22,11 @@ import {
   LogOut,
   MessageSquare,
   Monitor,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
 
 interface AdminHeaderProps {
   onToggleSidebar?: () => void;
@@ -41,7 +43,13 @@ export function AdminHeader({
   const { canManageUsers, canManageParameters, isDirector, canViewReports } =
     useComponentAccess();
 
-  const [notifications] = useState(3); // Mock - substituir por hook real
+  // Status das notificações
+  const {
+    unreadCount,
+    isWebSocketConnected,
+    hasConnectionIssues,
+    isLoading: notificationsLoading,
+  } = useNotificationStatus();
 
   const handleLogout = () => {
     logout();
@@ -62,9 +70,9 @@ export function AdminHeader({
     if (!roles?.length)
       return 'bg-gradient-to-r from-neutral-500 to-neutral-600';
     if (roles.includes('DIRETOR'))
-      return 'bg-gradient-to-r from-amber-500 to-yellow-600'; // Amarelo mais suave para diretor
+      return 'bg-gradient-to-r from-amber-500 to-yellow-600';
     if (roles.includes('GERENTE'))
-      return 'bg-gradient-to-r from-orange-500 to-orange-600'; // Laranja para gerente
+      return 'bg-gradient-to-r from-orange-500 to-orange-600';
     return 'bg-gradient-to-r from-neutral-500 to-neutral-600';
   };
 
@@ -104,21 +112,17 @@ export function AdminHeader({
             href='/'
             className='flex items-center space-x-3 hover:opacity-80 transition-opacity'
           >
-            <div className='relative bg'>
-              <Image
-                src='/logo.png'
-                alt='Logo da Empresa'
-                width={120}
-                height={32}
-                className='h-12 w-auto' // Logo branca no header escuro
-                priority
-              />
-              {/* Indicador de versão admin mais sutil */}
+            <div className='relative'>
+              {/* Fallback caso não tenha logo */}
+              <div className='h-8 w-8 bg-amber-500 rounded-lg flex items-center justify-center'>
+                <span className='text-neutral-900 font-bold text-sm'>SP</span>
+              </div>
+              {/* Indicador de versão admin */}
               <div className='absolute -top-1 -right-1 w-2 h-2 bg-amber-400 rounded-full animate-pulse' />
             </div>
           </Link>
 
-          {/* Separador mais sutil */}
+          {/* Separador */}
           <div className='h-6 w-px bg-amber-500/30' />
 
           {/* Título da página atual */}
@@ -134,43 +138,27 @@ export function AdminHeader({
         {/* Centro: Espaço flexível */}
         <div className='flex-1' />
 
-        {/* Lado Direito: Ações e usuário */}
+        {/* Lado Direito: Notificações + Status + Usuário */}
         <div className='flex items-center space-x-3'>
-          {/* Status do sistema mais sutil */}
-          <div className='hidden sm:flex items-center space-x-2 px-3 py-1.5 bg-amber-500/10 border border-amber-400/20 rounded-full'>
-            <div className='w-2 h-2 bg-amber-400 rounded-full animate-pulse' />
-            <span className='text-xs font-medium text-amber-200'>Online</span>
-          </div>
+          {/* Notificações */}
+          <NotificationBellAdmin size='md' className='relative' />
 
-          {/* Notificações com hover mais sutil */}
-          {/* <Button
-            variant='ghost'
-            size='sm'
-            className='relative text-neutral-300 hover:text-amber-200 hover:bg-amber-500/5'
-          >
-            <Bell className='h-4 w-4' />
-            {notifications > 0 && (
-              <div className='absolute -top-1 -right-1 w-5 h-5 bg-amber-500 text-neutral-900 text-xs rounded-full flex items-center justify-center font-bold'>
-                {notifications > 9 ? '9+' : notifications}
-              </div>
-            )}
-          </Button> */}
-
-          {/* Ajuda com hover mais sutil */}
+          {/* Ajuda */}
           <Button
             variant='ghost'
             size='sm'
-            className='text-neutral-300 hover:text-amber-200 hover:bg-amber-500/5'
+            className='text-neutral-300 hover:text-amber-200 hover:bg-amber-500/5 h-8 w-8'
+            title='Ajuda'
           >
             <HelpCircle className='h-4 w-4' />
           </Button>
 
-          {/* Menu do usuário com hover mais sutil */}
+          {/* Menu do usuário */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant='ghost'
-                className='flex cursor-pointer items-center space-x-3 px-3 py-2 hover:bg-amber-500/5 hover:border hover:border-amber-500/20 text-white rounded-lg transition-all'
+                className='flex cursor-pointer items-center space-x-3 px-3 py-2 hover:bg-amber-500/5 hover:border hover:border-amber-500/20 text-white rounded-lg transition-all h-auto'
               >
                 <Avatar className='h-8 w-8 ring-2 ring-amber-400/30'>
                   <AvatarFallback
@@ -222,13 +210,30 @@ export function AdminHeader({
 
               <DropdownMenuSeparator />
 
-              {/* Perfil pessoal */}
-              {/* <DropdownMenuItem asChild>
-                <Link href='/profile' className='cursor-pointer'>
-                  <User className='mr-3 h-4 w-4' />
-                  Meu Perfil
-                </Link>
-              </DropdownMenuItem> */}
+              {/* Status de notificações no mobile */}
+              <div className='sm:hidden px-2 py-1'>
+                <div className='flex items-center justify-between text-xs'>
+                  <span className='text-neutral-500'>Notificações:</span>
+                  <div className='flex items-center gap-2'>
+                    {unreadCount > 0 && (
+                      <span className='bg-red-500 text-white px-1.5 py-0.5 rounded-full text-xs font-bold'>
+                        {unreadCount}
+                      </span>
+                    )}
+                    {isWebSocketConnected ? (
+                      <span className='text-green-600 flex items-center gap-1'>
+                        <Wifi className='w-3 h-3' /> Online
+                      </span>
+                    ) : (
+                      <span className='text-amber-600 flex items-center gap-1'>
+                        <WifiOff className='w-3 h-3' /> Offline
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <DropdownMenuSeparator className='sm:hidden' />
 
               {/* Link para página pública */}
               <DropdownMenuItem asChild>

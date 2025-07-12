@@ -1,4 +1,4 @@
-// apps/web/src/app/admin/layout.tsx - COM FOOTER INTEGRADO
+// apps/web/src/app/admin/layout.tsx (UPDATED WITH NOTIFICATIONS)
 'use client';
 
 import { AdminFooter } from '@/components/admin/AdminFooter';
@@ -12,7 +12,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Toaster } from '@/components/ui/sonner';
 import { Permission } from '@sistema-premiacao/shared-types';
 import { Lock, ShieldAlert } from 'lucide-react';
 import { ReactNode, useState } from 'react';
@@ -41,7 +40,7 @@ function AdminAccessDenied() {
           </p>
           <div className='flex items-center justify-center space-x-2 text-xs text-red-500'>
             <Lock className='h-4 w-4' />
-            <span>Área protegida por autenticação</span>
+            <span>Área Administrativa</span>
           </div>
         </CardContent>
       </Card>
@@ -54,59 +53,75 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
   return (
     <ProtectedRoute
-      permissions={[
+      requiredPermissions={[
         Permission.VIEW_REPORTS,
-        Permission.MANAGE_USERS,
         Permission.MANAGE_PARAMETERS,
+        Permission.MANAGE_USERS,
         Permission.APPROVE_EXPURGOS,
+        Permission.VIEW_PARAMETERS,
       ]}
-      requireAll={false} // Basta ter UMA das permissões
+      requireAny={true}
       fallback={<AdminAccessDenied />}
     >
-      {/* Layout principal com flex column para garantir que o footer fique no final */}
-      <div className='min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-slate-100 flex flex-col'>
-        {/* Header fixo no topo */}
-        <AdminHeader
-          onToggleSidebar={setSidebarCollapsed}
-          sidebarCollapsed={sidebarCollapsed}
-        />
-
-        {/* Container principal com sidebar e conteúdo */}
-        <div className='flex flex-1'>
-          {/* Sidebar */}
+      {/* 
+        IMPORTANTE: Os providers já estão no layout principal (apps/web/src/app/layout.tsx):
+        - QueryClientProvider
+        - AuthProvider  
+        - NotificationProvider
+        
+        Portanto, aqui só precisamos da estrutura do layout administrativo.
+      */}
+      <div className='flex h-screen bg-gray-50 dark:bg-gray-900'>
+        {/* Sidebar */}
+        <aside
+          className={`
+            ${sidebarCollapsed ? 'w-16' : 'w-64'} 
+            transition-all duration-300 ease-in-out
+            bg-white dark:bg-gray-800 
+            border-r border-gray-200 dark:border-gray-700
+            flex-shrink-0
+            hidden lg:flex
+          `}
+        >
           <AdminSidebar
             isCollapsed={sidebarCollapsed}
             onToggleCollapse={setSidebarCollapsed}
           />
+        </aside>
 
-          {/* Conteúdo principal com margem responsiva baseada no estado da sidebar */}
-          <main
-            className={`flex-1 transition-all duration-300 flex flex-col ${
-              sidebarCollapsed
-                ? 'ml-16' // Sidebar colapsada
-                : 'ml-72' // Sidebar expandida
-            }`}
-          >
-            {/* Conteúdo das páginas - flex-1 para ocupar espaço disponível */}
-            <div className='flex-1 p-4 sm:p-6 lg:p-8'>{children}</div>
+        {/* Main Content Area */}
+        <div className='flex-1 flex flex-col min-w-0'>
+          {/* Header */}
+          <AdminHeader
+            sidebarCollapsed={sidebarCollapsed}
+            onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+          />
 
-            {/* Footer sempre no final */}
-            <AdminFooter />
+          {/* Page Content */}
+          <main className='flex-1 overflow-auto'>
+            <div className='container mx-auto px-4 py-6 max-w-[1400px]'>
+              {children}
+            </div>
           </main>
+
+          {/* Footer */}
+          <AdminFooter />
         </div>
 
-        {/* Toast notifications */}
-        <Toaster
-          position='top-right'
-          toastOptions={{
-            duration: 4000,
-            style: {
-              background: 'white',
-              color: 'rgb(15 23 42)', // slate-900
-              border: '1px solid rgb(251 191 36)', // yellow-400
-            },
-          }}
-        />
+        {/* Mobile Sidebar Overlay */}
+        {!sidebarCollapsed && (
+          <div
+            className='lg:hidden fixed inset-0 z-40 bg-black bg-opacity-50'
+            onClick={() => setSidebarCollapsed(true)}
+          >
+            <aside className='absolute left-0 top-0 h-full w-64 bg-white dark:bg-gray-800 shadow-lg'>
+              <AdminSidebar
+                isCollapsed={false}
+                onToggleCollapse={setSidebarCollapsed}
+              />
+            </aside>
+          </div>
+        )}
       </div>
     </ProtectedRoute>
   );

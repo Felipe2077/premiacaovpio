@@ -1,8 +1,10 @@
-// apps/web/src/components/layout/Header.tsx (ATUALIZADO)
+// apps/web/src/components/layout/Header/index.tsx (UPDATED)
 'use client';
 
 import { useComponentAccess } from '@/components/auth/ProtectedRoute';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { useNotificationStatus } from '@/components/providers/NotificationProvider';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,14 +17,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   BarChart3,
-  Calendar,
   ChevronDown,
-  FileText,
   LogOut,
   Settings,
   Shield,
   User,
   Users,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -36,6 +38,9 @@ export function Header() {
     canManageParameters,
     isDirector,
   } = useComponentAccess();
+
+  // Status das notificações
+  const { isWebSocketConnected, hasConnectionIssues } = useNotificationStatus();
 
   const handleLogout = () => {
     logout();
@@ -106,129 +111,146 @@ export function Header() {
           {/* Área do Usuário */}
           <div className='flex items-center space-x-4'>
             {isAuthenticated && user ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant='ghost'
-                    className='flex items-center space-x-2 hover:bg-gray-100'
-                  >
-                    <Avatar className='h-8 w-8'>
-                      <AvatarFallback className='bg-blue-600 text-white text-sm'>
-                        {getUserInitials(user.nome)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className='hidden sm:block text-left'>
-                      <p className='text-sm font-medium text-gray-900'>
-                        {user.nome}
-                      </p>
-                      <p className='text-xs text-gray-500'>
-                        {getRoleLabel(user.roles)}
-                      </p>
-                    </div>
-                    <ChevronDown className='h-4 w-4 text-gray-400' />
-                  </Button>
-                </DropdownMenuTrigger>
+              <>
+                {/* Status da Conexão (apenas quando há problemas) */}
+                {hasConnectionIssues && (
+                  <div className='flex items-center text-amber-600 dark:text-amber-400'>
+                    <WifiOff className='h-4 w-4' />
+                    <span className='sr-only'>Problemas de conectividade</span>
+                  </div>
+                )}
 
-                <DropdownMenuContent align='end' className='w-56'>
-                  <DropdownMenuLabel>
-                    <div className='flex flex-col space-y-1'>
-                      <p className='text-sm font-medium'>{user.nome}</p>
-                      <p className='text-xs text-gray-500'>{user.email}</p>
-                      <p className='text-xs text-blue-600 font-medium'>
-                        {getRoleLabel(user.roles)}
-                      </p>
-                    </div>
-                  </DropdownMenuLabel>
+                {/* Sino de Notificações */}
+                <NotificationBell className='hidden sm:flex' size='md' />
 
-                  <DropdownMenuSeparator />
+                {/* Menu do Usuário */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant='ghost'
+                      className='flex items-center space-x-3 hover:bg-gray-100'
+                    >
+                      <Avatar className='h-8 w-8'>
+                        <AvatarFallback className='text-sm font-semibold bg-blue-100 text-blue-700'>
+                          {getUserInitials(user.nome)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className='hidden sm:block text-left'>
+                        <p className='text-sm font-medium text-gray-900 truncate max-w-32'>
+                          {user.nome}
+                        </p>
+                        <p className='text-xs text-gray-500'>
+                          {getRoleLabel(user.roles)}
+                        </p>
+                      </div>
+                      <ChevronDown className='h-4 w-4 text-gray-400' />
+                    </Button>
+                  </DropdownMenuTrigger>
 
-                  {/* Itens do menu baseados em permissões */}
-                  {canAccessAdminArea() && (
-                    <>
-                      <DropdownMenuItem asChild>
-                        <Link href='/admin' className='cursor-pointer'>
-                          <Settings className='mr-2 h-4 w-4' />
-                          Painel Administrativo
-                        </Link>
+                  <DropdownMenuContent align='end' className='w-56'>
+                    <DropdownMenuLabel>
+                      <div className='flex flex-col space-y-1'>
+                        <p className='text-sm font-medium text-gray-900'>
+                          {user.nome}
+                        </p>
+                        <p className='text-xs text-gray-500'>{user.email}</p>
+                        <p className='text-xs text-blue-600'>
+                          {getRoleLabel(user.roles)}
+                        </p>
+                      </div>
+                    </DropdownMenuLabel>
+
+                    <DropdownMenuSeparator />
+
+                    {/* Notificações Mobile */}
+                    <div className='sm:hidden'>
+                      <DropdownMenuItem>
+                        <div className='flex items-center justify-between w-full'>
+                          <div className='flex items-center'>
+                            <span className='mr-2'>🔔</span>
+                            <span>Notificações</span>
+                          </div>
+                          <NotificationBell size='sm' />
+                        </div>
                       </DropdownMenuItem>
-
-                      {canManageUsers() && (
-                        <DropdownMenuItem asChild>
-                          <Link href='/admin/users' className='cursor-pointer'>
-                            <Users className='mr-2 h-4 w-4' />
-                            Gerenciar Usuários
-                          </Link>
-                        </DropdownMenuItem>
-                      )}
-
-                      {canManageParameters() && (
-                        <DropdownMenuItem asChild>
-                          <Link
-                            href='/admin/parameters'
-                            className='cursor-pointer'
-                          >
-                            <FileText className='mr-2 h-4 w-4' />
-                            Gerenciar Metas
-                          </Link>
-                        </DropdownMenuItem>
-                      )}
-
-                      {isDirector() && (
-                        <DropdownMenuItem asChild>
-                          <Link
-                            href='/admin/periods'
-                            className='cursor-pointer'
-                          >
-                            <Calendar className='mr-2 h-4 w-4' />
-                            Gerenciar Períodos
-                          </Link>
-                        </DropdownMenuItem>
-                      )}
-
                       <DropdownMenuSeparator />
-                    </>
-                  )}
+                    </div>
 
-                  {/* Perfil do usuário */}
-                  <DropdownMenuItem asChild>
-                    <Link href='/profile' className='cursor-pointer'>
-                      <User className='mr-2 h-4 w-4' />
-                      Meu Perfil
-                    </Link>
-                  </DropdownMenuItem>
+                    {/* Status da Conexão */}
+                    <DropdownMenuItem disabled>
+                      <div className='flex items-center w-full text-xs'>
+                        {isWebSocketConnected ? (
+                          <>
+                            <Wifi className='h-3 w-3 mr-2 text-green-500' />
+                            <span className='text-green-600'>Conectado</span>
+                          </>
+                        ) : (
+                          <>
+                            <WifiOff className='h-3 w-3 mr-2 text-amber-500' />
+                            <span className='text-amber-600'>Desconectado</span>
+                          </>
+                        )}
+                      </div>
+                    </DropdownMenuItem>
 
-                  {/* Logs de auditoria (apenas para diretores) */}
-                  {isDirector() && (
+                    <DropdownMenuSeparator />
+
+                    {/* Menu Items */}
                     <DropdownMenuItem asChild>
-                      <Link href='/admin/audit' className='cursor-pointer'>
-                        <Shield className='mr-2 h-4 w-4' />
-                        Logs de Auditoria
+                      <Link href='/profile' className='cursor-pointer'>
+                        <User className='mr-2 h-4 w-4' />
+                        Meu Perfil
                       </Link>
                     </DropdownMenuItem>
-                  )}
 
-                  <DropdownMenuSeparator />
+                    {/* Itens administrativos */}
+                    {canManageUsers() && (
+                      <DropdownMenuItem asChild>
+                        <Link href='/admin/users' className='cursor-pointer'>
+                          <Users className='mr-2 h-4 w-4' />
+                          Gerenciar Usuários
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
 
-                  {/* Logout */}
-                  <DropdownMenuItem
-                    onClick={handleLogout}
-                    className='cursor-pointer text-red-600 focus:text-red-600'
-                  >
-                    <LogOut className='mr-2 h-4 w-4' />
-                    Sair do Sistema
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                    {canManageParameters() && (
+                      <DropdownMenuItem asChild>
+                        <Link
+                          href='/admin/parameters'
+                          className='cursor-pointer'
+                        >
+                          <Settings className='mr-2 h-4 w-4' />
+                          Parâmetros
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
+
+                    {isDirector() && (
+                      <DropdownMenuItem asChild>
+                        <Link href='/admin/audit' className='cursor-pointer'>
+                          <Shield className='mr-2 h-4 w-4' />
+                          Auditoria
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
+
+                    <DropdownMenuSeparator />
+
+                    <DropdownMenuItem
+                      onClick={handleLogout}
+                      className='cursor-pointer'
+                    >
+                      <LogOut className='mr-2 h-4 w-4' />
+                      Sair
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
             ) : (
-              // Botão de login para usuários não autenticados
-              <div className='flex items-center space-x-2'>
-                <Button asChild variant='outline' size='sm'>
-                  <Link href='/login'>
-                    <User className='mr-2 h-4 w-4' />
-                    Entrar
-                  </Link>
-                </Button>
-              </div>
+              /* Botão de Login para usuários não autenticados */
+              <Button asChild>
+                <Link href='/login'>Entrar</Link>
+              </Button>
             )}
           </div>
         </div>
