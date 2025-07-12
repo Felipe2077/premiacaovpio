@@ -1,5 +1,6 @@
 // apps/api/src/modules/queue/queue.service.ts
 import { Job, JobsOptions, Queue, Worker } from 'bullmq';
+import { NotificationJobData } from '@sistema-premiacao/shared-types';
 import IORedis from 'ioredis';
 import {
   AutomationService,
@@ -92,6 +93,7 @@ interface RedisConfig {
 export class QueueService {
   private redisConnection: IORedis;
   private automationQueue: Queue;
+  private notificationQueue: Queue;
   private automationWorker: Worker;
   private automationService: AutomationService;
 
@@ -123,6 +125,27 @@ export class QueueService {
     console.log('[QueueService] Sistema de queue inicializado com sucesso!');
   }
 
+  async addNotificationJob(
+    data: NotificationJobData,
+    options?: JobsOptions
+  ): Promise<string> {
+    console.log(`[QueueService] Adicionando job de notificação...`);
+
+    const job = await this.notificationQueue.add('new-notification', data, {
+      attempts: 3,
+      backoff: {
+        type: 'exponential',
+        delay: 1000,
+      },
+      ...options,
+    });
+
+    console.log(
+      `[QueueService] Job de notificação adicionado com ID: ${job.id}`
+    );
+    return job.id!;
+  }
+
   /**
    * Configura a queue de automação
    */
@@ -139,6 +162,19 @@ export class QueueService {
         },
       },
     });
+
+    this.notificationQueue = new Queue('notifications', {
+        connection: this.redisConnection,
+        defaultJobOptions: {
+          removeOnComplete: 1000, // Manter mais jobs de notificação
+          removeOnFail: 5000,
+          attempts: 5, // Tentar mais vezes
+          backoff: {
+            type: 'exponential',
+            delay: 1000,
+          },
+        },
+      });
 
     console.log('[QueueService] Queue configurada');
   }
@@ -512,6 +548,7 @@ export class QueueService {
 
     await this.automationWorker.close();
     await this.automationQueue.close();
+    await this.notificationQueue.close();
     this.redisConnection.disconnect();
 
     console.log('[QueueService] Recursos limpos');

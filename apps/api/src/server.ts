@@ -20,6 +20,7 @@ import expurgosRoutes from './routes/expurgos.routes';
 import healthRoutes from './routes/health.routes';
 import historicalResultsRoutes from './routes/historical-results.routes';
 import metadataRoutes from './routes/metadata.routes';
+import notificationsRoutes from './routes/notifications.routes';
 import parametersRoutes from './routes/parameters.routes';
 import periodOfficializationRoutes from './routes/period-officialization.routes';
 import periodsRoutes from './routes/periods.routes';
@@ -180,6 +181,7 @@ const start = async () => {
     await fastify.register(automationRoutes);
     await fastify.register(schedulingRoutes);
     await fastify.register(periodOfficializationRoutes);
+    await fastify.register(notificationsRoutes);
 
     console.log('✅ Todas as rotas foram registradas (incluindo automação).');
 

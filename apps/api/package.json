@@ -8,8 +8,10 @@
     "dev": "nodemon --watch src --ext ts --exec 'ts-node -r tsconfig-paths/register src/server.ts'",
     "build": "tsc",
     "start": "node dist/server.js",
+    "clean": "rm -rf dist",
     "seed": "ts-node -r tsconfig-paths/register src/seed.ts",
     "test:scheduling": "ts-node -r tsconfig-paths/register ../../test-scheduling-system.ts",
+    "work:notifications": "ts-node -r tsconfig-paths/register src/workers/notification.worker.ts",
     "init:scheduling": "ts-node -r tsconfig-paths/register src/scripts/init-scheduling.ts"
   },
   "keywords": [],

@@ -3,8 +3,9 @@
 // ===================================
 // ENUMS PRINCIPAIS
 // ===================================
-export * from './enums/expurgo-status.enum';
+export * from './dto/notification.dto';
 export * from './enums/permission.enum';
+export * from './enums/role.enum';
 
 // ===================================
 // DTOs E INTERFACES PRINCIPAIS

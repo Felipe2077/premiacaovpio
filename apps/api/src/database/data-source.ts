@@ -15,6 +15,7 @@ import { CriterionCalculationSettingsEntity } from '../entity/criterion-calculat
 import { CriterionEntity } from '../entity/criterion.entity';
 import { ExpurgoAttachmentEntity } from '../entity/expurgo-attachment.entity';
 import { ExpurgoEventEntity } from '../entity/expurgo-event.entity';
+import { NotificationEntity } from '../entity/notification.entity';
 import { ParameterValueEntity } from '../entity/parameter-value.entity';
 import { PerformanceDataEntity } from '../entity/performance-data.entity';
 import { RawMySqlQuebraDefeitoEntity } from '../entity/raw-data/raw-mysql-quebra-defeito.entity';
@@ -119,6 +120,7 @@ const entities = [
 
   // === AUDIT & LOGS ===
   AuditLogEntity,
+  NotificationEntity,
 
   // === RAW DATA (ETL) ===
   RawOracleAusenciaEntity,

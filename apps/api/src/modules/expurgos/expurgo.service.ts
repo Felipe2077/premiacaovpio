@@ -25,6 +25,7 @@ import {
 import 'reflect-metadata';
 import { Between, FindOptionsWhere, Repository } from 'typeorm';
 import { AuditLogService } from '../audit/audit.service';
+import { QueueService } from '../queue/queue.service';
 import { ExpurgoAttachmentService } from './expurgo-attachment.service';
 
 /**
@@ -41,6 +42,7 @@ export class ExpurgoService {
   private readonly auditLogService: AuditLogService;
   private readonly attachmentService: ExpurgoAttachmentService;
   private readonly automationHook: ExpurgoAutomationHook;
+  private readonly queueService: QueueService;
 
   // Critérios elegíveis para expurgo
   private readonly ELIGIBLE_CRITERIA = [
@@ -62,6 +64,7 @@ export class ExpurgoService {
     this.auditLogService = new AuditLogService();
     this.attachmentService = new ExpurgoAttachmentService();
     this.automationHook = new ExpurgoAutomationHook();
+    this.queueService = new QueueService();
 
     console.log(
       '[ExpurgoService] Serviço inicializado com repositórios e serviços configurados.'
@@ -424,6 +427,13 @@ export class ExpurgoService {
         competitionPeriodId: validatedData.competitionPeriodId,
       });
 
+      this.queueService.addNotificationJob({
+        recipient: { userRole: 'DIRETOR' },
+        type: 'EXPURGO_SOLICITADO',
+        message: `O gerente ${requestingUser.nome} solicitou um novo expurgo para o setor ${sector.nome}.`,
+        link: `/admin/expurgos/${savedExpurgo.id}`
+      });
+
       console.log(
         `[ExpurgoService] Expurgo ID ${savedExpurgo.id} criado com sucesso ` +
           `para ${criterion.nome} - ${sector.nome} - ${period.mesAno}`
@@ -530,6 +540,13 @@ export class ExpurgoService {
         },
         justification: validatedData.justificativaAprovacao,
         competitionPeriodId: expurgo.competitionPeriodId,
+      });
+
+      this.queueService.addNotificationJob({
+        recipient: { userId: expurgo.registradoPorUserId },
+        type: 'EXPURGO_APROVADO',
+        message: `Seu expurgo para o critério "${expurgo.criterion?.nome}" foi aprovado.`,
+        link: `/expurgos/${updatedExpurgo.id}`
       });
 
       console.log(
@@ -761,6 +778,13 @@ export class ExpurgoService {
         },
         justification: validatedData.justificativaRejeicao,
         competitionPeriodId: expurgo.competitionPeriodId,
+      });
+
+      this.queueService.addNotificationJob({
+        recipient: { userId: expurgo.registradoPorUserId },
+        type: 'EXPURGO_REJEITADO',
+        message: `Seu expurgo para o critério "${expurgo.criterion?.nome}" foi rejeitado.`,
+        link: `/expurgos/${updatedExpurgo.id}`
       });
 
       console.log(
