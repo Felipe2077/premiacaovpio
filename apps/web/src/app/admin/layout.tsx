@@ -63,49 +63,40 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       requireAny={true}
       fallback={<AdminAccessDenied />}
     >
-      {/* 
-        IMPORTANTE: Os providers já estão no layout principal (apps/web/src/app/layout.tsx):
-        - QueryClientProvider
-        - AuthProvider  
-        - NotificationProvider
-        
-        Portanto, aqui só precisamos da estrutura do layout administrativo.
-      */}
-      <div className='flex h-screen bg-gray-50 dark:bg-gray-900'>
-        {/* Sidebar */}
-        <aside
-          className={`
-            ${sidebarCollapsed ? 'w-16' : 'w-64'} 
-            transition-all duration-300 ease-in-out
-            bg-white dark:bg-gray-800 
-            border-r border-gray-200 dark:border-gray-700
-            flex-shrink-0
-            hidden lg:flex
-          `}
-        >
-          <AdminSidebar
-            isCollapsed={sidebarCollapsed}
-            onToggleCollapse={setSidebarCollapsed}
-          />
-        </aside>
+      {/* 👇 1. O container principal agora é uma COLUNA */}
+      <div className='flex flex-col h-screen bg-gray-50 dark:bg-gray-900'>
+        {/* Header movido para ser o primeiro item, ocupando toda a largura */}
+        <AdminHeader
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+        />
 
-        {/* Main Content Area */}
-        <div className='flex-1 flex flex-col min-w-0'>
-          {/* Header */}
-          <AdminHeader
-            sidebarCollapsed={sidebarCollapsed}
-            onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
-          />
+        {/* 👇 2. Novo container em LINHA para agrupar a sidebar e o conteúdo principal */}
+        <div className='flex flex-1 overflow-hidden'>
+          {/* Sidebar */}
+          <aside
+            className={`
+              ${sidebarCollapsed ? 'w-16' : 'w-64'} 
+              transition-all duration-300 ease-in-out
+              bg-white dark:bg-gray-800 
+              border-r border-gray-200 dark:border-gray-700
+              flex-shrink-0
+              hidden lg:flex
+            `}
+          >
+            <AdminSidebar
+              isCollapsed={sidebarCollapsed}
+              onToggleCollapse={setSidebarCollapsed}
+            />
+          </aside>
 
-          {/* Page Content */}
-          <main className='flex-1 overflow-auto'>
-            <div className='container mx-auto px-4 py-6 max-w-[1400px]'>
+          {/* Page Content & Footer */}
+          <main className='flex-1 overflow-auto flex flex-col'>
+            <div className='container mx-auto px-4 py-6 max-w-[1480px] flex-grow'>
               {children}
             </div>
+            <AdminFooter />
           </main>
-
-          {/* Footer */}
-          <AdminFooter />
         </div>
 
         {/* Mobile Sidebar Overlay */}
