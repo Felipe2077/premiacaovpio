@@ -494,10 +494,11 @@ export class AutomationService {
     try {
       // --- MySQL Extractions ---
       console.log('[AutomationService] Processando fontes MySQL...');
-      totalRecords += await this.mySqlEtlService.extractAndLoadQuebraDefeito(
-        startDate,
-        endDate
-      );
+      // [MIGRADO PARA ORACLE] - Desativado em 12/07/2025
+      // totalRecords += await this.mySqlEtlService.extractAndLoadQuebraDefeito(
+      //   startDate,
+      //   endDate
+      // );
       totalRecords += await this.mySqlEtlService.extractAndLoadAtraso(
         startDate,
         endDate
@@ -513,6 +514,10 @@ export class AutomationService {
 
       // --- Oracle Extractions ---
       console.log('[AutomationService] Processando fontes Oracle...');
+      totalRecords += await this.oracleEtlService.extractAndLoadQuebraDefeito(
+        startDate,
+        endDate
+      );
       totalRecords += await this.oracleEtlService.extractAndLoadAusencia(
         startDate,
         endDate

@@ -97,12 +97,14 @@ export class EtlService {
       `[EtlService] Iniciando extração de todos os dados RAW para o período: ${startDate} a ${endDate}`
     );
     // MySQL
-    await this.mySqlEtlService.extractAndLoadQuebraDefeito(startDate, endDate);
+    // [MIGRADO PARA ORACLE] - Desativado em 12/07/2025
+    // await this.mySqlEtlService.extractAndLoadQuebraDefeito(startDate, endDate);
     await this.mySqlEtlService.extractAndLoadAtraso(startDate, endDate);
     await this.mySqlEtlService.extractAndLoadFuroPorAtraso(startDate, endDate);
     await this.mySqlEtlService.extractAndLoadFuroDeViagem(startDate, endDate);
     console.log('[EtlService] Extrações MySQL para RAW concluídas.');
     // Oracle
+    await this.oracleEtlService.extractAndLoadQuebraDefeito(startDate, endDate);
     await this.oracleEtlService.extractAndLoadAusencia(startDate, endDate);
     await this.oracleEtlService.extractAndLoadColisao(startDate, endDate);
     await this.oracleEtlService.extractAndLoadPecas(startDate, endDate);

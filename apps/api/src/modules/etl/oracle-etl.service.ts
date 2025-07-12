@@ -1,5 +1,6 @@
 // apps/api/src/modules/etl/oracle-etl.service.ts (VERSÃO REALMENTE INTEGRAL FINALÍSSIMA - SEM NADA COMENTADO)
 import { AppDataSource, OracleDataSource } from '@/database/data-source';
+import { RawMySqlQuebraDefeitoEntity } from '@/entity/raw-data/raw-mysql-quebra-defeito.entity';
 import { RawOracleAusenciaEntity } from '@/entity/raw-data/raw-oracle-ausencia.entity';
 import { RawOracleColisaoEntity } from '@/entity/raw-data/raw-oracle-colisao.entity';
 import { RawOracleEstoqueCustoEntity } from '@/entity/raw-data/raw-oracle-estoque-custo.entity';
@@ -17,6 +18,12 @@ interface CombinedKmOciosaDataNew {
   kmHod?: number; // Hodômetro bruto (sem abatimentos)
 }
 // Interfaces Raw From Query (Tipagem interna para clareza)
+interface QuebraDefeitoRawFromQuery {
+  SETOR: string;
+  OCORRENCIA: 'QUEBRA' | 'DEFEITO';
+  TOTAL: number | string;
+  DIA: Date;
+}
 interface AusenciaRawFromQuery {
   SETOR: string;
   OCORRENCIA: 'FALTA FUNC' | 'ATESTADO FUNC';
@@ -92,6 +99,7 @@ export class OracleEtlService {
   private rawFleetPerfRepo: Repository<RawOracleFleetPerformanceEntity>;
   private rawKmOciosaComponentsRepo: Repository<RawOracleKmOciosaComponentsEntity>;
   private rawIpkCalculadoRepo: Repository<RawOracleIpkCalculadoEntity>;
+  private rawQuebraDefeitoRepo: Repository<RawMySqlQuebraDefeitoEntity>;
 
   constructor() {
     this.rawAusenciaRepo = AppDataSource.getRepository(RawOracleAusenciaEntity);
@@ -107,6 +115,9 @@ export class OracleEtlService {
     );
     this.rawIpkCalculadoRepo = AppDataSource.getRepository(
       RawOracleIpkCalculadoEntity
+    );
+    this.rawQuebraDefeitoRepo = AppDataSource.getRepository(
+      RawMySqlQuebraDefeitoEntity
     );
 
     console.log(
@@ -131,6 +142,111 @@ export class OracleEtlService {
       console.log('[Oracle ETL] AppDataSource (Postgres) inicializado.');
     }
     return dataSource;
+  }
+
+  async extractAndLoadQuebraDefeito(
+    startDate: string,
+    endDate: string
+  ): Promise<number> {
+    const functionName = 'Quebra/Defeito (Oracle)';
+    console.log(
+      `[Oracle ETL] Iniciando extração/carga de ${functionName} para ${startDate} a ${endDate}`
+    );
+    const oracleDataSource = await this.ensureOracleConnection();
+    await this.ensurePostgresConnection();
+
+    try {
+      const query = `
+        SELECT 
+            CASE CODIGOGA
+                WHEN 124 THEN 'SANTA MARIA'
+                WHEN 240 THEN 'GAMA'
+                WHEN 239 THEN 'SÃO SEBASTIÃO'
+                WHEN 31 THEN 'PARANOÁ'
+            END AS SETOR,
+            
+            CASE CODORIGOS
+                WHEN 23 THEN 'QUEBRA'
+                WHEN 24 THEN 'DEFEITO'
+            END AS OCORRENCIA,
+            
+            COUNT(*) AS TOTAL,
+            
+            TRUNC(DATAABERTURAOS) AS DIA
+
+        FROM MAN_OS
+        WHERE CODORIGOS IN (23, 24)
+          AND CODIGOGA IN (124, 240, 239, 31)
+          AND DATAABERTURAOS >= TO_DATE(:1, 'YYYY-MM-DD') 
+          AND DATAABERTURAOS < TO_DATE(:2, 'YYYY-MM-DD') + 1
+        GROUP BY 
+            CASE CODIGOGA
+                WHEN 124 THEN 'SANTA MARIA'
+                WHEN 240 THEN 'GAMA'
+                WHEN 239 THEN 'SÃO SEBASTIÃO'
+                WHEN 31 THEN 'PARANOÁ'
+            END,
+            CASE CODORIGOS
+                WHEN 23 THEN 'QUEBRA'
+                WHEN 24 THEN 'DEFEITO'
+            END,
+            TRUNC(DATAABERTURAOS)
+        ORDER BY DIA DESC, SETOR, OCORRENCIA
+      `;
+      const parameters = [startDate, endDate];
+      const results: QuebraDefeitoRawFromQuery[] = await oracleDataSource.query(
+        query,
+        parameters
+      );
+      console.log(
+        `[Oracle ETL] Query Oracle ${functionName} retornou ${results.length} registros.`
+      );
+      if (results.length === 0) return 0;
+
+      const entitiesToSave = results
+        .map((r) => {
+          const metricDate =
+            r.DIA instanceof Date ? r.DIA.toISOString().split('T')[0] : null;
+          if (!metricDate) {
+            console.warn(
+              `[Oracle ETL] Data inválida recebida para ${functionName}: ${r.DIA}`
+            );
+            return null;
+          }
+          return this.rawQuebraDefeitoRepo.create({
+            metricDate: metricDate,
+            sectorName: r.SETOR,
+            occurrenceType: r.OCORRENCIA,
+            totalCount: Number(r.TOTAL) || 0,
+          });
+        })
+        .filter((entity) => entity !== null) as RawMySqlQuebraDefeitoEntity[];
+
+      if (entitiesToSave.length === 0) {
+        console.log(
+          `[Oracle ETL] Nenhum registro válido de ${functionName} para salvar após mapeamento.`
+        );
+        return 0;
+      }
+
+      console.log(
+        `[Oracle ETL] Salvando ${entitiesToSave.length} registros em raw_mysql_quebras_defeitos...`
+      );
+      await this.rawQuebraDefeitoRepo.save(entitiesToSave, { chunk: 100 });
+      console.log(
+        `[Oracle ETL] Registros de ${functionName} salvos no Postgres.`
+      );
+      return entitiesToSave.length;
+    } catch (error) {
+      console.error(
+        `[Oracle ETL] ERRO ao extrair/carregar ${functionName}:`,
+        error
+      );
+      if (error instanceof Error && 'errorNum' in error) {
+        console.error(`  [Oracle Error Num]: ${(error as any).errorNum}`);
+      }
+      return 0;
+    }
   }
 
   async extractAndLoadAusencia(
