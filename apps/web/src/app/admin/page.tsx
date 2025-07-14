@@ -13,7 +13,9 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import useLastETLExecution from '@/hooks/useLastETLExecution';
 import { useQuery } from '@tanstack/react-query';
+
 import {
   Activity,
   AlertTriangle,
@@ -155,6 +157,8 @@ const fetchExpurgoSummary = async (
 export default function AdminDashboard() {
   const { user } = useAuth();
   const isDirector = user?.roles?.includes('DIRETOR') || false;
+
+  const { data, loading, error } = useLastETLExecution();
 
   // Queries - TODAS DEPENDEM DO PERÍODO ATIVO
   const { data: currentPeriod, isLoading: loadingPeriod } = useQuery({
@@ -547,11 +551,13 @@ export default function AdminDashboard() {
               <div className='flex items-center justify-between'>
                 <div>
                   <p className='text-sm font-medium text-slate-600'>
-                    Última Atualização ETL
+                    Última Atualização dos dados de premiação:
                   </p>
-                  <p className='text-lg font-semibold text-slate-900'>
-                    Hoje, 02:30
-                  </p>
+                  {data?.hasExecutions ? (
+                    <div>{data.lastExecution?.executedAtFormatted}</div>
+                  ) : (
+                    <div>Nenhuma execução encontrada</div>
+                  )}
                 </div>
                 <CheckCircle className='h-8 w-8 text-green-500' />
               </div>
