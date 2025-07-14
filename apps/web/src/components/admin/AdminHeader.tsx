@@ -25,6 +25,7 @@ import {
   Wifi,
   WifiOff,
 } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 
@@ -113,12 +114,7 @@ export function AdminHeader({
             className='flex items-center space-x-3 hover:opacity-80 transition-opacity'
           >
             <div className='relative'>
-              {/* Fallback caso não tenha logo */}
-              <div className='h-8 w-8 bg-amber-500 rounded-lg flex items-center justify-center'>
-                <span className='text-neutral-900 font-bold text-sm'>SP</span>
-              </div>
-              {/* Indicador de versão admin */}
-              <div className='absolute -top-1 -right-1 w-2 h-2 bg-amber-400 rounded-full animate-pulse' />
+              <Image src={'/logo.png'} width={48} height={48} alt='Logo' />
             </div>
           </Link>
 
