@@ -163,7 +163,7 @@ export function StatsCard({
 
         <div className='flex items-center justify-between'>
           {description && (
-            <p className='text-xs text-slate-600'>{description}</p>
+            <p className='text-sm text-slate-600'>{description}</p>
           )}
 
           {trend && (
@@ -195,14 +195,18 @@ interface StatsGridProps {
 }
 
 export function StatsGrid({ stats, isLoading, columns = 4 }: StatsGridProps) {
+  // Calcula o número real de colunas baseado na quantidade de stats
+  const actualColumns = Math.min(stats.length, columns);
+
   const gridCols = {
+    1: 'grid-cols-1',
     2: 'grid-cols-1 md:grid-cols-2',
     3: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3',
     4: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4',
   };
 
   return (
-    <div className={cn('grid gap-4', gridCols[columns])}>
+    <div className={cn('grid gap-4', gridCols[actualColumns])}>
       {stats.map((stat) => (
         <StatsCard key={stat.id} {...stat} isLoading={isLoading} />
       ))}

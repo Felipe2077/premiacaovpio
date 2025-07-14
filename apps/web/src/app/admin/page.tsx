@@ -154,6 +154,7 @@ const fetchExpurgoSummary = async (
 // ===== COMPONENTE PRINCIPAL =====
 export default function AdminDashboard() {
   const { user } = useAuth();
+  const isDirector = user?.roles?.includes('DIRETOR') || false;
 
   // Queries - TODAS DEPENDEM DO PERÍODO ATIVO
   const { data: currentPeriod, isLoading: loadingPeriod } = useQuery({
@@ -218,7 +219,41 @@ export default function AdminDashboard() {
     const today = new Date();
     const diffTime = endDate.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
+    return Math.max(0, diffDays); // Garantir que não retorne negativo
+  };
+
+  // 🎯 NOVA FUNÇÃO para formatar os dias restantes
+  const formatDaysRemaining = (dataFim: string) => {
+    const daysLeft = getDaysUntilEnd(dataFim);
+    if (daysLeft === 0) return 'Último dia';
+    if (daysLeft === 1) return '1 dia restante';
+    return `${daysLeft} dias restantes`;
+  };
+
+  // 🎯 NOVA FUNÇÃO para formatar mês amigável
+  const formatFriendlyMonth = (mesAno: string) => {
+    if (!mesAno) return 'N/A';
+
+    const [year, month] = mesAno.split('-');
+    const monthNames = [
+      'Janeiro',
+      'Fevereiro',
+      'Março',
+      'Abril',
+      'Maio',
+      'Junho',
+      'Julho',
+      'Agosto',
+      'Setembro',
+      'Outubro',
+      'Novembro',
+      'Dezembro',
+    ];
+
+    const monthIndex = parseInt(month) - 1;
+    const monthName = monthNames[monthIndex];
+
+    return `${monthName} ${year}`;
   };
 
   // ===== CARDS DE MÉTRICAS =====
@@ -227,22 +262,17 @@ export default function AdminDashboard() {
     {
       id: 'current-period',
       title: 'Período Atual',
-      value: currentPeriod ? currentPeriod.mesAno : 'N/A',
-      description: currentPeriod
-        ? getStatusLabel(currentPeriod.status)
-        : 'Nenhum período ativo',
+      value: currentPeriod ? formatFriendlyMonth(currentPeriod.mesAno) : 'N/A',
+      description:
+        currentPeriod && currentPeriod.status === 'ATIVA'
+          ? formatDaysRemaining(currentPeriod.dataFim)
+          : currentPeriod
+            ? getStatusLabel(currentPeriod.status)
+            : 'Nenhum período ativo',
       icon: Calendar,
       variant: currentPeriod
         ? getStatusVariant(currentPeriod.status)
         : 'secondary',
-      trend:
-        currentPeriod && currentPeriod.status === 'ATIVA'
-          ? {
-              value: getDaysUntilEnd(currentPeriod.dataFim),
-              type: 'neutral' as const,
-              period: 'dias restantes',
-            }
-          : undefined,
       isLoading: loadingPeriod,
     },
 
@@ -280,22 +310,26 @@ export default function AdminDashboard() {
     },
 
     // Card 4: Usuários Ativos
-    {
-      id: 'active-users',
-      title: 'Usuários Ativos',
-      value: userStats?.activeUsers || 0,
-      description: `${userStats?.totalUsers || 0} usuários cadastrados`,
-      icon: Users,
-      variant: 'success' as const,
-      trend: userStats?.recentLogins
-        ? {
-            value: userStats.recentLogins,
-            type: 'up' as const,
-            period: 'logins recentes',
-          }
-        : undefined,
-      isLoading: loadingUserStats,
-    },
+    ...(isDirector
+      ? [
+          {
+            id: 'active-users',
+            title: 'Usuários Ativos',
+            value: userStats?.activeUsers || 0,
+            description: `${userStats?.totalUsers || 0} usuários cadastrados`,
+            icon: Users,
+            variant: 'success' as const,
+            trend: userStats?.recentLogins
+              ? {
+                  value: userStats.recentLogins,
+                  type: 'up' as const,
+                  period: 'logins recentes',
+                }
+              : undefined,
+            isLoading: loadingUserStats,
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -398,103 +432,105 @@ export default function AdminDashboard() {
         </Card>
 
         {/* Quick Actions */}
-        <Card>
-          <CardHeader className='pb-3'>
-            <CardTitle className='flex items-center gap-2'>
-              <Activity className='h-5 w-5 text-amber-600' />
-              Ações Rápidas
-            </CardTitle>
-            <CardDescription>
-              Acesso direto às funcionalidades principais
-            </CardDescription>
-          </CardHeader>
-          <CardContent className='space-y-3'>
-            <div className='grid grid-cols-1 gap-3'>
-              <Link href='/admin/parameters' className='block'>
-                <Button variant='outline' className='w-full justify-start'>
-                  <Target className='h-4 w-4 mr-3' />
-                  Gerenciar Metas
-                </Button>
-              </Link>
+        {isDirector && (
+          <Card>
+            <CardHeader className='pb-3'>
+              <CardTitle className='flex items-center gap-2'>
+                <Activity className='h-5 w-5 text-amber-600' />
+                Ações Rápidas
+              </CardTitle>
+              <CardDescription>
+                Acesso direto às funcionalidades principais
+              </CardDescription>
+            </CardHeader>
+            <CardContent className='space-y-3'>
+              <div className='grid grid-cols-1 gap-3'>
+                <Link href='/admin/parameters' className='block'>
+                  <Button variant='outline' className='w-full justify-start'>
+                    <Target className='h-4 w-4 mr-3' />
+                    Gerenciar Metas
+                  </Button>
+                </Link>
 
-              <Link href='/admin/expurgos' className='block'>
-                <Button variant='outline' className='w-full justify-start'>
-                  <AlertTriangle className='h-4 w-4 mr-3' />
-                  Gestão de Expurgos
-                  {currentPeriod?.status === 'ATIVA' &&
-                    (expurgoSummary?.pendentes || 0) > 0 && (
-                      <Badge className='ml-auto bg-orange-500'>
-                        {expurgoSummary?.pendentes}
-                      </Badge>
-                    )}
-                </Button>
-              </Link>
+                <Link href='/admin/expurgos' className='block'>
+                  <Button variant='outline' className='w-full justify-start'>
+                    <AlertTriangle className='h-4 w-4 mr-3' />
+                    Gestão de Expurgos
+                    {currentPeriod?.status === 'ATIVA' &&
+                      (expurgoSummary?.pendentes || 0) > 0 && (
+                        <Badge className='ml-auto bg-orange-500'>
+                          {expurgoSummary?.pendentes}
+                        </Badge>
+                      )}
+                  </Button>
+                </Link>
 
-              <Link href='/admin/users' className='block'>
-                <Button variant='outline' className='w-full justify-start'>
-                  <Users className='h-4 w-4 mr-3' />
-                  Gerenciar Usuários
-                </Button>
-              </Link>
+                <Link href='/admin/users' className='block'>
+                  <Button variant='outline' className='w-full justify-start'>
+                    <Users className='h-4 w-4 mr-3' />
+                    Gerenciar Usuários
+                  </Button>
+                </Link>
 
-              <Link href='/admin/vigencias' className='block'>
-                <Button variant='outline' className='w-full justify-start'>
-                  <Clock className='h-4 w-4 mr-3' />
-                  Gestão de Vigências
-                </Button>
-              </Link>
+                <Link href='/admin/vigencias' className='block'>
+                  <Button variant='outline' className='w-full justify-start'>
+                    <Clock className='h-4 w-4 mr-3' />
+                    Gestão de Vigências
+                  </Button>
+                </Link>
 
-              <Link href='/admin/audit-logs' className='block'>
-                <Button variant='outline' className='w-full justify-start'>
-                  <FileText className='h-4 w-4 mr-3' />
-                  Logs de Auditoria
-                </Button>
-              </Link>
-            </div>
+                <Link href='/admin/audit-logs' className='block'>
+                  <Button variant='outline' className='w-full justify-start'>
+                    <FileText className='h-4 w-4 mr-3' />
+                    Logs de Auditoria
+                  </Button>
+                </Link>
+              </div>
 
-            {/* Alertas Importantes - APENAS PARA PERÍODO ATIVO */}
-            {currentPeriod?.status === 'ATIVA' &&
-              (expurgoSummary?.pendentes || 0) > 0 && (
-                <Alert className='mt-4'>
-                  <AlertTriangle className='h-4 w-4' />
+              {/* Alertas Importantes - APENAS PARA PERÍODO ATIVO */}
+              {currentPeriod?.status === 'ATIVA' &&
+                (expurgoSummary?.pendentes || 0) > 0 && (
+                  <Alert className='mt-4'>
+                    <AlertTriangle className='h-4 w-4' />
+                    <AlertDescription>
+                      <strong>{expurgoSummary?.pendentes} expurgo(s)</strong>{' '}
+                      pendente(s) no período{' '}
+                      <strong>{currentPeriod.mesAno}</strong>.
+                      <Link href='/admin/expurgos' className='ml-1 underline'>
+                        Revisar agora
+                      </Link>
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+              {currentPeriod?.status === 'PLANEJAMENTO' && (
+                <Alert>
+                  <Clock className='h-4 w-4' />
                   <AlertDescription>
-                    <strong>{expurgoSummary?.pendentes} expurgo(s)</strong>{' '}
-                    pendente(s) no período{' '}
-                    <strong>{currentPeriod.mesAno}</strong>.
-                    <Link href='/admin/expurgos' className='ml-1 underline'>
-                      Revisar agora
+                    Período <strong>{currentPeriod.mesAno}</strong> em
+                    planejamento.
+                    <Link href='/admin/vigencias' className='ml-1 underline'>
+                      Iniciar período
                     </Link>
                   </AlertDescription>
                 </Alert>
               )}
 
-            {currentPeriod?.status === 'PLANEJAMENTO' && (
-              <Alert>
-                <Clock className='h-4 w-4' />
-                <AlertDescription>
-                  Período <strong>{currentPeriod.mesAno}</strong> em
-                  planejamento.
-                  <Link href='/admin/vigencias' className='ml-1 underline'>
-                    Iniciar período
-                  </Link>
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {!currentPeriod && (
-              <Alert variant='destructive'>
-                <AlertTriangle className='h-4 w-4' />
-                <AlertDescription>
-                  <strong>Nenhum período ativo encontrado.</strong> Configure um
-                  período para visualizar os dados.
-                  <Link href='/admin/vigencias' className='ml-1 underline'>
-                    Gerenciar vigências
-                  </Link>
-                </AlertDescription>
-              </Alert>
-            )}
-          </CardContent>
-        </Card>
+              {!currentPeriod && (
+                <Alert variant='destructive'>
+                  <AlertTriangle className='h-4 w-4' />
+                  <AlertDescription>
+                    <strong>Nenhum período ativo encontrado.</strong> Configure
+                    um período para visualizar os dados.
+                    <Link href='/admin/vigencias' className='ml-1 underline'>
+                      Gerenciar vigências
+                    </Link>
+                  </AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Status Operacional */}
