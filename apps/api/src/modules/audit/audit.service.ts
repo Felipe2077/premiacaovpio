@@ -299,4 +299,180 @@ export class AuditLogService {
       throw new Error('Falha ao buscar erros críticos.');
     }
   }
+
+  /**
+   * Busca a última execução bem-sucedida do ETL
+   * @returns Promise<object | null> Dados da última execução ou null se não encontrar
+   */
+  async getLastSuccessfulETLExecution(): Promise<{
+    executedAt: Date;
+    status: string;
+    durationMs?: number;
+    recordsProcessed?: number;
+    triggeredBy?: string;
+    userId?: number | null;
+    periodProcessed?: string;
+  } | null> {
+    try {
+      console.log(
+        '[AuditLogService] Buscando última execução ETL bem-sucedida...'
+      );
+
+      // CORREÇÃO: Buscar pelos actionType reais que o AutomationService usa
+      const auditLog = await this.logRepo.findOne({
+        where: [
+          { actionType: 'ETL_CONCLUIDO' }, // ✅ Usado pelo AutomationService
+          { actionType: 'RECALCULO_CONCLUIDO' }, // ✅ Usado pelo AutomationService
+          { actionType: 'ETL_INICIADO' }, // Como fallback
+          { actionType: 'RECALCULO_INICIADO' }, // Como fallback
+        ],
+        order: { timestamp: 'DESC' },
+        relations: { user: true, competitionPeriod: true },
+      });
+
+      if (!auditLog) {
+        console.log(
+          '[AuditLogService] Nenhuma execução ETL encontrada nos logs'
+        );
+        return null;
+      }
+
+      // Parse seguro dos details (JSON)
+      let details: any = {};
+      if (auditLog.details) {
+        try {
+          details =
+            typeof auditLog.details === 'string'
+              ? JSON.parse(auditLog.details)
+              : auditLog.details;
+        } catch (error) {
+          console.warn(
+            '[AuditLogService] Erro ao fazer parse dos details:',
+            error
+          );
+          details = {};
+        }
+      }
+
+      // Determinar status baseado no actionType
+      const isSuccess =
+        auditLog.actionType === 'ETL_CONCLUIDO' ||
+        auditLog.actionType === 'RECALCULO_CONCLUIDO';
+
+      // Extrair informações relevantes
+      const result = {
+        executedAt: auditLog.timestamp,
+        status: isSuccess ? 'success' : 'completed',
+        durationMs: details.executionTimeMs || details.durationMs || null,
+        recordsProcessed:
+          details.rawRecords ||
+          details.recordsProcessed?.rawRecords ||
+          details.recordsProcessed?.total ||
+          details.totalRecords ||
+          null,
+        triggeredBy: details.triggeredBy || 'unknown',
+        userId: auditLog.userId,
+        periodProcessed: details.periodMesAno || details.period || null,
+      };
+
+      console.log('[AuditLogService] Última execução ETL encontrada:', {
+        actionType: auditLog.actionType,
+        executedAt: result.executedAt,
+        status: result.status,
+        triggeredBy: result.triggeredBy,
+      });
+
+      return result;
+    } catch (error) {
+      console.error(
+        '[AuditLogService] Erro ao buscar última execução ETL:',
+        error
+      );
+      throw new Error(
+        `Erro ao consultar última execução: ${error instanceof Error ? error.message : 'Erro desconhecido'}`
+      );
+    }
+  }
+
+  /**
+   * Busca histórico de execuções ETL
+   * @param limit Número máximo de registros (padrão: 10)
+   * @returns Promise<Array> Lista das últimas execuções
+   */
+  async getETLExecutionHistory(limit: number = 10): Promise<
+    Array<{
+      executedAt: Date;
+      status: string;
+      durationMs?: number;
+      recordsProcessed?: number;
+      triggeredBy?: string;
+      userId?: number | null;
+      periodProcessed?: string;
+    }>
+  > {
+    try {
+      console.log(
+        `[AuditLogService] Buscando histórico de ${limit} execuções ETL...`
+      );
+
+      // CORREÇÃO: Buscar pelos actionType reais
+      const auditLogs = await this.logRepo.find({
+        where: [
+          { actionType: 'ETL_CONCLUIDO' },
+          { actionType: 'RECALCULO_CONCLUIDO' },
+          { actionType: 'ETL_INICIADO' },
+          { actionType: 'RECALCULO_INICIADO' },
+        ],
+        order: { timestamp: 'DESC' },
+        take: limit,
+        relations: { user: true, competitionPeriod: true },
+      });
+
+      const history = auditLogs.map((log) => {
+        let details: any = {};
+        if (log.details) {
+          try {
+            details =
+              typeof log.details === 'string'
+                ? JSON.parse(log.details)
+                : log.details;
+          } catch (error) {
+            console.warn(
+              '[AuditLogService] Erro ao fazer parse dos details no histórico:',
+              error
+            );
+          }
+        }
+
+        const isSuccess =
+          log.actionType === 'ETL_CONCLUIDO' ||
+          log.actionType === 'RECALCULO_CONCLUIDO';
+
+        return {
+          executedAt: log.timestamp,
+          status: isSuccess ? 'success' : 'completed',
+          durationMs: details.executionTimeMs || details.durationMs || null,
+          recordsProcessed:
+            details.rawRecords ||
+            details.recordsProcessed?.rawRecords ||
+            details.recordsProcessed?.total ||
+            details.totalRecords ||
+            null,
+          triggeredBy: details.triggeredBy || 'unknown',
+          userId: log.userId,
+          periodProcessed: details.periodMesAno || details.period || null,
+        };
+      });
+
+      console.log(
+        `[AuditLogService] Encontradas ${history.length} execuções no histórico`
+      );
+      return history;
+    } catch (error) {
+      console.error('[AuditLogService] Erro ao buscar histórico ETL:', error);
+      throw new Error(
+        `Erro ao consultar histórico: ${error instanceof Error ? error.message : 'Erro desconhecido'}`
+      );
+    }
+  }
 }

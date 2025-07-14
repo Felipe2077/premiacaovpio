@@ -666,8 +666,14 @@ export class AutomationService {
   }): Promise<void> {
     try {
       const auditLog = this.auditRepo.create({
-        actionType: data.actionType,
-        details: data.details,
+        actionType:
+          data.actionType === 'RECALCULO_COMPLETO'
+            ? 'FULL_ETL_UPDATE'
+            : data.actionType, // Padronizar
+        details: {
+          ...data.details,
+          timestamp: new Date().toISOString(), // Adicionar timestamp nos details
+        },
         userId: data.userId,
         competitionPeriodId: data.competitionPeriodId,
         entityType: 'AutomationService',

@@ -392,6 +392,130 @@ const automationRoutes: FastifyPluginAsync = async (
     controller.validateActivePeriod.bind(controller)
   );
 
+  /**
+   * GET /api/automation/last-execution
+   * Retorna dados da última execução ETL bem-sucedida
+   * ROTA PÚBLICA - Não requer autenticação
+   */
+  fastify.get(
+    '/api/automation/last-execution',
+    {
+      schema: {
+        description:
+          'Retorna dados da última execução ETL bem-sucedida (rota pública)',
+        tags: ['Automation'],
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              message: { type: 'string' },
+              data: {
+                type: 'object',
+                properties: {
+                  lastExecution: {
+                    type: 'object',
+                    nullable: true,
+                    properties: {
+                      executedAt: { type: 'string', format: 'date-time' },
+                      status: { type: 'string' },
+                      durationMs: { type: 'number', nullable: true },
+                      durationFormatted: { type: 'string', nullable: true },
+                      recordsProcessed: { type: 'number', nullable: true },
+                      triggeredBy: { type: 'string' },
+                      periodProcessed: { type: 'string', nullable: true },
+                      executedAtFormatted: { type: 'string' },
+                      relativeTime: { type: 'string' },
+                    },
+                  },
+                  hasExecutions: { type: 'boolean' },
+                },
+              },
+              timestamp: { type: 'string', format: 'date-time' },
+            },
+          },
+          500: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              message: { type: 'string' },
+              error: { type: 'string' },
+              data: {
+                type: 'object',
+                properties: {
+                  lastExecution: { type: 'null' },
+                  hasExecutions: { type: 'boolean' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    controller.getLastExecution.bind(controller)
+  );
+
+  /**
+   * GET /api/automation/execution-history
+   * Retorna histórico de execuções ETL
+   * ROTA PÚBLICA - Não requer autenticação
+   */
+  fastify.get(
+    '/api/automation/execution-history',
+    {
+      schema: {
+        description: 'Retorna histórico de execuções ETL (rota pública)',
+        tags: ['Automation'],
+        querystring: {
+          type: 'object',
+          properties: {
+            limit: {
+              type: 'string',
+              description: 'Número máximo de registros (máx: 50)',
+              default: '10',
+            },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              message: { type: 'string' },
+              data: {
+                type: 'object',
+                properties: {
+                  executions: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        executedAt: { type: 'string', format: 'date-time' },
+                        status: { type: 'string' },
+                        durationMs: { type: 'number', nullable: true },
+                        durationFormatted: { type: 'string', nullable: true },
+                        recordsProcessed: { type: 'number', nullable: true },
+                        triggeredBy: { type: 'string' },
+                        periodProcessed: { type: 'string', nullable: true },
+                        executedAtFormatted: { type: 'string' },
+                        relativeTime: { type: 'string' },
+                      },
+                    },
+                  },
+                  total: { type: 'number' },
+                  limit: { type: 'number' },
+                  hasMore: { type: 'boolean' },
+                },
+              },
+              timestamp: { type: 'string', format: 'date-time' },
+            },
+          },
+        },
+      },
+    },
+    controller.getExecutionHistory.bind(controller)
+  );
+
   fastify.log.info(
     '✅ Rotas de Automação v2 registradas (com Queue e WebSockets)'
   );

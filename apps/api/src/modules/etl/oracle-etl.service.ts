@@ -9,7 +9,7 @@ import { RawOracleIpkCalculadoEntity } from '@/entity/raw-data/raw-oracle-ipk-ca
 import { RawOracleKmOciosaComponentsEntity } from '@/entity/raw-data/raw-oracle-km-ociosa.entity';
 
 import 'reflect-metadata';
-import { DataSource, DeepPartial, Repository, FindOptionsWhere, In } from 'typeorm';
+import { DataSource, DeepPartial, In, Repository } from 'typeorm';
 
 interface CombinedKmOciosaDataNew {
   CODIGOGA: string;
@@ -1017,35 +1017,60 @@ ORDER BY
 
       // ----- SALVAR NO POSTGRES DENTRO DE UMA TRANSAÇÃO -----
       if (entitiesToSave.length > 0) {
-        await AppDataSource.manager.transaction(async (transactionalEntityManager) => {
-          console.log(`[Oracle ETL] Iniciando transação para salvar ${entitiesToSave.length} registros em raw_oracle_km_ociosa_components...`);
+        await AppDataSource.manager.transaction(
+          async (transactionalEntityManager) => {
+            console.log(
+              `[Oracle ETL] Iniciando transação para salvar ${entitiesToSave.length} registros em raw_oracle_km_ociosa_components...`
+            );
 
-          const uniqueMonthSectorKeys = new Set<string>();
-          entitiesToSave.forEach(entity => {
+            const uniqueMonthSectorKeys = new Set<string>();
+            entitiesToSave.forEach((entity) => {
               if (entity.metricMonth && entity.sectorName) {
-                  uniqueMonthSectorKeys.add(`${entity.metricMonth}-${entity.sectorName}`);
+                uniqueMonthSectorKeys.add(
+                  `${entity.metricMonth}-${entity.sectorName}`
+                );
               }
-          });
+            });
 
-          // Deletar registros existentes dentro da transação
-          const uniqueMetricMonths = Array.from(new Set(entitiesToSave.map(entity => entity.metricMonth)));
+            // Deletar registros existentes dentro da transação
+            const uniqueMetricMonths = Array.from(
+              new Set(entitiesToSave.map((entity) => entity.metricMonth))
+            );
 
-          if (uniqueMetricMonths.length > 0) {
-              console.log(`[Oracle ETL] Deletando todos os registros existentes para os meses: ${uniqueMetricMonths.join(', ')}...`);
-              const deleteResult = await transactionalEntityManager.delete(RawOracleKmOciosaComponentsEntity, {
-                  metricMonth: In(uniqueMetricMonths)
-              });
-              console.log(`[Oracle ETL] Registros existentes deletados: ${deleteResult.affected || 0} linhas afetadas.`);
-          } else {
+            if (uniqueMetricMonths.length > 0) {
+              console.log(
+                `[Oracle ETL] Deletando todos os registros existentes para os meses: ${uniqueMetricMonths.join(', ')}...`
+              );
+              const deleteResult = await transactionalEntityManager.delete(
+                RawOracleKmOciosaComponentsEntity,
+                {
+                  metricMonth: In(uniqueMetricMonths),
+                }
+              );
+              console.log(
+                `[Oracle ETL] Registros existentes deletados: ${deleteResult.affected || 0} linhas afetadas.`
+              );
+            } else {
               console.log(`[Oracle ETL] Nenhum mês para deletar.`);
-          }
-          console.log(`[Oracle ETL] Registros existentes deletados dentro da transação.`);
+            }
+            console.log(
+              `[Oracle ETL] Registros existentes deletados dentro da transação.`
+            );
 
-          // Salvar novos registros dentro da transação
-          await transactionalEntityManager.save(RawOracleKmOciosaComponentsEntity, entitiesToSave, { chunk: 100 });
-          console.log(`[Oracle ETL] Novos registros salvos dentro da transação.`);
-        });
-        console.log(`[Oracle ETL] Transação concluída. Registros de ${functionName} salvos no Postgres.`);
+            // Salvar novos registros dentro da transação
+            await transactionalEntityManager.save(
+              RawOracleKmOciosaComponentsEntity,
+              entitiesToSave,
+              { chunk: 100 }
+            );
+            console.log(
+              `[Oracle ETL] Novos registros salvos dentro da transação.`
+            );
+          }
+        );
+        console.log(
+          `[Oracle ETL] Transação concluída. Registros de ${functionName} salvos no Postgres.`
+        );
       } else {
         console.log(
           `[Oracle ETL] Nenhum registro válido de ${functionName} para salvar.`
@@ -1160,7 +1185,7 @@ FROM (
               AND G.COD_SEQ_GUIA = D.COD_SEQ_GUIA
               AND G.DAT_VIAGEM_GUIA BETWEEN TO_DATE(:1, 'YYYY-MM-DD') AND TO_DATE(:2, 'YYYY-MM-DD')
               AND V.COD_INTLINHA = L.CODINTLINHA
-              AND L.CODIGOGA IN (124, 240)
+              AND L.CODIGOGA IN (124, 240, 4)
               AND L.CODIGOEMPRESA = 4
               AND D.COD_TIPOPAGTARIFA NOT IN (3)
               AND V.COD_VEICULO = VE.CODIGOVEIC
