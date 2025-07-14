@@ -320,12 +320,12 @@ const ActivePeriodCell = memo<ActivePeriodCellProps>(
                       onClick={handleHistoryClick}
                       className={`
                       p-1 rounded-full transition-colors duration-200
-                      hover:bg-black/10 dark:hover:bg-white/10
+                      hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer
                       ${colors.textColor}
                     `}
                       title='Ver histórico'
                     >
-                      <History className='h-3 w-3' />
+                      <History className='h-5 w-5 cursor-pointer' />
                     </button>
                   )}
                 </div>
