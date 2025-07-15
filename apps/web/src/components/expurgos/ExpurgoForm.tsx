@@ -349,7 +349,10 @@ export default function ExpurgoForm({
                             <span className='font-medium'>{criterio.nome}</span>
                             {criterio.unidade_medida && (
                               <span className='text-xs text-gray-500'>
-                                Unidade: {criterio.unidade_medida}
+                                Unidade:{' '}
+                                {criterio.nome === 'KM OCIOSA'
+                                  ? 'Km'
+                                  : criterio.unidade_medida}
                               </span>
                             )}
                           </div>
@@ -408,7 +411,11 @@ export default function ExpurgoForm({
               Valor a ser Expurgado <span className='text-red-500'>*</span>
               {selectedCriterion?.unidade_medida && (
                 <span className='text-sm text-gray-600 ml-2'>
-                  ({selectedCriterion.unidade_medida})
+                  (
+                  {selectedCriterion.nome === 'KM OCIOSA'
+                    ? 'Km'
+                    : selectedCriterion.unidade_medida}
+                  )
                 </span>
               )}
             </Label>
