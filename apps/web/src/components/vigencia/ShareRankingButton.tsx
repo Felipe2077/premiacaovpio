@@ -442,8 +442,8 @@ export default function ShareRankingButton({
         const colors = {
           1: '#fbbf24',
           2: '#e5e7eb',
-          3: '#fed7aa',
-          default: '#f3f4f6',
+          3: '#e5e7eb',
+          default: '#e5e7eb',
         };
 
         ctx.fillStyle =
