@@ -1,6 +1,7 @@
-// apps/web/src/components/expurgos/ExpurgosTable.tsx (REFATORADA - SEM SCROLL HORIZONTAL)
+// apps/web/src/components/expurgos/ExpurgosTable.tsx - VERSÃO CORRIGIDA COMPLETA
 'use client';
 
+import { useAuth } from '@/components/providers/AuthProvider'; // 🎯 CORREÇÃO: Importar useAuth
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -85,7 +86,7 @@ interface ModalState<T = ExpurgoData | null> {
 }
 
 // ===================================
-// UTILITÁRIOS DE ORDENAÇÃO
+// UTILITÁRIOS DE ORDENAÇÃO (MANTIDO DO ORIGINAL)
 // ===================================
 
 class ExpurgoSortHelper {
@@ -109,6 +110,10 @@ class ExpurgoSortHelper {
     });
   }
 }
+
+// ===================================
+// HELPERS E CLASSES UTILITÁRIAS (MANTIDO DO ORIGINAL)
+// ===================================
 
 class ExpurgoStatusHelper {
   private static readonly STATUS_CONFIG: Record<
@@ -176,7 +181,7 @@ class ExpurgoDisplayHelper {
 }
 
 // ===================================
-// COMPONENTES GRANULARES (SEPARAÇÃO DE RESPONSABILIDADES)
+// COMPONENTES GRANULARES
 // ===================================
 
 interface DataEventoCellProps {
@@ -212,18 +217,20 @@ const CriterioCell: React.FC<CriterioCellProps> = ({ criterion }) => (
   <TableCell className='py-3 w-[110px]'>
     <Tooltip>
       <TooltipTrigger asChild>
-        <div className='space-y-1 cursor-help'>
-          <div className='font-medium text-sm'>{criterion?.nome || 'N/A'}</div>
+        <div className='cursor-help'>
+          <p className='text-sm font-medium text-gray-900 truncate'>
+            {criterion?.nome || 'N/A'}
+          </p>
           {criterion?.unidade_medida && (
-            <Badge variant='secondary' className='text-xs px-1 py-0'>
+            <p className='text-xs text-gray-500 truncate'>
               {criterion.unidade_medida}
-            </Badge>
+            </p>
           )}
         </div>
       </TooltipTrigger>
       <TooltipContent>
-        <p>Critério: {criterion?.nome}</p>
-        <p>Unidade: {criterion?.unidade_medida}</p>
+        <p>Critério: {criterion?.nome || 'N/A'}</p>
+        <p>Unidade: {criterion?.unidade_medida || 'N/A'}</p>
       </TooltipContent>
     </Tooltip>
   </TableCell>
@@ -242,25 +249,26 @@ const ValoresCell: React.FC<ValoresCellProps> = ({
 }) => (
   <TableCell className='py-3 w-[120px]'>
     <div className='space-y-1'>
-      <div className='flex items-center justify-between text-xs'>
-        <span className='text-gray-600 font-medium'>Solic:</span>
-        <span className='font-semibold'>{valorSolicitado}</span>
-      </div>
-      <div className='flex items-center justify-between text-xs'>
-        <span className='text-gray-600 font-medium'>Aprov:</span>
-        <span className='font-semibold text-green-600'>
-          {valorAprovado ?? 0}
+      <div className='flex items-center space-x-1'>
+        <span className='text-xs text-gray-500'>Sol:</span>
+        <span className='text-sm font-semibold text-gray-900'>
+          {valorSolicitado.toFixed(0)}
         </span>
       </div>
-      {percentualAprovacao !== null && (
-        <div className='flex items-center justify-center mt-1'>
-          <Badge
-            variant='secondary'
-            className='text-xs px-1 py-0 bg-blue-100 text-blue-800 border-blue-200'
-          >
-            <Percent className='h-2 w-2 mr-1' />
-            {percentualAprovacao.toFixed(0)}%
-          </Badge>
+      {valorAprovado !== null && valorAprovado !== undefined && (
+        <div className='flex items-center space-x-1'>
+          <span className='text-xs text-gray-500'>Apr:</span>
+          <span className='text-sm font-semibold text-green-700'>
+            {valorAprovado.toFixed(0)}
+          </span>
+        </div>
+      )}
+      {percentualAprovacao !== null && percentualAprovacao !== undefined && (
+        <div className='flex items-center space-x-1'>
+          <Percent className='h-3 w-3 text-blue-500' />
+          <span className='text-xs font-medium text-blue-600'>
+            {(percentualAprovacao * 100).toFixed(1)}%
+          </span>
         </div>
       )}
     </div>
@@ -276,7 +284,9 @@ const StatusCell: React.FC<StatusCellProps> = ({ status }) => {
 
   return (
     <TableCell className='py-3 w-[120px]'>
-      <Badge className={`text-xs px-2 py-1 ${statusInfo.className}`}>
+      <Badge
+        className={`${statusInfo.className} text-xs font-medium px-2 py-1`}
+      >
         <span className='mr-1'>{statusInfo.icon}</span>
         {statusInfo.label}
       </Badge>
@@ -364,6 +374,7 @@ const AnexosCell: React.FC<AnexosCellProps> = ({
   </TableCell>
 );
 
+// 🎯 CORREÇÃO: Componente AcoesCell com verificação de role
 interface AcoesCellProps {
   expurgo: ExpurgoData;
   onView: (expurgo: ExpurgoData) => void;
@@ -379,12 +390,20 @@ const AcoesCell: React.FC<AcoesCellProps> = ({
   onReject,
   onViewAttachments,
 }) => {
-  const canApproveReject = ExpurgoStatusHelper.canApproveReject(expurgo.status);
+  // 🎯 CORREÇÃO: Usar hook de autenticação para verificar role
+  const { user } = useAuth();
+
+  // 🎯 CORREÇÃO: Verificar se é diretor
+  const isDirector = user?.roles?.includes('DIRETOR');
+
+  // 🎯 CORREÇÃO: Só pode aprovar/rejeitar se for DIRETOR E status for PENDENTE
+  const canApproveReject =
+    ExpurgoStatusHelper.canApproveReject(expurgo.status) && isDirector;
 
   return (
     <TableCell className='py-3 w-[140px] text-center'>
       <div className='flex items-center justify-center gap-1'>
-        {/* Botões de Aprovação/Rejeição diretos (visíveis) */}
+        {/* 🎯 CORREÇÃO: Botões de Aprovação/Rejeição só para DIRETOR */}
         {canApproveReject ? (
           <>
             <Tooltip>
@@ -420,7 +439,7 @@ const AcoesCell: React.FC<AcoesCellProps> = ({
             </Tooltip>
           </>
         ) : (
-          // Para registros já processados, mostrar apenas visualizar
+          // Para registros já processados OU usuários sem permissão, mostrar apenas visualizar
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -471,7 +490,7 @@ const AcoesCell: React.FC<AcoesCellProps> = ({
 };
 
 // ===================================
-// HOOK CUSTOMIZADO PARA GESTÃO DE MODAIS (ABSTRAÇÃO)
+// HOOK CUSTOMIZADO PARA GESTÃO DE MODAIS
 // ===================================
 
 const useExpurgoModals = () => {
@@ -546,7 +565,7 @@ const useExpurgoModals = () => {
 };
 
 // ===================================
-// COMPONENTE PRINCIPAL (COMPOSIÇÃO E ORQUESTRAÇÃO)
+// COMPONENTE PRINCIPAL
 // ===================================
 
 export default function ExpurgosTable({
@@ -557,12 +576,10 @@ export default function ExpurgosTable({
   console.log('Dados recebidos pela tabela:', expurgos);
 
   // ===================================
-  // HOOKS E ESTADOS
+  // HOOKS E ESTADOS (MANTIDO DO ORIGINAL)
   // ===================================
-  // <-- 2. CRIAR UMA VERSÃO "LIMPA" DOS DADOS USANDO useMemo
-  // Isso garante que os dados sejam convertidos para os tipos corretos (números)
-  // assim que chegam ao componente, e de forma otimizada.
 
+  // 🎯 MANTIDO: Versão "limpa" dos dados usando useMemo
   const sanitizedExpurgos = useMemo(() => {
     if (!expurgos) return [];
     return expurgos.map((expurgo) => ({
@@ -575,6 +592,11 @@ export default function ExpurgosTable({
         : null,
     }));
   }, [expurgos]);
+
+  // 🎯 MANTIDO: Ordenação usando o helper original
+  const sortedExpurgos = useMemo(() => {
+    return ExpurgoSortHelper.sortByMostRecent(sanitizedExpurgos);
+  }, [sanitizedExpurgos]);
 
   const {
     approveModal,
@@ -591,92 +613,83 @@ export default function ExpurgosTable({
     closeDetailsModal,
   } = useExpurgoModals();
 
-  const {
-    handleApprove,
-    handleReject,
-    isLoading: isActionLoading,
-  } = useExpurgoActions();
+  const { approveExpurgo, rejectExpurgo } = useExpurgoActions();
+  const [isActionLoading, setIsActionLoading] = useState(false);
 
   // ===================================
-  // HANDLERS DE AÇÕES (ORQUESTRAÇÃO)
+  // HANDLERS
   // ===================================
 
   const handleViewExpurgo = (expurgo: ExpurgoData) => {
     openDetailsModal(expurgo);
   };
 
-  const handleConfirmApprove = async (data: {
-    valorAprovado: number;
-    justificativaAprovacao: string;
-    observacoes?: string;
-  }) => {
+  const handleConfirmApprove = async (data: any) => {
     if (!approveModal.expurgo) return;
 
+    setIsActionLoading(true);
     try {
-      await handleApprove(approveModal.expurgo.id, data);
+      await approveExpurgo.mutateAsync({
+        id: approveModal.expurgo.id,
+        data,
+      });
       closeApproveModal();
     } catch (error) {
       console.error('Erro ao aprovar expurgo:', error);
-      // Toast de erro será tratado pelo hook useExpurgoActions
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
-  const handleConfirmReject = async (data: {
-    justificativaRejeicao: string;
-    observacoes?: string;
-  }) => {
+  const handleConfirmReject = async (data: any) => {
     if (!rejectModal.expurgo) return;
 
+    setIsActionLoading(true);
     try {
-      await handleReject(rejectModal.expurgo.id, data);
+      await rejectExpurgo.mutateAsync({
+        id: rejectModal.expurgo.id,
+        data,
+      });
       closeRejectModal();
     } catch (error) {
       console.error('Erro ao rejeitar expurgo:', error);
-      // Toast de erro será tratado pelo hook useExpurgoActions
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
   // ===================================
-  // ESTADOS DE LOADING E ERRO
+  // RENDERIZAÇÃO
   // ===================================
 
   if (loading) {
     return (
-      <div className='flex items-center justify-center h-32'>
-        <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900'></div>
-        <span className='ml-2'>Carregando expurgos...</span>
+      <div className='flex justify-center items-center h-64'>
+        <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600'></div>
+        <span className='ml-2 text-gray-600'>Carregando expurgos...</span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className='text-center text-red-600 p-4'>
-        <p>Erro ao carregar expurgos: {error.message}</p>
+      <div className='text-center py-8'>
+        <p className='text-red-600 font-medium'>
+          Erro ao carregar expurgos: {error.message}
+        </p>
       </div>
     );
   }
 
-  // ===================================
-  // PREPARAÇÃO DOS DADOS
-  // ===================================
-
-  // Ordenar expurgos do mais recente para o mais antigo
-  const sortedExpurgos = ExpurgoSortHelper.sortByMostRecent(sanitizedExpurgos);
-
-  // ===================================
-  // RENDER PRINCIPAL
-  // ===================================
-
   return (
     <TooltipProvider>
-      <div className='w-full'>
-        {/* Container otimizado para evitar scroll horizontal */}
-        <div className='border rounded-lg bg-white shadow-sm overflow-hidden'>
-          <div className='overflow-x-auto'>
-            <Table className='min-w-[1300px] table-fixed'>
-              <TableCaption className='py-4'>
-                Lista de eventos expurgados com aprovação/rejeição.
+      <div className='space-y-4'>
+        <div className='overflow-x-auto border rounded-lg'>
+          <div className='min-w-[1200px]'>
+            <Table className='table-fixed'>
+              <TableCaption className='text-sm text-gray-600 pb-3'>
+                Lista de expurgos do período selecionado. Passe o mouse sobre os
+                itens para ver mais detalhes.
               </TableCaption>
 
               <TableHeader>
@@ -727,35 +740,27 @@ export default function ExpurgosTable({
                       key={expurgo.id}
                       className='hover:bg-gray-50 transition-colors'
                     >
-                      {/* Componentes granulares para cada célula */}
                       <DataEventoCell dataEvento={expurgo.dataEvento} />
-
                       <SetorCell setor={expurgo.sector} />
-
                       <CriterioCell criterion={expurgo.criterion} />
-
                       <ValoresCell
                         valorSolicitado={expurgo.valorSolicitado}
                         valorAprovado={expurgo.valorAprovado}
                         percentualAprovacao={expurgo.percentualAprovacao}
                       />
-
                       <StatusCell status={expurgo.status} />
-
                       <SolicitanteCell
                         registradoPor={expurgo.registradoPor}
                         createdAt={expurgo.createdAt}
                       />
-
                       <JustificativaCell
                         justificativa={expurgo.justificativaSolicitacao}
                       />
-
                       <AnexosCell
                         quantidadeAnexos={expurgo.quantidadeAnexos}
                         onViewAttachments={() => openAttachmentsModal(expurgo)}
                       />
-
+                      {/* 🎯 CORREÇÃO: AcoesCell agora verifica role internamente */}
                       <AcoesCell
                         expurgo={expurgo}
                         onView={handleViewExpurgo}
@@ -821,7 +826,7 @@ export default function ExpurgosTable({
         />
       </div>
 
-      {/* Estilos customizados para melhorias */}
+      {/* 🎯 MANTIDO: Estilos customizados do original */}
       <style jsx>{`
         .break-words {
           word-wrap: break-word;

@@ -1,5 +1,6 @@
 'use client';
 
+import { useAuth } from '@/components/providers/AuthProvider'; // 🎯 CORREÇÃO: Importar useAuth
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -170,12 +171,15 @@ export default function ExpurgoDetailsModal({
   canManage = false,
 }: ExpurgoDetailsModalProps) {
   if (!expurgo) return null;
+  const { user } = useAuth();
 
   const statusConfig = getStatusConfig(expurgo.status);
   const isPendente = expurgo.status === 'PENDENTE';
   const isAprovado =
     expurgo.status === 'APROVADO' || expurgo.status === 'APROVADO_PARCIAL';
   const isRejeitado = expurgo.status === 'REJEITADO';
+  const isDirector = user?.roles?.includes('DIRETOR');
+  const canActuallyManage = canManage && isDirector;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -374,8 +378,7 @@ export default function ExpurgoDetailsModal({
             />
           </InfoCard>
 
-          {/* AÇÕES DISPONÍVEIS */}
-          {isPendente && canManage && (onApprove || onReject) && (
+          {isPendente && canActuallyManage && (onApprove || onReject) && (
             <div className='!mt-5'>
               <div className='flex gap-3'>
                 {onApprove && (
@@ -397,6 +400,21 @@ export default function ExpurgoDetailsModal({
                     Rejeitar
                   </Button>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* 🎯 CORREÇÃO: Mensagem informativa para não-diretores */}
+          {isPendente && canManage && !isDirector && (
+            <div className='!mt-5'>
+              <div className='bg-amber-50 border border-amber-200 rounded-lg p-3'>
+                <div className='flex items-center gap-2'>
+                  <div className='text-amber-600'>⚠️</div>
+                  <div className='text-sm text-amber-800'>
+                    <strong>Permissão Restrita:</strong> Apenas diretores podem
+                    aprovar ou rejeitar expurgos.
+                  </div>
+                </div>
               </div>
             </div>
           )}

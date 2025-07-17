@@ -5,6 +5,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { formatDate } from '@/lib/utils';
 import { CheckCircle, Gavel, Settings, Trophy } from 'lucide-react';
 
 // Tipos baseados no código real
@@ -42,7 +43,7 @@ const statusConfig = {
     variant: 'default' as const,
     className: 'bg-green-100 text-green-800 border-green-300',
     icon: Trophy,
-    tooltip: 'Competição em andamento - dados atualizados em tempo real',
+    tooltip: 'Competição em andamento',
   },
   PRE_FECHADA: {
     label: 'Pré-fechada',
@@ -58,15 +59,6 @@ const statusConfig = {
     icon: CheckCircle,
     tooltip: 'Período oficialmente encerrado',
   },
-};
-
-// Função para formatar data
-const formatDate = (dateStr: string) => {
-  return new Date(dateStr).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
 };
 
 export default function VigenciaStatusBadge({

@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useExpurgosData } from '@/hooks/useExpurgosData'; // Assumindo que este hook foi atualizado para aceitar 'enabled'
-import { ChevronLeft, ChevronRight, Plus, Shield } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -308,21 +308,6 @@ export default function ExpurgosPage() {
       </div>
 
       {/* Alerta de Segurança */}
-      {securityInfo.isFiltered && (
-        <Card className='border-blue-200 bg-blue-50'>
-          <CardContent className='pt-4'>
-            <div className='flex items-center gap-2'>
-              <Shield className='h-5 w-5 text-blue-600' />
-              <div className='flex-1'>
-                <p className='text-blue-900 font-medium'>
-                  Filtro de Segurança Ativo
-                </p>
-                <p className='text-blue-700 text-sm'>{securityInfo.message}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Estatísticas */}
       {expurgos && (
