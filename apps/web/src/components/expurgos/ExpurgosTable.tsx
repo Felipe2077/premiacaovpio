@@ -613,8 +613,12 @@ export default function ExpurgosTable({
     closeDetailsModal,
   } = useExpurgoModals();
 
-  const { approveExpurgo, rejectExpurgo } = useExpurgoActions();
-  const [isActionLoading, setIsActionLoading] = useState(false);
+  // 🎯 CORREÇÃO PRINCIPAL: Usar os nomes corretos do hook
+  const {
+    handleApprove,
+    handleReject,
+    isLoading: isActionLoading,
+  } = useExpurgoActions();
 
   // ===================================
   // HANDLERS
@@ -627,34 +631,22 @@ export default function ExpurgosTable({
   const handleConfirmApprove = async (data: any) => {
     if (!approveModal.expurgo) return;
 
-    setIsActionLoading(true);
     try {
-      await approveExpurgo.mutateAsync({
-        id: approveModal.expurgo.id,
-        data,
-      });
+      await handleApprove(approveModal.expurgo.id, data);
       closeApproveModal();
     } catch (error) {
       console.error('Erro ao aprovar expurgo:', error);
-    } finally {
-      setIsActionLoading(false);
     }
   };
 
   const handleConfirmReject = async (data: any) => {
     if (!rejectModal.expurgo) return;
 
-    setIsActionLoading(true);
     try {
-      await rejectExpurgo.mutateAsync({
-        id: rejectModal.expurgo.id,
-        data,
-      });
+      await handleReject(rejectModal.expurgo.id, data);
       closeRejectModal();
     } catch (error) {
       console.error('Erro ao rejeitar expurgo:', error);
-    } finally {
-      setIsActionLoading(false);
     }
   };
 

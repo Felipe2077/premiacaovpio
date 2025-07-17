@@ -1,9 +1,8 @@
-// apps/web/src/components/notifications/NotificationPanel.tsx
+// apps/web/src/components/notifications/NotificationPanel.tsx - VERSÃO CORRIGIDA
 'use client';
 
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { useNotifications } from '@/hooks/useNotifications';
 import {
   useNotifications as useNotificationsStore,
@@ -97,10 +96,10 @@ export function NotificationPanel({
   const hasUnread = displayUnreadCount > 0;
 
   return (
-    <div className='flex flex-col min-h-0'>
+    <div className='flex flex-col w-96 h-[480px] bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-lg shadow-lg overflow-hidden'>
       {/* Header */}
       {showHeader && (
-        <>
+        <div className='flex-shrink-0 border-b border-gray-200 dark:border-gray-800'>
           <div className='flex items-center justify-between p-4 pb-2'>
             <div className='flex items-center gap-2'>
               <Bell className='h-5 w-5 text-gray-600 dark:text-gray-400' />
@@ -163,16 +162,14 @@ export function NotificationPanel({
               )}
             </div>
           )}
-
-          <Separator />
-        </>
+        </div>
       )}
 
-      {/* Content */}
-      <div className='flex-1 min-h-0'>
+      {/* 🎯 CORREÇÃO: Content area com flex-1 e overflow controlado */}
+      <div className='flex-1 min-h-0 overflow-hidden'>
         {/* Loading State */}
         {isLoading && (
-          <div className='flex items-center justify-center p-8'>
+          <div className='flex items-center justify-center h-full p-8'>
             <div className='flex flex-col items-center gap-2'>
               <Loader2 className='h-6 w-6 animate-spin text-gray-400' />
               <p className='text-sm text-gray-500'>
@@ -184,7 +181,7 @@ export function NotificationPanel({
 
         {/* Error State */}
         {error && !isLoading && (
-          <div className='flex flex-col items-center justify-center p-8'>
+          <div className='flex items-center justify-center h-full p-8'>
             <div className='text-center'>
               <X className='h-8 w-8 text-red-400 mx-auto mb-2' />
               <p className='text-sm text-red-600 dark:text-red-400 mb-2'>
@@ -203,21 +200,23 @@ export function NotificationPanel({
 
         {/* Empty State */}
         {!hasNotifications && !isLoading && !error && (
-          <div className='flex flex-col items-center justify-center p-8'>
-            <BellOff className='h-8 w-8 text-gray-300 dark:text-gray-600 mb-3' />
-            <p className='text-sm font-medium text-gray-500 dark:text-gray-400 mb-1'>
-              Nenhuma notificação
-            </p>
-            <p className='text-xs text-gray-400 dark:text-gray-500 text-center'>
-              Você não tem notificações no momento
-            </p>
+          <div className='flex items-center justify-center h-full p-8'>
+            <div className='text-center'>
+              <BellOff className='h-8 w-8 text-gray-300 dark:text-gray-600 mb-3' />
+              <p className='text-sm font-medium text-gray-500 dark:text-gray-400 mb-1'>
+                Nenhuma notificação
+              </p>
+              <p className='text-xs text-gray-400 dark:text-gray-500 text-center'>
+                Você não tem notificações no momento
+              </p>
+            </div>
           </div>
         )}
 
-        {/* Notifications List */}
+        {/* 🎯 CORREÇÃO: Notifications List com ScrollArea apropriado */}
         {hasNotifications && !isLoading && !error && (
-          <ScrollArea className='h-full' style={{ maxHeight }}>
-            <div className='divide-y divide-gray-100 dark:divide-gray-800'>
+          <ScrollArea className='h-full'>
+            <div className='divide-y divide-gray-100 dark:divide-gray-800 px-1'>
               {displayNotifications.map((notification) => (
                 <NotificationItem
                   key={notification.id}
@@ -233,15 +232,14 @@ export function NotificationPanel({
         )}
       </div>
 
-      {/* Footer */}
+      {/* 🎯 CORREÇÃO: Footer fixo na parte inferior */}
       {hasNotifications && showActions && (
-        <>
-          <Separator />
-          <div className='p-3 bg-gray-50 dark:bg-gray-900/50'>
+        <div className='flex-shrink-0 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50'>
+          <div className='p-3'>
             <Button
               variant='ghost'
               size='sm'
-              className='w-full h-8 text-xs'
+              className='w-full h-8 text-xs font-medium hover:bg-gray-100 dark:hover:bg-gray-800'
               onClick={() => {
                 onClose?.();
                 // TODO: Navegar para página de todas as notificações
@@ -251,7 +249,7 @@ export function NotificationPanel({
               Ver todas as notificações
             </Button>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
