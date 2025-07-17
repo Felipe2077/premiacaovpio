@@ -833,10 +833,6 @@ export default function SchedulingAdminPage() {
                         retirado em breve) e dados da Transdata, busca todos os
                         dados atualizados, processa as informações e recalcula
                         rankings e pontuações.
-                        <span className='text-orange-600 font-medium'>
-                          {' '}
-                          Processo um pouco mais demorado (Até 05min)
-                        </span>
                       </div>
                     </div>
                   </div>
@@ -850,10 +846,6 @@ export default function SchedulingAdminPage() {
                       <div className='text-sm text-gray-600'>
                         Usa os dados já disponíveis para recalcular apenas os
                         rankings e pontuações.
-                        <span className='text-green-600 font-medium'>
-                          {' '}
-                          Processo rápido
-                        </span>
                       </div>
                     </div>
                   </div>

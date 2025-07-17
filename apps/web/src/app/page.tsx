@@ -8,7 +8,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import ShareRankingButton from '@/components/vigencia/ShareRankingButton';
 import VigenciaStatusBadge from '@/components/vigencia/VigenciaStatusBadge';
 import { useCompetitionData } from '@/hooks/useCompetitionData';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 export default function HomePage() {
   const {
@@ -27,50 +27,6 @@ export default function HomePage() {
   const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
   const [isStatusLoading, setIsStatusLoading] = useState(true);
 
-  useEffect(() => {
-    async function fetchSystemStatus() {
-      try {
-        const response = await fetch('/api/system/status', {
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-        });
-
-        if (!response.ok) {
-          throw new Error(`Erro de rede! Status: ${response.status}`);
-        }
-
-        const result = await response.json();
-
-        if (result.success && result.data && result.data.lastUpdate) {
-          console.log(
-            '[LOG] Campo "lastUpdate" encontrado:',
-            result.data.lastUpdate
-          );
-          setLastUpdateTime(new Date(result.data.lastUpdate));
-        } else {
-          console.warn(
-            '[LOG] Condição para extrair a data falhou. Verificando os campos:',
-            {
-              success: result.success,
-              dataExists: !!result.data,
-              lastUpdateExists: result.data ? !!result.data.lastUpdate : false,
-            }
-          );
-          setLastUpdateTime(null);
-        }
-      } catch (error) {
-        console.error(
-          '[LOG] Erro CRÍTICO no fetch do status do sistema:',
-          error
-        );
-        setLastUpdateTime(null);
-      } finally {
-        setIsStatusLoading(false);
-      }
-    }
-
-    fetchSystemStatus();
-  }, []);
   const formatMesAno = (mesAno: string) => {
     if (!mesAno || !mesAno.includes('-')) return 'Período Indisponível';
     const [ano, mes] = mesAno.split('-');
@@ -133,7 +89,8 @@ export default function HomePage() {
                   <div className='flex justify-between items-center mb-3 flex-wrap gap-4'>
                     <div className='flex items-center gap-3'>
                       <h2 className='text-2xl font-semibold'>
-                        📈 Desempenho vs Meta
+                        Premiação 01 a 16 de julho de 2025 - 📈 Desempenho vs
+                        Meta
                       </h2>
                       <VigenciaStatusBadge
                         selectedPeriod={selectedPeriodData}

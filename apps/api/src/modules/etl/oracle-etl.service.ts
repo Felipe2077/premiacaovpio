@@ -473,8 +473,8 @@ ORDER BY SETOR, OCORRENCIA
                       INNER JOIN EST_CADMATERIAL J ON I.CODIGOMATINT = J.CODIGOMATINT
                 WHERE M.DATAMOVTO >= TO_DATE(:1, 'YYYY-MM-DD') AND M.DATAMOVTO < TO_DATE(:2, 'YYYY-MM-DD') + 1
                   AND R.CODIGOEMPRESA = 4 AND R.CODIGOGA IN (31, 124, 239, 240)
-                  AND ((J.CODDIVISAO BETWEEN 5100 AND 5311) OR (J.CODDIVISAO BETWEEN 5500 AND 5730) OR (J.CODDIVISAO BETWEEN 7300 AND 7430) OR (J.CODDIVISAO IN(5470,6000,6010,6710,6730,6770,8200)))
-                  AND M.CODIGOHISMOV IN (20, 48)
+                  AND J.CODDIVISAO BETWEEN 5100 AND 5399
+                  AND M.CODIGOHISMOV IN (20)
             ) A
             WHERE A.SETOR <> 'OUTRAS'
             GROUP BY A.SETOR, TRUNC(A.DATA)
@@ -557,8 +557,8 @@ ORDER BY SETOR, OCORRENCIA
                       INNER JOIN EST_CADMATERIAL J ON I.CODIGOMATINT = J.CODIGOMATINT
                 WHERE M.DATAMOVTO >= TO_DATE(:1, 'YYYY-MM-DD') AND M.DATAMOVTO < TO_DATE(:2, 'YYYY-MM-DD') + 1
                   AND R.CODIGOEMPRESA = 4 AND R.CODIGOGA IN (31, 124, 239, 240)
-                  AND J.CODDIVISAO IN (5400,5410,5420,5430,5440,5450,5460,5480,5490) -- Filtro Pneus
-                  AND M.CODIGOHISMOV IN (20, 48)
+                  AND J.CODDIVISAO BETWEEN 5400 AND 5499
+                  AND M.CODIGOHISMOV IN (20)
             ) A
             WHERE A.SETOR <> 'OUTRAS'
             GROUP BY A.SETOR, TRUNC(A.DATA)
@@ -810,9 +810,13 @@ ORDER BY
         startDate,
         endDatePlus03h59,
         startDate,
-        endDateMinus1,
+        endDatePlus03h59,
       ];
-
+      console.log('=== DEBUG VALORES ===');
+      console.log('endDate original:', endDate);
+      console.log('endDatePlus03h59 gerado:', endDatePlus03h59);
+      console.log('Tipo:', typeof endDatePlus03h59);
+      console.log('Comprimento:', endDatePlus03h59.length);
       // ----- QUERY 1: KM OPERACIONAL (Nova Fonte - Escalas + Linhas) -----
       const queryKmOperacional = `
       SELECT 
@@ -913,7 +917,7 @@ ORDER BY
             AND V.CONDICAOVEIC = 'A'
       ) A
       WHERE A.DIA_OPERACIONAL BETWEEN TO_DATE(:3, 'YYYY-MM-DD') 
-                                  AND TO_DATE(:4, 'YYYY-MM-DD')
+                                  AND TO_DATE(:4, 'YYYY-MM-DD HH24:MI:SS')
       GROUP BY A.CODIGOGA, TRUNC(A.DIA_OPERACIONAL, 'MM')
       ORDER BY A.CODIGOGA, TRUNC(A.DIA_OPERACIONAL, 'MM')`;
 
