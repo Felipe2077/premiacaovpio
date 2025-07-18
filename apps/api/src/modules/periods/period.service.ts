@@ -720,7 +720,6 @@ export class CompetitionPeriodService {
         try {
           await this.preClosePeriod(period.id, 'automatic');
           result.preClosedPeriods++;
-
           console.log(
             `[PeriodService] ✅ Período ${period.mesAno} pré-fechado automaticamente.`
           );
@@ -731,21 +730,21 @@ export class CompetitionPeriodService {
         }
       }
 
-      // 2. Verificar se precisa criar próxima vigência
-      try {
-        const planningPeriod = await this.findOrCreatePlanningPeriod();
-
-        // Se retornou um período recém-criado, contamos
-        if (planningPeriod && eligiblePeriods.length > 0) {
-          result.newPeriodsCreated = 1;
-          console.log(
-            `[PeriodService] ✅ Nova vigência criada: ${planningPeriod.mesAno}`
-          );
+      // 2. Se algum período foi pré-fechado, verifica se precisa criar a próxima vigência
+      if (result.preClosedPeriods > 0) {
+        try {
+          const planningPeriod = await this.findOrCreatePlanningPeriod();
+          if (planningPeriod) {
+            result.newPeriodsCreated = 1;
+            console.log(
+              `[PeriodService] ✅ Nova vigência criada: ${planningPeriod.mesAno}`
+            );
+          }
+        } catch (error) {
+          const errorMsg = `Erro ao criar próxima vigência: ${error instanceof Error ? error.message : error}`;
+          console.error(`[PeriodService] ❌ ${errorMsg}`);
+          result.errors.push(errorMsg);
         }
-      } catch (error) {
-        const errorMsg = `Erro ao criar próxima vigência: ${error instanceof Error ? error.message : error}`;
-        console.error(`[PeriodService] ❌ ${errorMsg}`);
-        result.errors.push(errorMsg);
       }
 
       console.log(

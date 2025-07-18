@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import useLastETLExecution from '@/hooks/useLastETLExecution';
 import { Calendar } from 'lucide-react';
 // Tipos baseados no código existente
 interface Period {
@@ -63,6 +64,7 @@ export function FilterControls({
   onPeriodChange,
 }: FilterControlsProps) {
   const isLoading = !activePeriod || periods.length === 0;
+  const { data, loading } = useLastETLExecution();
 
   // Encontrar o período selecionado para mostrar o badge
   const selectedPeriod = periods.find((p) => p.mesAno === activePeriod) || null;
@@ -134,9 +136,37 @@ export function FilterControls({
               </span>
             )}
           {selectedPeriod.status === 'ATIVA' && (
-            <span className='ml-2 text-green-600'>
+            <span className='ml-1 text-green-600 font-bold'>
               • Competição em andamento
             </span>
+          )}
+
+          {selectedPeriod.status === 'PLANEJAMENTO' && (
+            <span className='ml-1 text-yellow-600 font-bold'>
+              Competição em planejamento
+            </span>
+          )}
+
+          {selectedPeriod.status === 'FECHADA' && (
+            <span className='ml-1 text-green-600 font-bold'>
+              • Competição finalizada
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* ultima atização dos dados */}
+      {selectedPeriod!.status === 'ATIVA' && (
+        <div>
+          <p className='text-xs font-medium text-slate-600'>
+            Última Atualização dos dados:
+          </p>
+          {data?.hasExecutions ? (
+            <div className='text-xs font-medium text-neutral-600'>
+              {data.lastExecution?.executedAtFormatted}
+            </div>
+          ) : (
+            <div>Nenhuma execução encontrada</div>
           )}
         </div>
       )}

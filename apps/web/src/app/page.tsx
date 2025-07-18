@@ -8,6 +8,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import ShareRankingButton from '@/components/vigencia/ShareRankingButton';
 import VigenciaStatusBadge from '@/components/vigencia/VigenciaStatusBadge';
 import { useCompetitionData } from '@/hooks/useCompetitionData';
+import useLastETLExecution from '@/hooks/useLastETLExecution';
 import { useMemo, useState } from 'react';
 
 export default function HomePage() {
@@ -26,12 +27,29 @@ export default function HomePage() {
   // Estados para status da vigência e última atualização
   const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
   const [isStatusLoading, setIsStatusLoading] = useState(true);
+  const { data, loading } = useLastETLExecution();
 
   const formatMesAno = (mesAno: string) => {
     if (!mesAno || !mesAno.includes('-')) return 'Período Indisponível';
     const [ano, mes] = mesAno.split('-');
     const date = new Date(Number(ano), Number(mes) - 1);
     return date.toLocaleString('pt-BR', {
+      month: 'long',
+      year: 'numeric',
+    });
+  };
+
+  const formatDate = (dateString: any) => {
+    if (!dateString) return '';
+
+    // Parse da data no formato "16/07/2025, 17:23:41"
+    const [datePart] = dateString.split(', ');
+    const [day, month, year] = datePart.split('/');
+
+    const date = new Date(year, month - 1, day);
+
+    return date.toLocaleDateString('pt-BR', {
+      day: 'numeric',
       month: 'long',
       year: 'numeric',
     });
@@ -89,8 +107,12 @@ export default function HomePage() {
                   <div className='flex justify-between items-center mb-3 flex-wrap gap-4'>
                     <div className='flex items-center gap-3'>
                       <h2 className='text-2xl font-semibold'>
-                        Premiação 01 a 16 de julho de 2025 - 📈 Desempenho vs
-                        Meta
+                        Premiação 01 a{' '}
+                        {data?.lastExecution?.executedAtFormatted &&
+                          formatDate(
+                            data.lastExecution.executedAtFormatted
+                          )}{' '}
+                        - 📈 Desempenho vs Meta
                       </h2>
                       <VigenciaStatusBadge
                         selectedPeriod={selectedPeriodData}
@@ -104,15 +126,6 @@ export default function HomePage() {
                             period={selectedPeriodData}
                             rankingData={rankingForShare}
                           />
-                        )}
-
-                      {/* 🔍 DEBUG: Indicador quando deveria aparecer mas não aparece */}
-                      {selectedPeriodData?.status === 'FECHADA' &&
-                        !isLoading &&
-                        rankingForShare.length === 0 && (
-                          <div className='text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded'>
-                            ⚠️ Período FECHADO mas sem ranking
-                          </div>
                         )}
 
                       {/* Indicador de loading quando necessário */}
