@@ -31,6 +31,10 @@ import { SectorEntity } from '../entity/sector.entity';
 import { RoleEntity } from '../entity/role.entity';
 import { SessionEntity } from '../entity/session.entity';
 import { UserEntity } from '../entity/user.entity';
+// === ENTIDADES DE METAS OPERACIONAIS ===
+import { HolidayClassificationEntity } from '../entity/holiday-classification.entity';
+import { OperationalGoalsCalculationEntity } from '../entity/operational-goals-calculation.entity';
+import { OperationalGoalsParametersEntity } from '../entity/operational-goals-parameters.entity';
 
 dotenv.config();
 
@@ -132,8 +136,12 @@ const entities = [
   RawMySqlQuebraDefeitoEntity,
   RawMySqlOcorrenciaHorariaEntity,
 
-  // === ScheduleConfigEntity ===
+  // === OPERATIONAL GOALS ENTITIES ===
+  HolidayClassificationEntity,
+  OperationalGoalsParametersEntity,
+  OperationalGoalsCalculationEntity,
 
+  // === ScheduleConfigEntity ===
   ScheduleConfigEntity,
 ];
 
